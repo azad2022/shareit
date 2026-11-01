@@ -156,7 +156,6 @@ class WifiDirectDeviceDiscoveryRepository(
     override fun startMonitoring() {
         if (monitoring) return
         monitoring = true
-        if (channel == null) channel = initializeChannel()
         registerP2pStateReceiverIfPermitted()
         refreshAvailability()
     }
@@ -217,6 +216,15 @@ class WifiDirectDeviceDiscoveryRepository(
     override fun refreshAvailability() {
         val permissionGranted = hasRequiredRuntimePermission()
         if (permissionGranted) {
+            // A P2P channel can disconnect while the Activity remains visible.
+            // Retry initialization on the next availability refresh rather than
+            // leaving the adapter permanently unavailable until process restart.
+            if (monitoring && channel == null &&
+                wifiP2pManager != null &&
+                packageManager.hasSystemFeature(PackageManager.FEATURE_WIFI_DIRECT)
+            ) {
+                channel = initializeChannel()
+            }
             registerP2pStateReceiverIfPermitted()
         } else {
             p2pEnabled = null
