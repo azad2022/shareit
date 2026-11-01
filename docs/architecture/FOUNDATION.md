@@ -6,6 +6,7 @@ The repository currently contains the native Android foundation and the first co
 
 - CP-001: Gradle/Kotlin/Compose foundation, Persian-first locale bootstrap, and the PEYVAND design-system entry point.
 - CP-002: runtime Wi-Fi Direct availability checks, version-aware permissions, and PEYVAND DNS-SD service discovery.
+- App-default network diagnostics: observe whether the network Android selects for the PEYVAND app UID is VPN-backed and show a non-blocking warning. This diagnostic is not a local peer reachability test.
 
 CP-002 discovers PEYVAND service advertisements. It does **not** connect peers, authenticate peers, create sockets, or transfer files. A discovered advertisement is untrusted input and is not proof of identity.
 
@@ -19,11 +20,11 @@ CP-002 discovers PEYVAND service advertisements. It does **not** connect peers, 
  └── :core:designsystem
 ```
 
-- `:app` owns Activity entry, Compose presentation, lifecycle ownership, and explicit composition of implementations.
-- `:core:domain` contains Android-free language and discovery models, repository contracts, and policies. It exposes `StateFlow` in its repository contract and must not import Android or Compose APIs.
-- `:core:data` owns Preferences DataStore and AppCompat per-app locale integration.
-- `:core:connectivity` owns the Android `WifiP2pManager` adapter, P2P state receiver, DNS-SD service advertisement and discovery, and runtime capability reporting. It does not depend on app presentation.
-- `:core:designsystem` owns PEYVAND semantic colors and the Compose theme.
+- `:app`: Android entry point, Compose presentation, lifecycle ownership, and explicit composition of implementations.
+- `:core:domain`: Android-free language, discovery, and network-diagnostic models/policies. It exposes `StateFlow` in repository contracts and must not import Android or Compose APIs.
+- `:core:data`: Preferences DataStore and AppCompat per-app locale integration.
+- `:core:connectivity`: Android `WifiP2pManager` adapter, P2P state receiver, DNS-SD service advertisement/discovery, runtime capability reporting, and app-default network diagnostics through `ConnectivityManager`. It does not depend on app presentation.
+- `:core:designsystem`: PEYVAND semantic colors and the Compose theme.
 
 Keep the project graph acyclic. Add security, transfer, storage, and package-sharing modules only when their contracts and ownership are defined in ADRs.
 
@@ -42,10 +43,15 @@ The service TXT fields are public, spoofable compatibility markers. They contain
 ## Permission model
 
 - Android 13/API 33 and later: `NEARBY_WIFI_DEVICES` runtime permission with `neverForLocation`.
-- Android 12L/API 32 and earlier: `ACCESS_FINE_LOCATION` runtime permission, capped at API 32.
+- Android 12L/API 32 and earlier: `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` declared/requested together; Wi-Fi Direct discovery proceeds only when FINE is granted.
 - P2P system access: `ACCESS_WIFI_STATE` and `CHANGE_WIFI_STATE`.
+- App-default network diagnostic: `ACCESS_NETWORK_STATE`, declared in the `:core:connectivity` library manifest because that module uses ConnectivityManager APIs. This permission is not required by DNS-SD itself and does not imply a public-internet dependency.
 - Wi-Fi Direct hardware is declared optional; capability is checked at runtime.
-- No `INTERNET` permission is added for this discovery-only milestone. Local socket APIs and the INTERNET permission belong to a later, reviewed transport milestone; INTERNET permission does not imply public-internet dependency.
+- No `INTERNET` permission is added for this discovery-only milestone. Local socket APIs and the INTERNET permission belong to a later, reviewed transport milestone; INTERNET permission does not imply use of public internet.
+
+## VPN diagnostic boundary
+
+The app observes its own default network and checks whether it carries `TRANSPORT_VPN`. It does not attempt to discover or control every VPN configured on the device. A VPN-backed app route may have a policy that restricts local traffic, but the status alone cannot establish that Wi-Fi Direct discovery or a future P2P socket is blocked. Therefore it is informational only and must not block scanning or transfer. See `docs/decisions/ADR-0003-VPN-ROUTE-DIAGNOSTICS.md`.
 
 ## Deferred responsibilities
 
