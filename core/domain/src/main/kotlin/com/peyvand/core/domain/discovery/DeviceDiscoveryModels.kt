@@ -102,7 +102,10 @@ object PeyvandDiscoveryAdvertisement {
     }
 
     fun isCompatibleRegistrationType(registrationType: String): Boolean =
-        registrationType.trim().trimEnd('.').equals(SERVICE_TYPE, ignoreCase = true)
+        registrationType.trim().trimEnd('.').equals(
+            "$SERVICE_TYPE.local",
+            ignoreCase = true,
+        )
 
     /**
      * Extracts the instance name only from the expected DNS-SD service domain.
