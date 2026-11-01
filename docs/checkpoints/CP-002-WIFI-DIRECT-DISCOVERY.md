@@ -54,8 +54,10 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 - Several intermediate CI runs were cancelled by newer pushes. Do not treat a cancelled run or the earlier successful run as validation of the latest source revision.
 - Follow-up implementation commit `73f030c1e81b9302d08a9d6130f926fb2725d0e1` removes unconditional startup cleanup (`clearServiceRequests`/`clearLocalServices`) and skips teardown calls when discovery was already idle. Exact-head GitHub Actions run `41322529714` completed successfully: 21 unit tests passed, 0 failures/errors/skips; configured lint tasks passed with 0 lint errors; `:app:assembleDebug` succeeded. Artifact `13089684423` (`peyvand-debug-apk`) was downloaded and its APK archive passed `unzip -t`; SHA-256 `ce77391803c6c23a1c105f2546dc7a102e39a1f7ef3bc6cf5338529c3b08202d`.
 - The last previously CI-verified source revision was `0363d7ff83ccca019cdf775d293d7f06945d6c7d` (run `41294583841`). Discovery diagnostics/lifecycle fixes are in app-source commit `6e781732afd91b41c331b2c22d5445fc0b3d85df`. The final source tree at `4251e6df630747b8a78bb7a1161a3cedbd4909ad` passed run `41317903875`; subsequent documentation updates do not change app source.
-- Local build: not run in the current workbench.
-- Two-physical-device reciprocal discovery: failed on the owner's Galaxy A06 + ASUS X017DA test pair; retest after the diagnostics build is required. Emulator-only evidence cannot replace this requirement.
+- Product-owner retest after Debug APK `73f030c`: Galaxy A12 and ASUS X017DA both remained in active search (receiver on one phone, sender on the other) but did not discover each other.
+- Diagnostics source commit `58c4d86e655e6f3e6800c845ce4792661d9b07f3` adds visible DNS-SD callback/filter counters. GitHub Actions run `41327944528` passed: 21 unit tests, 0 failures/errors/skips; 8 lint warnings, 0 lint errors; Debug APK assembled and uploaded as artifact `13092725538`. APK SHA-256: `e36988f49f55b05b6e9ec87f119c932f878bc07f042afa1a4e966c15cd123187`.
+- The diagnostics APK does not add peer connection, sockets, TLS, pairing, receiver consent, file transfer, integrity verification, resume or APK handling. Those features remain unimplemented.
+- The latest physical discovery result remains failed. The diagnostics APK has not yet been tested on both physical phones. Emulator-only evidence cannot replace this requirement.
 
 ## Risks and deferred work
 

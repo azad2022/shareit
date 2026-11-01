@@ -5,7 +5,7 @@
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-002 — Wi-Fi Direct service discovery
 - **Current branch:** `feature/foundation-bootstrap`
-- **Last updated:** 2026-11-01 (two-device compatibility investigation)
+- **Last updated:** 2026-11-01 (discovery diagnostics build; two-device retest still failing)
 
 ## Milestones
 
@@ -36,6 +36,9 @@
 - GitHub Actions run `41317903875` passed for branch tree `4251e6df630747b8a78bb7a1161a3cedbd4909ad`: 21 domain unit tests passed (0 failures/errors/skips), all configured lint tasks succeeded with 8 warnings and 0 errors, and `:app:assembleDebug` succeeded. Debug APK artifact `13087339471` was verified; APK SHA-256 `0a20f9f63530774b46d659c9d4523ae9812acf4ab15b78387784a97018d1eb12`.
 - The follow-up fix commit `73f030c1e81b9302d08a9d6130f926fb2725d0e1` removes unconditional `clearServiceRequests`/`clearLocalServices` calls from scan startup and avoids cleanup when `stopDiscovery()` is called while idle. CI run `41322529714` completed successfully for this exact commit: 21 domain unit tests passed (0 failures/errors/skips), all configured lint tasks passed with no reported lint errors, and `:app:assembleDebug` completed successfully. Debug APK artifact `13089684423` was extracted and the APK archive validated; SHA-256 `ce77391803c6c23a1c105f2546dc7a102e39a1f7ef3bc6cf5338529c3b08202d`.
 - ADR-0004 proposes (but does not approve) a PEYVAND-specific QR/local-only-hotspot alternative for physical compatibility evaluation. No hotspot or QR transport has been implemented.
+- Product-owner retest after the `73f030c` Debug APK: the Galaxy A12 and ASUS X017DA were both left actively searching (one in receive mode, one in send mode), but neither device appeared on the other. This confirms the discovery interoperability issue remains unresolved.
+- Diagnostics instrumentation commit `58c4d86e655e6f3e6800c845ce4792661d9b07f3` adds visible counters for raw DNS-SD service responses, accepted service responses, TXT responses, accepted TXT domains, compatible TXT records, and final peers. CI run `41327944528` succeeded: 21 unit tests passed (0 failures/errors/skips), lint reported 8 warnings and 0 errors, and `:app:assembleDebug` succeeded. Debug APK artifact `13092725538`; APK SHA-256 `e36988f49f55b05b6e9ec87f119c932f878bc07f042afa1a4e966c15cd123187`.
+- The current implementation still contains no Wi-Fi P2P `connect()` flow, local socket transport, TLS peer authentication, recipient consent protocol, or file streaming. The diagnostics APK does not implement file transfer.
 - Reciprocal two-device physical discovery remains mandatory before CP-002 can be marked `PASSED`.
 
 ## Module boundaries
