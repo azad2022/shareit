@@ -1,8 +1,5 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
@@ -13,17 +10,21 @@ android {
         minSdk = 26
     }
 
+    sourceSets {
+        named("main") {
+            kotlin.directories.add("src/main/kotlin")
+        }
+        named("test") {
+            kotlin.directories.add("src/test/kotlin")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
-    }
-}
 
 dependencies {
     implementation(project(":core:domain"))

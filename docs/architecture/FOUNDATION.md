@@ -14,7 +14,7 @@ CP-001 establishes project/build structure, language preference persistence, the
 ```
 
 - `:app` owns Activity entry, presentation state, Compose screen routing, and composition of implementations.
-- `:core:domain` contains the `AppLanguage` target catalogue, `LanguageRepository` contract, and language-selection use cases. It is pure Kotlin/JVM and must stay independent of Android and Compose.
+- `:core:domain` contains the `AppLanguage` target catalogue, `LanguageRepository` contract, and language-selection use cases. Its source must remain Kotlin-only and must not import Android or Compose APIs. All Kotlin source directories are explicitly configured through `AndroidSourceSet.kotlin`. The Android library plugin is used to share AGP built-in Kotlin consistently; this is a build-system choice, not permission for domain source to use Android APIs.
 - `:core:data` owns the Android-specific Preferences DataStore implementation and AppCompat locale adapter. It implements the domain contract; it must not depend on app presentation.
 - `:core:designsystem` owns semantic PEYVAND colors and the Compose theme. It contains no business or transfer logic.
 

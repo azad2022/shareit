@@ -28,24 +28,29 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The legacy "tools" SDK package no longer exists in current SDK repositories.
+          packages: platform-tools
 
       - name: Install Android 17 SDK platform
-        run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "platforms;android-37" "build-tools;37.0.0" "platform-tools"
+        run: sdkmanager "platforms;android-37" "platform-tools"
 
       - name: Validate Gradle wrapper and build
         uses: gradle/actions/setup-gradle@v5
 
       - name: Run unit tests, lint, and debug APK build
-        run: ./gradlew --no-daemon --stacktrace testDebugUnitTest lintDebug assembleDebug
+        run: >-
+          ./gradlew --no-daemon --stacktrace
+          :core:domain:testDebugUnitTest
+          :app:lintDebug :core:data:lintDebug :core:designsystem:lintDebug :core:domain:lintDebug
+          :app:assembleDebug
 
       - name: Upload debug APK
         if: success()

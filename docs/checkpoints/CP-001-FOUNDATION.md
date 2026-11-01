@@ -17,6 +17,7 @@ Create the first reproducible native Android project foundation for PEYVAND (Ù¾Û
 - [ ] Project syncs and `assembleDebug` succeeds on the CI runner.
 - [ ] `testDebugUnitTest` succeeds; language catalogue/locale-resolution tests pass.
 - [ ] `lintDebug` succeeds without errors.
+- [ ] Android modules use AGP built-in Kotlin without applying the legacy `org.jetbrains.kotlin.android` plugin.
 - [ ] Module dependency graph matches `docs/architecture/FOUNDATION.md` and has no cycles.
 - [ ] Language preference is stored asynchronously; first-run selector is shown only before an explicit choice.
 - [ ] Persian is selectable; incomplete languages are visibly disabled and excluded from `locale_config.xml`.

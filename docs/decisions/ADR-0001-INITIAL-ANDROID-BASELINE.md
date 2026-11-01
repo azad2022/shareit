@@ -15,8 +15,8 @@ The repository previously contained product documents but no executable Android 
 | Component | Pinned version | Rationale |
 |---|---:|---|
 | Android Gradle Plugin | 9.5.0 | Current stable project baseline documented by Android Developers. |
-| Gradle Wrapper | 9.7.1 | Exact wrapper JAR checksum is verified against Gradle's published checksum list; Gradle 9.7.1 is newer than AGP 9.5's minimum Gradle 9.6.0. |
-| Kotlin | 2.4.10 | Required language; Compose compiler plugin is aligned to the same Kotlin version. |
+| Gradle Wrapper | 9.7.1 | Distribution SHA-256 is pinned in wrapper properties; the wrapper JAR SHA-256 matches Gradle's published checksum `7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d`. AGP 9.5 requires Gradle 9.6.0 or newer. |
+| Kotlin | AGP built-in Kotlin; Compose compiler plugin 2.4.10 | Kotlin is mandatory. AGP 9+ provides built-in Kotlin for Android modules; do not also apply `org.jetbrains.kotlin.android`. The Compose compiler plugin is pinned to the matching compiler line. |
 | Compose BOM | 2026.09.00 | Current stable Compose dependency alignment published by Android Developers. |
 | AppCompat | 1.8.0 | Per-app locale support for older Android versions and compatibility with Compose hosting Activity. |
 | Activity Compose | 1.13.0 | Stable AndroidX Activity Compose release. |
@@ -40,7 +40,7 @@ Google Play's current policy (accessed 2026-11-01) requires new mobile apps and 
 ### Module boundaries
 
 - `:app`: Android entry point, presentation state, first-run language selection, and explicit dependency composition.
-- `:core:domain`: pure Kotlin language model, repository contract, and selection use case; no Android dependency.
+- `:core:domain`: Kotlin-only language model, repository contract, and selection use case; its source imports no Android or Compose APIs. It uses the Android library plugin to keep all Android modules on AGP built-in Kotlin. Its unit tests run as local Android library unit tests.
 - `:core:data`: Preferences DataStore and AndroidX per-app locale adapter implementing the domain contract.
 - `:core:designsystem`: Compose Material 3 theme and PEYVAND blue/white semantic palette.
 
@@ -68,6 +68,7 @@ Use explicit dependency construction in `MainActivity` for this small foundation
 ## Consequences and follow-up
 
 - The foundation can evolve without moving Android APIs into domain logic.
+- Kotlin code is placed under `src/main/kotlin` and `src/test/kotlin`; each Android module explicitly adds these folders through `AndroidSourceSet.kotlin` for AGP built-in Kotlin.
 - Only Persian is user-selectable until the other translations, layout directions, fonts, and accessibility pass review.
 - The min SDK and package ID are intentionally not final decisions; obtain owner approval before release configuration or public distribution.
 - Before CP-002, decide the first connectivity ADR topics (Wi-Fi Direct lifecycle, runtime permissions, peer identity/pairing, and capability checks). Do not start sockets or transfer protocol in CP-001.
@@ -75,6 +76,7 @@ Use explicit dependency construction in `MainActivity` for this small foundation
 ## References
 
 - AGP versions and Gradle compatibility: https://developer.android.com/build/releases/about-agp
+- AGP built-in Kotlin migration and Kotlin source-set configuration: https://developer.android.com/build/migrate-to-built-in-kotlin
 - Compose compiler plugin/Kotlin alignment and Compose BOM: https://developer.android.com/develop/ui/compose/setup-compose-dependencies-and-compiler
 - Per-app languages and custom storage handling: https://developer.android.com/guide/topics/resources/app-languages
 - AndroidX AppCompat releases: https://developer.android.com/jetpack/androidx/releases/appcompat

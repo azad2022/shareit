@@ -28,7 +28,7 @@ fun PeyvandApp(
                 (fadeOut(tween(durationMillis = 160)) +
                     slideOutVertically(tween(durationMillis = 160)) { height -> -height / 24 })
         },
-        label = "pey vand-main-route",
+        label = "peyvand-main-route",
     ) { targetState ->
         when (targetState) {
             is MainUiState.LanguageSelection -> LanguageSelectionScreen(

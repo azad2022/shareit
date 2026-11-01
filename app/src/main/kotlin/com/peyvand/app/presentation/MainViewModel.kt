@@ -14,7 +14,7 @@ class MainViewModel(
     private val selectLanguage: SelectLanguageUseCase,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<MainUiState>(
-        initialLanguage?.let(MainUiState::Home) ?: MainUiState.LanguageSelection(),
+        initialLanguage?.let { MainUiState.Home(it) } ?: MainUiState.LanguageSelection(),
     )
     val uiState = _uiState.asStateFlow()
 
