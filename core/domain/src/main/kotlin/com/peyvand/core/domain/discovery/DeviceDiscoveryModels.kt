@@ -77,12 +77,22 @@ object WifiDirectPermissionPolicy {
  * Matching this record is not authentication and must never authorize a connection.
  */
 object PeyvandDiscoveryAdvertisement {
-    const val INSTANCE_NAME = "PEYVAND"
+    const val INSTANCE_NAME_PREFIX = "PEYVAND-"
+    const val INSTANCE_ID_LENGTH = 8
     const val SERVICE_TYPE = "_peyvand._tcp"
     const val APP_KEY = "app"
     const val APP_ID = "peyvand"
     const val DISCOVERY_VERSION_KEY = "discovery"
     const val DISCOVERY_VERSION = "1"
+
+    fun isCompatibleInstanceName(instanceName: String): Boolean {
+        if (!instanceName.startsWith(INSTANCE_NAME_PREFIX, ignoreCase = true)) return false
+        val suffix = instanceName.substring(INSTANCE_NAME_PREFIX.length)
+        return suffix.length == INSTANCE_ID_LENGTH &&
+            suffix.all { character ->
+                character in '0'..'9' || character.lowercaseChar() in 'a'..'f'
+            }
+    }
 
     fun isCompatible(record: Map<String, String>): Boolean =
         record[APP_KEY] == APP_ID &&

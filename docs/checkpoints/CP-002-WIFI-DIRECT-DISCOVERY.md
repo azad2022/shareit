@@ -16,8 +16,8 @@ Implement a first real nearby-device discovery path using Android Wi-Fi Direct D
 - [ ] Domain discovery contracts and API-level permission policy are Android-free and covered by unit tests.
 - [ ] Android 13+ uses `NEARBY_WIFI_DEVICES`; API 32 and earlier use `ACCESS_FINE_LOCATION`.
 - [ ] Wi-Fi Direct hardware is optional in the manifest and checked at runtime.
-- [ ] Location Mode, P2P enabled state, channel readiness, and permission status are represented accurately.
-- [ ] DNS-SD advertisement contains only PEYVAND application/schema compatibility fields.
+- [ ] Location Mode, P2P enabled state, channel readiness, and permission status are represented accurately; unknown P2P state remains CHECKING until the sticky system state is observed.
+- [ ] DNS-SD advertisement contains only PEYVAND application/schema compatibility fields and a process-local collision-resistant instance suffix.
 - [ ] A displayed peer has both a matching service callback and matching TXT callback.
 - [ ] No peer is described as authenticated; no socket, transport, or transfer is added in CP-002.
 - [ ] Scan cancellation, activity stop, permission loss, and channel loss clear pending peer data and release system registrations.

@@ -15,6 +15,7 @@ import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest
 import android.os.Build
 import android.os.Looper
 import android.provider.Settings
+import java.util.UUID
 import androidx.core.content.ContextCompat
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
@@ -53,12 +54,24 @@ class WifiDirectDeviceDiscoveryRepository(
     private var p2pEnabled: Boolean? = null
     private var generation = 0L
 
+    private val serviceInstanceName by lazy {
+        PeyvandDiscoveryAdvertisement.INSTANCE_NAME_PREFIX +
+            UUID.randomUUID().toString().replace("-", "").take(
+                PeyvandDiscoveryAdvertisement.INSTANCE_ID_LENGTH,
+            )
+    }
+
+    private companion object {
+        const val MAX_PENDING_PEERS = 128
+        const val MAX_VISIBLE_PEERS = 64
+    }
+
     private val discoveredServices = mutableMapOf<String, WifiP2pDevice>()
     private val discoveredRecords = mutableMapOf<String, Map<String, String>>()
 
     private val serviceInfo by lazy {
         WifiP2pDnsSdServiceInfo.newInstance(
-            PeyvandDiscoveryAdvertisement.INSTANCE_NAME,
+            serviceInstanceName,
             PeyvandDiscoveryAdvertisement.SERVICE_TYPE,
             mapOf(
                 PeyvandDiscoveryAdvertisement.APP_KEY to PeyvandDiscoveryAdvertisement.APP_ID,
@@ -123,9 +136,18 @@ class WifiDirectDeviceDiscoveryRepository(
     override fun startMonitoring() {
         if (monitoring) return
         monitoring = true
+        registerP2pStateReceiverIfPermitted()
+        refreshAvailability()
+    }
 
-        if (wifiP2pManager == null) {
-            refreshAvailability()
+    /**
+     * Wi-Fi P2P state is exposed as a protected sticky system broadcast.
+     * Register only after the version-specific runtime permission is granted.
+     */
+    private fun registerP2pStateReceiverIfPermitted() {
+        if (!monitoring || receiverRegistered || wifiP2pManager == null ||
+            !hasRequiredRuntimePermission()
+        ) {
             return
         }
 
@@ -140,14 +162,14 @@ class WifiDirectDeviceDiscoveryRepository(
             receiverRegistered = true
             stickyIntent?.let { p2pStateReceiver.onReceive(appContext, it) }
         } catch (_: SecurityException) {
+            p2pEnabled = null
             mutableSnapshot.value = mutableSnapshot.value.copy(
                 availability = WifiDirectAvailability.UNAVAILABLE,
                 status = DiscoveryStatus.FAILED,
                 failure = DeviceDiscoveryFailure.PLATFORM_ERROR,
+                peers = emptyList(),
             )
         }
-
-        refreshAvailability()
     }
 
     override fun stopMonitoring() {
@@ -155,6 +177,7 @@ class WifiDirectDeviceDiscoveryRepository(
 
         stopDiscovery()
         monitoring = false
+        p2pEnabled = null
 
         if (receiverRegistered) {
             try {
@@ -168,6 +191,7 @@ class WifiDirectDeviceDiscoveryRepository(
     }
 
     override fun refreshAvailability() {
+        registerP2pStateReceiverIfPermitted()
         val availability = currentAvailability()
         val current = mutableSnapshot.value
 
@@ -238,10 +262,7 @@ class WifiDirectDeviceDiscoveryRepository(
                         device,
                     ->
                     if (isCurrent(requestGeneration) &&
-                        instanceName.equals(
-                            PeyvandDiscoveryAdvertisement.INSTANCE_NAME,
-                            ignoreCase = true,
-                        ) &&
+                        PeyvandDiscoveryAdvertisement.isCompatibleInstanceName(instanceName) &&
                         registrationType.contains(
                             PeyvandDiscoveryAdvertisement.SERVICE_TYPE,
                             ignoreCase = true,
@@ -249,7 +270,7 @@ class WifiDirectDeviceDiscoveryRepository(
                     ) {
                         val address = device.deviceAddress
                         if (address.isNotBlank()) {
-                            discoveredServices[address] = device
+                            rememberService(address, device)
                             publishPeerIfCompatible(address, requestGeneration)
                         }
                     }
@@ -267,7 +288,7 @@ class WifiDirectDeviceDiscoveryRepository(
                     ) {
                         val address = device.deviceAddress
                         if (address.isNotBlank()) {
-                            discoveredRecords[address] = record.toMap()
+                            rememberRecord(address, record.toMap())
                             publishPeerIfCompatible(address, requestGeneration)
                         }
                     }
@@ -368,6 +389,10 @@ class WifiDirectDeviceDiscoveryRepository(
             return WifiDirectAvailability.WIFI_P2P_DISABLED
         }
 
+        if (p2pEnabled == null) {
+            return WifiDirectAvailability.CHECKING
+        }
+
         if (channel == null) {
             return WifiDirectAvailability.UNAVAILABLE
         }
@@ -463,13 +488,45 @@ class WifiDirectDeviceDiscoveryRepository(
             displayName = device.deviceName.takeIf { it.isNotBlank() },
         )
 
-        val peers = (mutableSnapshot.value.peers.filterNot { it.id == address } + peer)
+        val existingPeers = mutableSnapshot.value.peers
+        if (existingPeers.none { it.id == address } &&
+            existingPeers.size >= MAX_VISIBLE_PEERS
+        ) {
+            return
+        }
+        val peers = (existingPeers.filterNot { it.id == address } + peer)
             .sortedBy { it.displayName?.lowercase().orEmpty() }
 
         mutableSnapshot.value = mutableSnapshot.value.copy(
             peers = peers,
             failure = null,
         )
+    }
+
+    private fun rememberService(address: String, device: WifiP2pDevice) {
+        if (!discoveredServices.containsKey(address) &&
+            discoveredServices.size >= MAX_PENDING_PEERS
+        ) {
+            val oldestAddress = discoveredServices.keys.firstOrNull()
+            if (oldestAddress != null) {
+                discoveredServices.remove(oldestAddress)
+                discoveredRecords.remove(oldestAddress)
+            }
+        }
+        discoveredServices[address] = device
+    }
+
+    private fun rememberRecord(address: String, record: Map<String, String>) {
+        if (!discoveredRecords.containsKey(address) &&
+            discoveredRecords.size >= MAX_PENDING_PEERS
+        ) {
+            val oldestAddress = discoveredRecords.keys.firstOrNull()
+            if (oldestAddress != null) {
+                discoveredRecords.remove(oldestAddress)
+                discoveredServices.remove(oldestAddress)
+            }
+        }
+        discoveredRecords[address] = record
     }
 
     private fun clearPendingPeers() {

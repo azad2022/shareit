@@ -13,10 +13,11 @@ The foundation is built and installed on a product-owner phone. The next user-vi
 Use Android `WifiP2pManager` DNS-SD service discovery for CP-002:
 
 - Each actively discoverable PEYVAND instance registers a `WifiP2pDnsSdServiceInfo`.
-- The DNS-SD instance name is `PEYVAND`; the service type is `_peyvand._tcp`.
+- The DNS-SD instance name uses `PEYVAND-` plus an eight-character random process-local suffix to avoid instance-name collisions; the service type is `_peyvand._tcp`.
 - The public TXT record contains only `app=peyvand` and `discovery=1`.
 - Each device registers a service request for this service type.
-- The app displays a peer only after both the service-response callback and matching TXT callback have been received for the same transient P2P device address.
+- The app displays a peer only after both the service-response callback (with the PEYVAND prefix and valid suffix) and matching TXT callback have been received for the same transient P2P device address.
+- The P2P state receiver is registered only while the Activity is foregrounded and after the runtime permission is granted; its sticky state is used before enabling discovery.
 - Discovery metadata is a compatibility filter, not a secret or an authentication credential. Any nearby peer can forge it.
 
 Do not include a listening port or transport endpoint in this milestone. No socket is opened and no connection is initiated.

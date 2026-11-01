@@ -31,6 +31,15 @@ class WifiDirectDiscoveryPolicyTest {
     }
 
     @Test
+    fun `service instance name requires PEYVAND prefix and an eight digit hexadecimal suffix`() {
+        assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("PEYVAND-a1b2c3d4"))
+        assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("peyvand-0123ABCD"))
+        assertFalse(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("PEYVAND"))
+        assertFalse(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("PEYVAND-xyz"))
+        assertFalse(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("OTHER-a1b2c3d4"))
+    }
+
+    @Test
     fun `advertisement accepts only the matching application and schema version`() {
         assertTrue(
             PeyvandDiscoveryAdvertisement.isCompatible(

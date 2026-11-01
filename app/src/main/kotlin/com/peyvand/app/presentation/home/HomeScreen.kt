@@ -10,6 +10,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -178,6 +179,10 @@ fun HomeScreen(
                 )
 
                 Button(
+                    enabled = isScanning ||
+                        state.availability == WifiDirectAvailability.READY ||
+                        state.availability == WifiDirectAvailability.PERMISSION_REQUIRED ||
+                        state.availability == WifiDirectAvailability.UNAVAILABLE,
                     onClick = {
                         if (isScanning) {
                             viewModel.stopDiscovery()
@@ -451,17 +456,19 @@ private fun RadarScanner(
 ) {
     val animationsEnabled = remember { ValueAnimator.areAnimatorsEnabled() }
     val transition = rememberInfiniteTransition(label = "peyvand-discovery-radar")
-    val pulse by transition.animateFloat(
-        initialValue = 0.18f,
-        targetValue = 1f,
-        animationSpec = if (isActive && animationsEnabled) {
+    val pulseAnimationSpec: AnimationSpec<Float> =
+        if (isActive && animationsEnabled) {
             infiniteRepeatable(
                 animation = tween(durationMillis = 1_650, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart,
             )
         } else {
             snap()
-        },
+        }
+    val pulse by transition.animateFloat(
+        initialValue = 0.18f,
+        targetValue = 1f,
+        animationSpec = pulseAnimationSpec,
         label = "peyvand-discovery-pulse",
     )
 
