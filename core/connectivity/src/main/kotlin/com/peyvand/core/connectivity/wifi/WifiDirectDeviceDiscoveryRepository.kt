@@ -15,12 +15,14 @@ import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest
 import android.os.Build
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.Locale
 import java.util.UUID
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
 import com.peyvand.core.domain.discovery.DeviceDiscoverySnapshot
+import com.peyvand.core.domain.discovery.DiscoveryOperation
 import com.peyvand.core.domain.discovery.DiscoveryStatus
 import com.peyvand.core.domain.discovery.NearbyPeer
 import com.peyvand.core.domain.discovery.PeyvandDiscoveryAdvertisement
@@ -63,6 +65,7 @@ class WifiDirectDeviceDiscoveryRepository(
     }
 
     private companion object {
+        const val LOG_TAG = "PeyvandP2P"
         const val MAX_PENDING_PEERS = 128
         const val MAX_VISIBLE_PEERS = 64
     }
@@ -142,6 +145,7 @@ class WifiDirectDeviceDiscoveryRepository(
                     status = DiscoveryStatus.IDLE,
                     peers = emptyList(),
                     failure = null,
+                    failureOperation = null,
                 )
             } else {
                 refreshAvailability()
@@ -294,6 +298,7 @@ class WifiDirectDeviceDiscoveryRepository(
             status = DiscoveryStatus.STARTING,
             peers = emptyList(),
             failure = null,
+            failureOperation = null,
         )
 
         try {
@@ -342,21 +347,21 @@ class WifiDirectDeviceDiscoveryRepository(
 
             manager.clearServiceRequests(
                 activeChannel,
-                actionListener(requestGeneration) {
+                actionListener(requestGeneration, DiscoveryOperation.CLEAR_SERVICE_REQUESTS) {
                     manager.clearLocalServices(
                         activeChannel,
-                        actionListener(requestGeneration) {
+                        actionListener(requestGeneration, DiscoveryOperation.CLEAR_LOCAL_SERVICES) {
                             manager.addLocalService(
                                 activeChannel,
                                 serviceInfo,
-                                actionListener(requestGeneration) {
+                                actionListener(requestGeneration, DiscoveryOperation.ADD_LOCAL_SERVICE) {
                                     manager.addServiceRequest(
                                         activeChannel,
                                         serviceRequest,
-                                        actionListener(requestGeneration) {
+                                        actionListener(requestGeneration, DiscoveryOperation.ADD_SERVICE_REQUEST) {
                                             manager.discoverServices(
                                                 activeChannel,
-                                                actionListener(requestGeneration) {
+                                                actionListener(requestGeneration, DiscoveryOperation.DISCOVER_SERVICES) {
                                                     mutableSnapshot.value =
                                                         mutableSnapshot.value.copy(
                                                             status = DiscoveryStatus.DISCOVERING,
@@ -386,6 +391,7 @@ class WifiDirectDeviceDiscoveryRepository(
             status = DiscoveryStatus.IDLE,
             peers = emptyList(),
             failure = null,
+            failureOperation = null,
         )
         releaseDiscoveryRegistrations()
     }
@@ -492,6 +498,7 @@ class WifiDirectDeviceDiscoveryRepository(
 
     private fun actionListener(
         expectedGeneration: Long,
+        operation: DiscoveryOperation,
         onSuccess: () -> Unit,
     ): WifiP2pManager.ActionListener = object : WifiP2pManager.ActionListener {
         override fun onSuccess() {
@@ -499,7 +506,7 @@ class WifiDirectDeviceDiscoveryRepository(
         }
 
         override fun onFailure(reason: Int) {
-            handlePlatformFailure(expectedGeneration, reason)
+            handlePlatformFailure(expectedGeneration, reason, operation)
         }
     }
 
@@ -509,8 +516,13 @@ class WifiDirectDeviceDiscoveryRepository(
             override fun onFailure(reason: Int) = Unit
         }
 
-    private fun handlePlatformFailure(expectedGeneration: Long, reason: Int) {
+    private fun handlePlatformFailure(
+        expectedGeneration: Long,
+        reason: Int,
+        operation: DiscoveryOperation,
+    ) {
         if (!isCurrent(expectedGeneration)) return
+        Log.w(LOG_TAG, "Wi-Fi Direct operation $operation failed with framework reason=$reason")
 
         when (reason) {
             WifiP2pManager.P2P_UNSUPPORTED -> {
@@ -518,15 +530,24 @@ class WifiDirectDeviceDiscoveryRepository(
                     failure = DeviceDiscoveryFailure.UNSUPPORTED,
                     expectedGeneration = expectedGeneration,
                     availability = WifiDirectAvailability.UNSUPPORTED,
+                    failureOperation = operation,
                 )
             }
 
             WifiP2pManager.BUSY -> {
-                setFailure(DeviceDiscoveryFailure.BUSY, expectedGeneration)
+                setFailure(
+                    DeviceDiscoveryFailure.BUSY,
+                    expectedGeneration = expectedGeneration,
+                    failureOperation = operation,
+                )
             }
 
             else -> {
-                setFailure(DeviceDiscoveryFailure.PLATFORM_ERROR, expectedGeneration)
+                setFailure(
+                    DeviceDiscoveryFailure.PLATFORM_ERROR,
+                    expectedGeneration = expectedGeneration,
+                    failureOperation = operation,
+                )
             }
         }
     }
@@ -615,6 +636,7 @@ class WifiDirectDeviceDiscoveryRepository(
         failure: DeviceDiscoveryFailure,
         expectedGeneration: Long? = null,
         availability: WifiDirectAvailability? = null,
+        failureOperation: DiscoveryOperation? = null,
     ) {
         if (expectedGeneration != null && !isCurrent(expectedGeneration)) return
 
@@ -628,6 +650,7 @@ class WifiDirectDeviceDiscoveryRepository(
             availability = availability ?: mutableSnapshot.value.availability,
             status = DiscoveryStatus.FAILED,
             failure = failure,
+            failureOperation = failureOperation,
             peers = emptyList(),
         )
     }
