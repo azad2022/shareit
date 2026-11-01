@@ -22,6 +22,7 @@ The repository previously contained product documents but no executable Android 
 | Activity Compose | 1.13.0 | Stable AndroidX Activity Compose release. |
 | Lifecycle | 2.11.0 | Stable ViewModel/lifecycle APIs. |
 | DataStore Preferences | 1.3.0 | Asynchronous persistence for the user's selected language. |
+| Coroutines Android | 1.11.0 | Explicit Main dispatcher implementation dependency for the Android locale adapter in `:core:data`. |
 | AndroidX Core | 1.19.1 | Current stable core support APIs. |
 | JDK | 17 | Conservative supported JVM baseline for Android Gradle builds. |
 
@@ -62,7 +63,7 @@ Use explicit dependency construction in `MainActivity` for this small foundation
 ### Build and distribution
 
 - Debug build only. Do not add a release signing configuration, keystore, signing secret, analytics, cloud, network permission, or transfer permission before a feature requires it.
-- CI must run unit tests, Android lint, and `assembleDebug` on a hosted runner with Android SDK 37.
+- CI runs unit tests, Android lint, and `assembleDebug` on a hosted runner with Android SDK 37. It uses `--continue` to collect independent task results and always uploads available test/lint reports, including on failure.
 - Android 17's SDK Manager package is `platforms;android-37.0` and installs under `platforms/android-37.0`; CI creates a local `android-37` symlink for AGP `compileSdk = 37` lookup. This is isolated to the ephemeral CI SDK and does not alter the app or users’ devices.
 - Gradle Wrapper distribution checksum and wrapper JAR checksum are pinned/verified.
 
@@ -84,5 +85,6 @@ Use explicit dependency construction in `MainActivity` for this small foundation
 - AndroidX Activity releases: https://developer.android.com/jetpack/androidx/releases/activity
 - AndroidX Lifecycle releases: https://developer.android.com/jetpack/androidx/releases/lifecycle
 - AndroidX DataStore releases: https://developer.android.com/jetpack/androidx/releases/datastore
+- kotlinx.coroutines releases: https://github.com/Kotlin/kotlinx.coroutines/releases
 - Android app modularization: https://developer.android.com/topic/modularization
 - Gradle distribution and wrapper checksums: https://gradle.org/release-checksums/

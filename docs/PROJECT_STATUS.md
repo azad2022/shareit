@@ -6,7 +6,7 @@
 - **Current checkpoint:** CP-001 — Initial Android foundation
 - **Current branch:** `feature/foundation-bootstrap`
 - **Last updated:** 2026-11-01
-- **Latest implementation commit:** `765e0ba163c269af3a3fbd54dfafb33d7b5b759b`
+- **Latest source fix commit:** `71538591fcc2a3473920b26ba3388781dc2cfac1`
 
 ## Current milestone
 

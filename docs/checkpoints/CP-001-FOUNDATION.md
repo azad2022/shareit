@@ -39,6 +39,8 @@ Files created include the root Gradle configuration/version catalog/wrapper, fou
 
 The feature scope intentionally excludes all discovery, network, security, file-transfer, and APK work.
 
+- Compile diagnostic fix: `71538591fcc2a3473920b26ba3388781dc2cfac1` (extract the nullable locale tag to a local value before validation/use, avoiding cross-module public-property smart-cast failure).
+
 ## Test evidence
 
 Local build: not run. The available remote workbench has no `java`, `gradle`, `ANDROID_HOME`, or `ANDROID_SDK_ROOT` installation.
@@ -48,11 +50,14 @@ GitHub Actions:
 - Run `41278935375` (initial foundation): failed before Gradle at Android SDK setup because the setup action attempted to install the removed SDK package `tools`.
 - Run `41278975695` (wrapper executable fix): same SDK setup failure, before Gradle.
 - Run `41279407754` (AGP/Kotlin and CI correction): SDK setup passed, then failed because the workflow requested `platforms;android-37`, while the Android 17 SDK package is named `platforms;android-37.0`.
-- Run `41279528083` (latest): `Set up Android SDK`, `Install Android 17 SDK platform`, and `Validate Gradle wrapper and build` succeeded. The command step `:core:domain:testDebugUnitTest`, module lint tasks, and `:app:assembleDebug` was still `in_progress` at the last check (2026-11-01 06:08 UTC). No test/build conclusion is available yet.
+- Run `41279528083`: SDK installation and wrapper validation passed; its build step was later cancelled when the next push started.
+- Run `41279689928`: SDK installation and wrapper validation passed. `:core:designsystem:compileDebugKotlin` and `:core:domain:compileDebugKotlin` completed. `:core:domain:testDebugUnitTest` executed without a reported task failure. The build then failed at `:core:data:compileDebugKotlin` with: `Smart cast to TypeVariable(T) is impossible, because localeTag is a public API property declared in a different module` at `PreferencesLanguageRepository.kt:42:48`.
+- Source correction committed as `71538591fcc2a3473920b26ba3388781dc2cfac1`.
+- CI is being improved to run independent tasks with `--continue`, upload test/lint reports even on failure, and use current Node 24 GitHub Actions releases. A fresh validation run is required before any acceptance criterion can be marked passed.
 
-Latest run: https://github.com/azad2022/shareit/actions/runs/41279528083
+Failing run with the full diagnostic: https://github.com/azad2022/shareit/actions/runs/41279689928
 
-The test/build acceptance criteria remain unchecked until the latest workflow reaches a completed success. No test is reported as passed based on an in-progress job.
+The test/build acceptance criteria remain unchecked until a completed run includes inspectable test/lint reports and a successful Debug APK build.
 
 ## Risks and deferred decisions
 
@@ -65,7 +70,8 @@ The test/build acceptance criteria remain unchecked until the latest workflow re
 
 ## Commit and source-of-truth verification
 
-- Latest known branch commit: `765e0ba163c269af3a3fbd54dfafb33d7b5b759b`.
+- Latest source fix commit at the time of this update: `71538591fcc2a3473920b26ba3388781dc2cfac1`.
+- Earlier verified branch tip: `e869950de6ed990c1eb4de422942f72fa6c241e8`; the source fix has since advanced the branch.
 - The branch tip was verified through the Git reference API.
 - The `gradlew` file mode was verified as `100755` in the branch tree.
 - Key app, DataStore adapter, and checkpoint files were read back from GitHub after commit.

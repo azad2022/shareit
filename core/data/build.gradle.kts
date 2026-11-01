@@ -30,4 +30,6 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.datastore.preferences)
+    // This module directly calls Dispatchers.Main.immediate for its Android locale adapter.
+    implementation(libs.kotlinx.coroutines.android)
 }
