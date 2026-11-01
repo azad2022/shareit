@@ -48,6 +48,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +73,7 @@ import com.peyvand.app.R
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
 import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
+import com.peyvand.core.domain.discovery.DiscoveryOperation
 import com.peyvand.core.domain.discovery.DiscoveryStatus
 import com.peyvand.core.domain.discovery.NearbyPeer
 import com.peyvand.core.domain.discovery.WifiDirectAvailability
@@ -130,6 +132,10 @@ fun DeviceDiscoveryScreen(
 
     LaunchedEffect(Unit) {
         viewModel.refreshAvailability()
+    }
+
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.stopDiscovery() }
     }
 
     val hasPermission = ContextCompat.checkSelfPermission(
@@ -293,6 +299,25 @@ fun DeviceDiscoveryScreen(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
             )
+            state.failureOperation?.let { operation ->
+                val operationLabel = when (operation) {
+                    DiscoveryOperation.CLEAR_SERVICE_REQUESTS ->
+                        stringResource(R.string.discovery_stage_clear_requests)
+                    DiscoveryOperation.CLEAR_LOCAL_SERVICES ->
+                        stringResource(R.string.discovery_stage_clear_services)
+                    DiscoveryOperation.ADD_LOCAL_SERVICE ->
+                        stringResource(R.string.discovery_stage_add_local_service)
+                    DiscoveryOperation.ADD_SERVICE_REQUEST ->
+                        stringResource(R.string.discovery_stage_add_request)
+                    DiscoveryOperation.DISCOVER_SERVICES ->
+                        stringResource(R.string.discovery_stage_start_scan)
+                }
+                Text(
+                    text = stringResource(R.string.discovery_error_operation, operationLabel),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
 
         if (state.peers.isNotEmpty()) {
