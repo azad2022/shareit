@@ -34,16 +34,17 @@ class PreferencesLanguageRepository(
     }
 
     override suspend fun selectLanguage(language: AppLanguage) {
-        require(language.isSelectable && language.localeTag != null) {
+        val localeTag = language.localeTag
+        require(language.isSelectable && localeTag != null) {
             "The selected language is not ready for user-facing use."
         }
 
         dataStore.edit { preferences ->
-            preferences[selectedLanguageKey] = language.localeTag
+            preferences[selectedLanguageKey] = localeTag
         }
 
         withContext(Dispatchers.Main.immediate) {
-            val requestedLocales = LocaleListCompat.forLanguageTags(language.localeTag)
+            val requestedLocales = LocaleListCompat.forLanguageTags(localeTag)
             val currentTags = AppCompatDelegate.getApplicationLocales().toLanguageTags()
             if (currentTags != requestedLocales.toLanguageTags()) {
                 AppCompatDelegate.setApplicationLocales(requestedLocales)
