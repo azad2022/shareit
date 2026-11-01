@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +45,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,9 +80,12 @@ import com.peyvand.core.domain.network.VpnRouteStatus
 
 @SuppressLint("InlinedApi")
 @Composable
-fun HomeScreen(
+fun DeviceDiscoveryScreen(
     viewModel: DeviceDiscoveryViewModel,
     networkEnvironmentViewModel: NetworkEnvironmentViewModel,
+    title: String,
+    subtitle: String,
+    onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val networkEnvironment by networkEnvironmentViewModel.state.collectAsStateWithLifecycle()
@@ -148,21 +153,31 @@ fun HomeScreen(
             .padding(horizontal = 22.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onBack) {
+                Text(stringResource(R.string.action_back))
+            }
+            Spacer(modifier = Modifier.weight(1f))
             Text(
-                text = stringResource(R.string.brand_name),
-                style = MaterialTheme.typography.labelLarge,
+                text = stringResource(R.string.home_brand_name),
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
             )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(
-                text = stringResource(R.string.discovery_title),
+                text = title,
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = stringResource(R.string.discovery_subtitle),
+                text = subtitle,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

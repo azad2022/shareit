@@ -15,6 +15,8 @@ import androidx.lifecycle.lifecycleScope
 import com.peyvand.app.presentation.MainViewModel
 import com.peyvand.app.presentation.MainViewModelFactory
 import com.peyvand.app.presentation.PeyvandApp
+import com.peyvand.app.presentation.files.ShareSelectionViewModel
+import com.peyvand.app.presentation.files.ShareSelectionViewModelFactory
 import com.peyvand.app.presentation.StartupErrorScreen
 import com.peyvand.app.presentation.StartupLoadingScreen
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
@@ -36,6 +38,7 @@ class MainActivity : AppCompatActivity() {
             val languageViewModel: MainViewModel,
             val discoveryViewModel: DeviceDiscoveryViewModel,
             val networkEnvironmentViewModel: NetworkEnvironmentViewModel,
+            val shareSelectionViewModel: ShareSelectionViewModel,
         ) : StartupState
     }
 
@@ -62,6 +65,7 @@ class MainActivity : AppCompatActivity() {
                         languageViewModel = state.languageViewModel,
                         discoveryViewModel = state.discoveryViewModel,
                         networkEnvironmentViewModel = state.networkEnvironmentViewModel,
+                        shareSelectionViewModel = state.shareSelectionViewModel,
                     )
                 }
             }
@@ -124,10 +128,18 @@ class MainActivity : AppCompatActivity() {
                     NetworkEnvironmentViewModelFactory(networkEnvironmentRepository),
                 )[NetworkEnvironmentViewModel::class.java]
 
+                val shareSelectionViewModel = ViewModelProvider(
+                    this@MainActivity,
+                    ShareSelectionViewModelFactory(
+                        (application as PeyvandApplication).shareCatalogRepository,
+                    ),
+                )[ShareSelectionViewModel::class.java]
+
                 startupState = StartupState.Ready(
                     languageViewModel = languageViewModel,
                     discoveryViewModel = discoveryViewModel,
                     networkEnvironmentViewModel = networkEnvironmentViewModel,
+                    shareSelectionViewModel = shareSelectionViewModel,
                 )
             } catch (cancellation: CancellationException) {
                 throw cancellation

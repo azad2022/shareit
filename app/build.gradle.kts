@@ -13,7 +13,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.2.0"
+        versionName = "0.3.0"
     }
 
     buildFeatures {
@@ -45,6 +45,7 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:connectivity"))
     implementation(project(":core:designsystem"))
+    implementation(project(":core:storage"))
 
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.compose)

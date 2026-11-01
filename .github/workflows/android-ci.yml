@@ -56,6 +56,7 @@ jobs:
             :core:designsystem:lintDebug \
             :core:domain:lintDebug \
             :core:connectivity:lintDebug \
+            :core:storage:lintDebug \
             :app:assembleDebug
 
       - name: Upload validation reports

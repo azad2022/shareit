@@ -2,6 +2,19 @@
 <resources>
     <string name="app_name">پیوند</string>
     <string name="brand_name">PEYVAND</string>
+    <string name="home_brand_name">پیوند</string>
+    <string name="home_subtitle">انتقال مستقیم فایل بین دستگاه‌های نزدیک</string>
+    <string name="home_send">ارسال</string>
+    <string name="home_send_subtitle">انتخاب عکس، ویدیو، موسیقی، برنامه یا فایل</string>
+    <string name="home_receive">دریافت</string>
+    <string name="home_receive_subtitle">آماده‌سازی دستگاه برای دریافت فایل</string>
+    <string name="home_files">فایل‌ها</string>
+    <string name="home_files_subtitle">مرور محتوای موجود در دستگاه</string>
+    <string name="home_activity">فعالیت‌های انتقال</string>
+    <string name="home_local_transfer_hint">انتقال مستقیم و محلی؛ بدون نیاز به بارگذاری فایل‌ها در فضای ابری</string>
+    <string name="activity_title">فعالیت‌های انتقال</string>
+    <string name="activity_empty">هنوز فعالیتی ثبت نشده است. پس از انجام انتقال، وضعیت و نتیجهٔ آن در این بخش نمایش داده می‌شود.</string>
+
     <string name="vpn_route_warning_title">VPN برای مسیر شبکهٔ پیوند فعال است</string>
     <string name="vpn_route_warning_message">Android گزارش می‌کند شبکهٔ پیش‌فرض پیوند از VPN عبور می‌کند. بعضی VPNها ارتباط با شبکهٔ محلی را محدود می‌کنند و ممکن است اتصال یا انتقال را مختل کنند؛ اما روشن بودن VPN به‌تنهایی ثابت نمی‌کند که انتقال مسدود است. در صورت بروز مشکل، دسترسی شبکهٔ محلی (LAN) را در تنظیمات VPN مجاز کنید یا VPN را موقتاً خاموش کنید. پیوند VPN را خودکار خاموش نمی‌کند.</string>
     <string name="vpn_open_settings">بررسی تنظیمات VPN</string>
@@ -17,11 +30,46 @@
     <string name="language_coming_soon">به‌زودی</string>
     <string name="action_continue">ادامه</string>
     <string name="action_retry">تلاش مجدد</string>
+    <string name="action_back">بازگشت</string>
     <string name="saving_language">در حال ذخیره زبان…</string>
     <string name="language_save_failed">ذخیره زبان انجام نشد. دوباره تلاش کنید.</string>
     <string name="app_startup_loading">در حال آماده‌سازی پیوند…</string>
     <string name="app_startup_failed_title">راه‌اندازی برنامه انجام نشد</string>
     <string name="app_startup_failed_message">خواندن تنظیمات اولیه با مشکل روبه‌رو شد. می‌توانید دوباره تلاش کنید.</string>
+
+    <string name="file_selection_title">انتخاب فایل‌ها</string>
+    <string name="file_manager_title">فایل‌های دستگاه</string>
+    <string name="file_selection_subtitle">می‌توانید چند فایل را از دسته‌های مختلف انتخاب کنید. انتخاب شما تا پایان این مرحله حفظ می‌شود.</string>
+    <string name="file_category_music">موسیقی</string>
+    <string name="file_category_photos">عکس</string>
+    <string name="file_category_apps">برنامه‌ها</string>
+    <string name="file_category_videos">ویدیو</string>
+    <string name="file_category_files">فایل</string>
+    <string name="file_search_label">جست‌وجو</string>
+    <string name="file_search_hint">نام فایل یا برنامه را وارد کنید</string>
+    <string name="file_permission_explanation">برای نمایش محتوای این دسته، اجازهٔ دسترسی مربوط به همان نوع رسانه لازم است. این مجوز فقط برای خواندن رسانه‌های قابل‌دسترسی در دستگاه استفاده می‌شود.</string>
+    <string name="file_permission_denied">دسترسی داده نشد. برای مشاهدهٔ این دسته، مجوز را تأیید کنید.</string>
+    <string name="file_permission_action">اجازهٔ دسترسی به رسانه‌ها</string>
+    <string name="file_documents_picker_explanation">برای انتخاب اسناد و سایر فایل‌ها، فایل‌گزین امن Android باز می‌شود. فقط مواردی که خودتان انتخاب کنید در اختیار پیوند قرار می‌گیرند.</string>
+    <string name="file_documents_picker_action">انتخاب فایل‌ها از دستگاه</string>
+    <string name="file_catalog_error">خواندن محتوای این دسته ممکن نشد. مجوز دسترسی و وضعیت حافظه را بررسی کنید.</string>
+    <string name="file_catalog_empty">در این دسته موردی برای نمایش پیدا نشد.</string>
+    <string name="file_load_more">نمایش موارد بیشتر</string>
+    <string name="file_load_more_retry">تلاش دوباره برای بارگذاری</string>
+    <string name="file_load_more_error">بارگذاری بخش بعدی انجام نشد.</string>
+    <string name="file_size_unavailable">اندازه در دسترس نیست</string>
+    <string name="file_selected_size">حجم موارد انتخاب‌شده: %1$s</string>
+    <string name="file_selected_unknown_size">اندازهٔ بعضی موارد از سوی ارائه‌دهندهٔ فایل اعلام نشده است؛ جمع بالا فقط شامل اندازه‌های قابل‌دسترسی است.</string>
+    <string name="file_selection_clear">پاک کردن انتخاب</string>
+    <plurals name="file_selected_count">
+        <item quantity="one">%d مورد انتخاب شده</item>
+        <item quantity="other">%d مورد انتخاب شده</item>
+    </plurals>
+
+    <string name="send_discovery_title">انتخاب دستگاه مقصد</string>
+    <string name="send_discovery_subtitle">فایل‌ها انتخاب شده‌اند. پیوند را روی دستگاه مقصد نیز باز کنید تا کشف دوطرفه انجام شود. اتصال و انتقال پس از تکمیل احراز هویت امن فعال می‌شود.</string>
+    <string name="receive_screen_title">آماده‌سازی دریافت</string>
+    <string name="receive_screen_subtitle">در این مرحله کشف دستگاه‌های سازگار فعال است. QR، احراز هویت و پذیرش فایل پس از تأیید ارتباط دو دستگاه و تکمیل پروتکل امن اضافه می‌شود.</string>
 
     <string name="discovery_title">دستگاه‌های نزدیک</string>
     <string name="discovery_subtitle">گوشی‌های دارای پیوند را در نزدیکی خود پیدا کنید.</string>
