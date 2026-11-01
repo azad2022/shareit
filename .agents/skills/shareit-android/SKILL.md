@@ -460,3 +460,21 @@ Do not resolve these by guessing. Capture them in the requirements/ADR process b
 - Quantified performance and reliability targets after device-lab baselines exist.
 
 **Default rule:** preserve the confirmed Android-only, offline-first, security-and-reliability-first scope. Do not expand the product with unrelated media, social, cloud, advertising, or account features unless the product owner explicitly approves the expansion.
+
+
+## 17. Confirmed product-owner decisions (2026-11-01)
+
+The following decisions are confirmed and must be treated as requirements unless the product owner explicitly changes them:
+
+- **Offline/serverless core:** no central backend, cloud database, account, relay, or internet dependency is required for discovery, pairing, or local file transfer. Transfer payloads remain on the participating devices. Android local sockets may still require the manifest INTERNET permission; this does not imply internet connectivity.
+- **Primary transport:** Wi-Fi Direct is the preferred primary connection technology. Evaluate device capability and OS behavior; do not claim universal support. Any fallback transport must be documented and approved.
+- **Transfer modes:** support direct one-to-one transfer and one-sender-to-multiple-receivers group transfer. Each receiver has independent acceptance, progress, cancellation, integrity verification, and recovery state. Simultaneous multi-sender group exchange is not part of the confirmed first group-transfer requirement.
+- **Performance target:** deliver competitive, SHAREit-class real-world performance where hardware and radio conditions permit. Never promise identical throughput on every device. Establish evidence-based benchmarks against SHAREit on the same phones, files, distance, radio conditions, and test procedure.
+- **Frontend quality:** premium, bespoke visual design and polished, purposeful animations are core product requirements, not late-stage decoration. Use a maintained design system, reusable components, feature-isolated UI, explicit UI states, and accessibility/performance checks. Animations must not compromise responsiveness, battery, or transfer status accuracy.
+- **Maintainability:** modular, cleanly separated architecture is mandatory. Avoid oversized files/classes and unrelated responsibilities. Gradle module boundaries should reflect stable architectural ownership; do not create a module for every trivial class.
+- **Checkpoint discipline:** maintain repository documentation for project status, architecture decisions, test evidence, and milestone checkpoints. A checkpoint may be marked PASSED only with reproducible test evidence, relevant device/environment details, and the corresponding commit SHA. Use IN_PROGRESS, BLOCKED, and PASSED states. Preserve known-good commits/tags for major verified milestones.
+- **Signing and build stage:** current work is Debug-only and uses the standard Android debug signing configuration. Do not create or require a production keystore or release secrets during this phase. Never commit any keystore or signing secret.
+- **Distribution intent:** plan for both Google Play distribution and direct APK distribution. Treat their policy, package visibility, installer, signing, and release workflows as separate concerns requiring review.
+- **Future release signing:** when release preparation is explicitly authorized, create a production signing key, keep protected backups offline, and expose secrets only to tightly scoped trusted release workflows via GitHub Secrets/Environment Secrets. Review whether Play App Signing is appropriate.
+
+These decisions define product scope and planning constraints; they do not authorize implementation by themselves. Do not create app source, Gradle scaffolding, UI screens, or executable features until the product owner explicitly starts implementation.
