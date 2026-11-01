@@ -31,6 +31,7 @@
     <string name="discovery_permission_explanation">برای کشف مستقیم دستگاه‌های نزدیک، پیوند به مجوز Wi-Fi دستگاه‌های اطراف نیاز دارد. این قابلیت موقعیت مکانی شما را از اطلاعات Wi-Fi استخراج نمی‌کند.</string>
     <string name="discovery_permission_required">برای شروع جست‌وجو، مجوز دستگاه‌های نزدیک لازم است.</string>
     <string name="discovery_permission_denied">مجوز داده نشد. برای فعال‌سازی، دسترسی پیوند را در تنظیمات برنامه بررسی کنید.</string>
+    <string name="discovery_permission_precision_required">در Android 12 و نسخه‌های قدیمی‌تر، سرویس Wi-Fi Direct برای کشف دستگاه‌ها به مجوز موقعیت دقیق نیاز دارد. پیوند مختصات یا تاریخچهٔ موقعیت شما را دریافت یا ذخیره نمی‌کند.</string>
     <string name="discovery_open_app_settings">باز کردن تنظیمات مجوزهای پیوند</string>
     <string name="discovery_availability_checking">در حال بررسی پشتیبانی Wi-Fi Direct…</string>
     <string name="discovery_availability_ready">Wi-Fi Direct آمادهٔ بررسی دستگاه‌های سازگار است.</string>

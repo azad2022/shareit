@@ -62,14 +62,21 @@ object WifiDirectPermissionPolicy {
     enum class Permission {
         NEARBY_WIFI_DEVICES,
         LEGACY_FINE_LOCATION,
+        LEGACY_COARSE_LOCATION,
     }
 
-    fun forApiLevel(apiLevel: Int): Permission =
+    fun permissionsForApiLevel(apiLevel: Int): List<Permission> =
         if (apiLevel >= 33) {
-            Permission.NEARBY_WIFI_DEVICES
+            listOf(Permission.NEARBY_WIFI_DEVICES)
         } else {
-            Permission.LEGACY_FINE_LOCATION
+            listOf(
+                Permission.LEGACY_FINE_LOCATION,
+                Permission.LEGACY_COARSE_LOCATION,
+            )
         }
+
+    /** The permission that must be granted before Wi-Fi Direct discovery can start. */
+    fun forApiLevel(apiLevel: Int): Permission = permissionsForApiLevel(apiLevel).first()
 }
 
 /**

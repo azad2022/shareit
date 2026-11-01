@@ -14,7 +14,7 @@ Implement a first real nearby-device discovery path using Android Wi-Fi Direct D
 
 - [ ] `:core:connectivity` is a focused Android adapter module and the dependency graph remains acyclic.
 - [ ] Domain discovery contracts and API-level permission policy are Android-free and covered by unit tests.
-- [ ] Android 13+ uses `NEARBY_WIFI_DEVICES`; API 32 and earlier use `ACCESS_FINE_LOCATION`.
+- [ ] Android 13+ requests only `NEARBY_WIFI_DEVICES`; API 32 and earlier declare/request `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION` together, while discovery proceeds only if FINE is granted.
 - [ ] Wi-Fi Direct hardware is optional in the manifest and checked at runtime.
 - [ ] Location Mode, P2P enabled state, channel readiness, and permission status are represented accurately; unknown P2P state remains CHECKING until the sticky system state is observed.
 - [ ] DNS-SD advertisement contains only PEYVAND application/schema compatibility fields and a process-local collision-resistant instance suffix.
@@ -33,9 +33,10 @@ To be updated after source and CI read-back. This milestone must not silently ex
 
 ## Test evidence
 
-- Initial CI run `41283231293` reached compilation of `:core:connectivity`, `:core:data`, `:core:domain`, and `:core:designsystem`; three discovery policy tests and six language tests passed. The app compile then failed on a Compose animation-spec type mismatch in `HomeScreen.kt`.
-- Follow-up CI run `41283693851` exposed the precise API contract: `rememberInfiniteTransition.animateFloat` requires an `InfiniteRepeatableSpec`, not the common `AnimationSpec` type. The UI fix is to compose the infinite transition only while scanning is active and motion is enabled.
-- A subsequent validation run is required before treating this checkpoint as build-verified.
+- CI run `41283231293`: domain/data/design-system/connectivity source compilation and the then-current 9 unit tests passed; app Kotlin compilation failed on the initial radar animation-spec type.
+- CI run `41283693851`: the animation API mismatch remained and was diagnosed precisely.
+- CI run `41284094525`: all Kotlin compilation, domain tests (10 expected after the added discovery test), and core module lint tasks passed; `:app:assembleDebug` completed, but `:app:lintDebug` failed on the Android legacy `CoarseFineLocation` manifest rule. No APK artifact was uploaded.
+- The current change adds both legacy permissions, requests them together, and explicitly blocks discovery when only approximate permission is granted. A fresh CI run is required before considering the lint issue resolved.
 - Local build: not run in the current remote workbench.
 - Physical-device test results: pending.
 - Emulator-only evidence, if later added, cannot replace the required physical-device test.
@@ -50,8 +51,8 @@ To be updated after source and CI read-back. This milestone must not silently ex
 
 ## Source verification
 
-- Commit SHA: pending.
-- CI run ID and artifact: pending.
+- Permission-contract correction commit: pending.
+- Fresh CI run ID and APK artifact: pending.
 - Read-back of committed files: pending.
 
 ## Status rule

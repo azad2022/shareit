@@ -20,7 +20,8 @@
 - Implementing version-aware runtime permission checks and Wi-Fi Direct DNS-SD discovery.
 - Device list filters for the PEYVAND service marker; this is not peer authentication.
 - No socket, pairing, TLS, file transfer, or APK handling yet.
-- Requires physical two-device validation across API/manufacturer combinations.
+- CP-002 builds are currently being validated; latest failure was app lint's legacy Coarse/Fine location permission rule. The permission request/manifest correction is in progress.
+- Requires physical two-device validation across API/manufacturer combinations before discovery can be called working.
 
 ## Module boundaries
 

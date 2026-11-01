@@ -1,6 +1,8 @@
 package com.peyvand.app.presentation.home
 
 import android.animation.ValueAnimator
+import android.annotation.SuppressLint
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -70,6 +72,7 @@ import com.peyvand.core.domain.discovery.NearbyPeer
 import com.peyvand.core.domain.discovery.WifiDirectAvailability
 import com.peyvand.core.domain.discovery.WifiDirectPermissionPolicy
 
+@SuppressLint("InlinedApi")
 @Composable
 fun HomeScreen(
     viewModel: DeviceDiscoveryViewModel,
@@ -77,23 +80,41 @@ fun HomeScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = context as? Activity
-    val permission = remember {
-        when (WifiDirectPermissionPolicy.forApiLevel(Build.VERSION.SDK_INT)) {
-            WifiDirectPermissionPolicy.Permission.NEARBY_WIFI_DEVICES ->
-                android.Manifest.permission.NEARBY_WIFI_DEVICES
-            WifiDirectPermissionPolicy.Permission.LEGACY_FINE_LOCATION ->
-                android.Manifest.permission.ACCESS_FINE_LOCATION
+    val permissionsToRequest = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES)
+        } else {
+            // Android 12 can grant approximate location only when both are requested together.
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            )
         }
     }
+    val requiredPermission = permissionsToRequest.first()
 
     var permissionWasDenied by rememberSaveable { mutableStateOf(false) }
+    var approximatePermissionOnly by rememberSaveable { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        permissionWasDenied = !granted
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        val requiredGranted = grants[requiredPermission] == true ||
+            ContextCompat.checkSelfPermission(
+                context,
+                requiredPermission,
+            ) == PackageManager.PERMISSION_GRANTED
+        val coarseGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU &&
+            (grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ) == PackageManager.PERMISSION_GRANTED)
+
+        approximatePermissionOnly = coarseGranted && !requiredGranted
+        permissionWasDenied = !requiredGranted
         viewModel.refreshAvailability()
-        if (granted) viewModel.startDiscovery()
+        if (requiredGranted) viewModel.startDiscovery()
     }
 
     LaunchedEffect(Unit) {
@@ -102,11 +123,13 @@ fun HomeScreen(
 
     val hasPermission = ContextCompat.checkSelfPermission(
         context,
-        permission,
+        requiredPermission,
     ) == PackageManager.PERMISSION_GRANTED
 
-    val shouldShowRationale = activity?.shouldShowRequestPermissionRationale(permission) == true
-    val shouldOpenSettings = permissionWasDenied && !shouldShowRationale
+    val shouldShowRationale =
+        activity?.shouldShowRequestPermissionRationale(requiredPermission) == true
+    val shouldOpenSettings = approximatePermissionOnly ||
+        (permissionWasDenied && !shouldShowRationale)
     val isScanning = state.status == DiscoveryStatus.STARTING ||
         state.status == DiscoveryStatus.DISCOVERING
 
@@ -186,9 +209,10 @@ fun HomeScreen(
                             viewModel.stopDiscovery()
                         } else if (hasPermission) {
                             permissionWasDenied = false
+                            approximatePermissionOnly = false
                             viewModel.startDiscovery()
                         } else {
-                            permissionLauncher.launch(permission)
+                            permissionLauncher.launch(permissionsToRequest)
                         }
                     },
                     modifier = Modifier
@@ -222,6 +246,7 @@ fun HomeScreen(
                 )
             },
             permissionDenied = permissionWasDenied,
+            approximatePermissionOnly = approximatePermissionOnly,
             shouldOpenSettings = shouldOpenSettings,
         )
 
@@ -301,6 +326,7 @@ private fun AvailabilityCard(
     onOpenWifiSettings: () -> Unit,
     onOpenAppSettings: () -> Unit,
     permissionDenied: Boolean,
+    approximatePermissionOnly: Boolean,
     shouldOpenSettings: Boolean,
 ) {
     val message = when (availability) {
@@ -349,7 +375,15 @@ private fun AvailabilityCard(
 
             when (availability) {
                 WifiDirectAvailability.PERMISSION_REQUIRED -> {
-                    if (permissionDenied) {
+                    if (approximatePermissionOnly) {
+                        Text(
+                            text = stringResource(
+                                R.string.discovery_permission_precision_required,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    } else if (permissionDenied) {
                         Text(
                             text = stringResource(R.string.discovery_permission_denied),
                             style = MaterialTheme.typography.bodySmall,
@@ -472,7 +506,7 @@ private fun RadarScanner(
     } else {
         // No infinite transition is composed while idle or when Android disables motion.
         RadarDrawingCanvas(
-            isActive = false,
+            isActive = isActive,
             pulse = 0.18f,
         )
     }

@@ -16,6 +16,13 @@ class WifiDirectDiscoveryPolicyTest {
             WifiDirectPermissionPolicy.Permission.LEGACY_FINE_LOCATION,
             WifiDirectPermissionPolicy.forApiLevel(32),
         )
+        assertEquals(
+            listOf(
+                WifiDirectPermissionPolicy.Permission.LEGACY_FINE_LOCATION,
+                WifiDirectPermissionPolicy.Permission.LEGACY_COARSE_LOCATION,
+            ),
+            WifiDirectPermissionPolicy.permissionsForApiLevel(32),
+        )
     }
 
     @Test
@@ -27,6 +34,10 @@ class WifiDirectDiscoveryPolicyTest {
         assertEquals(
             WifiDirectPermissionPolicy.Permission.NEARBY_WIFI_DEVICES,
             WifiDirectPermissionPolicy.forApiLevel(37),
+        )
+        assertEquals(
+            listOf(WifiDirectPermissionPolicy.Permission.NEARBY_WIFI_DEVICES),
+            WifiDirectPermissionPolicy.permissionsForApiLevel(37),
         )
     }
 

@@ -27,7 +27,8 @@ Do not include a listening port or transport endpoint in this milestone. No sock
 - Initialize the P2P channel before P2P operations.
 - Check `PackageManager.FEATURE_WIFI_DIRECT` and the framework service at runtime; Wi-Fi Direct is optional hardware and must not be required for installation.
 - On Android 13/API 33 and later, declare/request `NEARBY_WIFI_DEVICES` and assert `neverForLocation`.
-- On Android 12L/API 32 and earlier, declare/request `ACCESS_FINE_LOCATION` with `maxSdkVersion=32`.
+- On Android 12L/API 32 and earlier, declare both `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION`, each with `maxSdkVersion=32`, and request them together in one runtime permission transaction. Android 12 can grant only approximate location when the user chooses that option; PEYVAND must not start Wi-Fi Direct discovery unless `ACCESS_FINE_LOCATION` is granted because the legacy `WifiP2pManager.discoverServices()` API requires it.
+- When only coarse location is granted, show a clear, user-facing explanation and link to app settings. PEYVAND does not read location coordinates or store location history; the fine permission is present solely because the legacy Wi-Fi Direct platform API requires it.
 - Declare `ACCESS_WIFI_STATE` and `CHANGE_WIFI_STATE`.
 - Check Location Mode because Android documents it as required for `discoverServices()`.
 - Observe P2P enabled/disabled state while the app is foregrounded. Stop discovery, remove P2P service requests/local services, unregister the receiver, and discard transient peer results when leaving the foreground or cancelling.
