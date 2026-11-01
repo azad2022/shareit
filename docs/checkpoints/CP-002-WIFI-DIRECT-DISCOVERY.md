@@ -46,11 +46,13 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 ## Test evidence
 
 - CI run `41288015067` on the earlier discovery/VPN diagnostic revision completed successfully: unit tests, app/core lint tasks and `:app:assembleDebug` succeeded; artifacts were uploaded. This run predates the DNS-SD callback and lifecycle hardening recorded below.
-- The source hardening added domain unit tests for the exact Bonjour registration type, valid/invalid TXT full domains and rejected instance names. The final test suite currently contains 15 domain tests across language, discovery and VPN policy.
+- The source hardening added domain unit tests for the exact Bonjour registration type, valid/invalid TXT full domains and rejected instance names. The previous green CI source revision had 21 domain tests across language, discovery, permission and VPN policies.
+- Product-owner physical test on Samsung Galaxy A06 and ASUS X017DA failed reciprocal discovery: Galaxy A06 returns the app's `Wi-Fi Direct busy` state; ASUS X017DA scans but finds no PEYVAND peer. Exact Android API levels, firmware versions and `logcat` evidence are pending.
+- The discovery adapter now exposes which P2P action failed (`clearServiceRequests`, `clearLocalServices`, `addLocalService`, `addServiceRequest`, or `discoverServices`). `DeviceDiscoveryScreen` now releases its scan when the navigation destination is removed. These changes require CI and physical retest.
 - Several intermediate CI runs were cancelled by newer pushes. Do not treat a cancelled run or the earlier successful run as validation of the latest source revision.
-- The latest code revision at documentation update is `a8518d473e20ca1159b16607284c211893b6e78e`. Its exact final CI result must be read from the newest GitHub Actions run before this checkpoint's automated-test criterion can be marked satisfied.
+- The last previously CI-verified source revision was `0363d7ff83ccca019cdf775d293d7f06945d6c7d` (run `41294583841`). Discovery diagnostics/lifecycle fixes are now committed through `6e781732afd91b41c331b2c22d5445fc0b3d85df`; the latest exact-head CI run must be verified before automated-test acceptance is updated.
 - Local build: not run in the current workbench.
-- Two-physical-device reciprocal discovery: pending; emulator-only evidence cannot replace this requirement.
+- Two-physical-device reciprocal discovery: failed on the owner's Galaxy A06 + ASUS X017DA test pair; retest after the diagnostics build is required. Emulator-only evidence cannot replace this requirement.
 
 ## Risks and deferred work
 
