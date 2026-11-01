@@ -29,7 +29,7 @@ Versions are pinned in `gradle/libs.versions.toml`; do not use dynamic version s
 
 ### SDK levels and identity
 
-- `compileSdk = 37` to compile against Android 17 (API 37).
+- `compileSdk = 37` to compile against Android 17 (API 37). The platform's current SDK Manager package name is `platforms;android-37.0`; CI uses a compatibility symlink because the build's compileSdk lookup expects `android-37`.
 - `targetSdk = 36` for the first foundation build. Android 17 target behavior, including mandatory large-screen resizability changes for apps targeting API 37, will be handled in an explicit adaptive-UI and compatibility milestone before raising target SDK.
 - `minSdk = 26` is a **provisional scaffolding assumption**, not an approved support promise. API 26 was previously discussed as a proposal only. The supported device matrix and Wi-Fi Direct capability coverage must inform the final minimum API decision.
 - `applicationId`/namespace `com.peyvand.app` are **provisional scaffolding identifiers**. Confirm ownership, store availability, and final package identity before publication. Do not treat this as an approved distribution identity.
@@ -63,6 +63,7 @@ Use explicit dependency construction in `MainActivity` for this small foundation
 
 - Debug build only. Do not add a release signing configuration, keystore, signing secret, analytics, cloud, network permission, or transfer permission before a feature requires it.
 - CI must run unit tests, Android lint, and `assembleDebug` on a hosted runner with Android SDK 37.
+- Android 17's SDK Manager package is `platforms;android-37.0` and installs under `platforms/android-37.0`; CI creates a local `android-37` symlink for AGP `compileSdk = 37` lookup. This is isolated to the ephemeral CI SDK and does not alter the app or users’ devices.
 - Gradle Wrapper distribution checksum and wrapper JAR checksum are pinned/verified.
 
 ## Consequences and follow-up

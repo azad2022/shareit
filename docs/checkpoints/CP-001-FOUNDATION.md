@@ -15,6 +15,7 @@ Create the first reproducible native Android project foundation for PEYVAND (Ù¾Û
 - [ ] Gradle Wrapper is committed, checksum-pinned, and executable on Unix.
 - [ ] AGP, Kotlin, Compose, Gradle, AndroidX, and JDK baseline are pinned and documented.
 - [ ] Project syncs and `assembleDebug` succeeds on the CI runner.
+- [ ] Android 17 SDK install uses the published `platforms;android-37.0` package and verifies the AGP-compatible platform path.
 - [ ] `testDebugUnitTest` succeeds; language catalogue/locale-resolution tests pass.
 - [ ] `lintDebug` succeeds without errors.
 - [ ] Android modules use AGP built-in Kotlin without applying the legacy `org.jetbrains.kotlin.android` plugin.
