@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">پیوند</string>
+    <string name="brand_name">PEYVAND</string>
+    <string name="language_selection_title">زبان برنامه را انتخاب کنید</string>
+    <string name="language_selection_subtitle">زبان دلخواه شما ذخیره می‌شود و در اجراهای بعدی دوباره پرسیده نخواهد شد.</string>
+    <string name="language_persian">فارسی</string>
+    <string name="language_english">English</string>
+    <string name="language_arabic">العربية</string>
+    <string name="language_turkish">Türkçe</string>
+    <string name="language_kurdish">کوردی</string>
+    <string name="language_german">Deutsch</string>
+    <string name="language_french">Français</string>
+    <string name="language_available">آماده</string>
+    <string name="language_coming_soon">به‌زودی</string>
+    <string name="action_continue">ادامه</string>
+    <string name="saving_language">در حال ذخیره زبان…</string>
+    <string name="language_save_failed">ذخیره زبان انجام نشد. دوباره تلاش کنید.</string>
+    <string name="foundation_status">مرحله اول توسعه</string>
+    <string name="foundation_ready_title">فونداسیون پیوند آماده است</string>
+    <string name="foundation_ready_message">ساختار اولیه برنامه، ذخیره تنظیمات زبان و زیرساخت رابط کاربری ایجاد شده‌اند.</string>
+    <string name="next_milestone_title">مرحله بعد</string>
+    <string name="next_milestone_message">کشف دستگاه‌های نزدیک، اتصال امن و انتقال مستقیم فایل‌ها در checkpointهای بعدی پیاده‌سازی و آزمایش می‌شوند.</string>
+    <string name="not_implemented_notice">قابلیت انتقال هنوز در این نسخه پیاده‌سازی نشده است.</string>
+</resources>

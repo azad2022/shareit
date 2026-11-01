@@ -1,6 +1,6 @@
 # PEYVAND (پیوند) — Android Product Requirements
 
-- **Status:** Product definition / planning. No application implementation is authorized yet.
+- **Status:** CP-001 foundation implementation explicitly authorized on 2026-11-01; networking and transfer implementation remain unauthorized until separately scoped.
 - **Repository:** `azad2022/shareit` (private), default branch `main`.
 - **Last decision update:** 2026-11-01.
 

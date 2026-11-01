@@ -13,10 +13,11 @@ PEYVAND competes in the same product category as SHAREit and may use blue-and-wh
 
 ### Current repository state
 
-This repository is in the product-definition and engineering-planning stage. It contains project guidance, not an application implementation.
+The product owner explicitly authorized the first Android foundation milestone (CP-001) on 2026-11-01. The repository has entered implementation for that limited scope. Do not expand authorization to Wi-Fi Direct, transfer, security, APK handling, or release work unless the product owner approves the relevant next milestone.
 
-- Do not create Android source code, Gradle scaffolding, mock implementations, screens, or build configuration unless the user explicitly asks to begin implementation.
-- A request to discuss, review, plan, or refine the product does not authorize coding.
+- The current authorization covers CP-001 only: Android project scaffolding, core module boundaries, language onboarding/persistence, design-system foundation, CI, and their tests. Do not implement transfer/network/security/APK features in CP-001.
+- For later milestones, do not create additional application functionality unless the user explicitly authorizes that scope.
+- A request to discuss, review, plan, or refine the product does not authorize coding. The explicit CP-001 authorization is an exception for the foundation scope only.
 - When asked to plan, return a decision-ready engineering proposal and identify unresolved decisions.
 - When asked to implement, make the smallest complete, testable change that satisfies the approved scope.
 - Never claim that a feature works, a test passed, a build succeeded, or a device is supported without direct evidence from repository state or test output.
