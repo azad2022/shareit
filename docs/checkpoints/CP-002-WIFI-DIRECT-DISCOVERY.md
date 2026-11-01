@@ -48,9 +48,9 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 - CI run `41288015067` on the earlier discovery/VPN diagnostic revision completed successfully: unit tests, app/core lint tasks and `:app:assembleDebug` succeeded; artifacts were uploaded. This run predates the DNS-SD callback and lifecycle hardening recorded below.
 - The source hardening added domain unit tests for the exact Bonjour registration type, valid/invalid TXT full domains and rejected instance names. The previous green CI source revision had 21 domain tests across language, discovery, permission and VPN policies.
 - Product-owner physical test on Samsung Galaxy A06 and ASUS X017DA failed reciprocal discovery: Galaxy A06 returns the app's `Wi-Fi Direct busy` state; ASUS X017DA scans but finds no PEYVAND peer. Exact Android API levels, firmware versions and `logcat` evidence are pending.
-- The discovery adapter now exposes which P2P action failed (`clearServiceRequests`, `clearLocalServices`, `addLocalService`, `addServiceRequest`, or `discoverServices`). `DeviceDiscoveryScreen` now releases its scan when the navigation destination is removed. These changes require CI and physical retest.
+- The discovery adapter now exposes and logs which P2P action failed (`clearServiceRequests`, `clearLocalServices`, `addLocalService`, `addServiceRequest`, or `discoverServices`). `DeviceDiscoveryScreen` releases its scan when the navigation destination is removed. Exact-head CI and physical retest are pending.
 - Several intermediate CI runs were cancelled by newer pushes. Do not treat a cancelled run or the earlier successful run as validation of the latest source revision.
-- The last previously CI-verified source revision was `0363d7ff83ccca019cdf775d293d7f06945d6c7d` (run `41294583841`). Discovery diagnostics/lifecycle fixes are now committed through `6e781732afd91b41c331b2c22d5445fc0b3d85df`; the latest exact-head CI run must be verified before automated-test acceptance is updated.
+- The last previously CI-verified source revision was `0363d7ff83ccca019cdf775d293d7f06945d6c7d` (run `41294583841`). The discovery diagnostics/lifecycle fixes are in app-source commit `6e781732afd91b41c331b2c22d5445fc0b3d85df`. Subsequent commits only record documentation and the unapproved QR/hotspot proposal; the latest exact branch-head CI run must still complete successfully.
 - Local build: not run in the current workbench.
 - Two-physical-device reciprocal discovery: failed on the owner's Galaxy A06 + ASUS X017DA test pair; retest after the diagnostics build is required. Emulator-only evidence cannot replace this requirement.
 
@@ -61,15 +61,15 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 - Public service markers can be forged; discovery is not authentication.
 - VPN route status is not a local-network reachability test. VPN-on/off, per-app VPN, split-tunnel, LAN exception and lockdown conditions require transport-level tests in a later milestone.
 - Local socket connection, TLS, pairing, receiver consent, transfer framing, files, APKs and resume are not implemented.
-- No fallback transport is selected by this checkpoint.
+- No fallback transport is selected by this checkpoint. Proposed ADR-0004 evaluates QR plus Android local-only hotspot as a possible alternative; the proposal is not approved and no implementation exists.
 
 ## Source verification
 
 - Manifest permission correction: `7abd10a4aebdc1dd94c7158b8f44d080f7b0ec92`.
 - DNS-SD and lifecycle hardening: commits `e6d70738a042b0bfa22bfa788f414e09de426666`, `fc8bbf1a828cf9f20f778b8b7365fb1dfaa078f7`, `4690d5dd57a78da30ac7e71337076aeb3d45ae46`, `fb401a45c6972ed1f7929eece296f9e2e7dbd8e8`, `225fc83afc04f7d443c6a16f33dd15207b38571d`, `2897297ffb3d12a92b80a31d55ac1ec9a9884b0e`, and `a8518d473e20ca1159b16607284c211893b6e78e`.
-- Latest code branch head at documentation update: `a8518d473e20ca1159b16607284c211893b6e78e`.
-- CI result for that revision: pending verification.
-- Two-device evidence: pending.
+- App-source diagnostics revision: `6e781732afd91b41c331b2c22d5445fc0b3d85df`.
+- Exact branch-head CI after documentation-only commits: pending. The latest workflow run must be checked against the final branch SHA.
+- Physical two-device result: reciprocal discovery failed on the owner's Galaxy A06 and ASUS X017DA; the diagnostics build has not yet been retested.
 
 ## Status rule
 
