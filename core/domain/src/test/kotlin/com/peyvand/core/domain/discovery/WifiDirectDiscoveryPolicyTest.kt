@@ -52,11 +52,28 @@ class WifiDirectDiscoveryPolicyTest {
     }
 
     @Test
-    fun `DNS-SD registration type must exactly match the PEYVAND service type`() {
-        assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType("_peyvand._tcp"))
-        assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType("_PEYVAND._TCP."))
-        assertFalse(PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType("_other._tcp"))
-        assertFalse(PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType("prefix._peyvand._tcp"))
+    fun `DNS-SD registration type must match the Android local Bonjour domain`() {
+        assertTrue(
+            PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType(
+                "_peyvand._tcp.local.",
+            ),
+        )
+        assertTrue(
+            PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType(
+                "_PEYVAND._TCP.LOCAL",
+            ),
+        )
+        assertFalse(
+            PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType("_other._tcp.local."),
+        )
+        assertFalse(
+            PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType("_peyvand._tcp"),
+        )
+        assertFalse(
+            PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType(
+                "prefix._peyvand._tcp.local.",
+            ),
+        )
     }
 
     @Test
