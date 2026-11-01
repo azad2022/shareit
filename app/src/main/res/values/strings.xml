@@ -98,6 +98,12 @@
     <string name="discovery_error_busy">سرویس Wi-Fi Direct مشغول است. چند لحظه بعد دوباره تلاش کنید.</string>
     <string name="discovery_error_unsupported">این دستگاه از سرویس کشف Wi-Fi Direct پشتیبانی نمی‌کند.</string>
     <string name="discovery_error_generic">شروع جست‌وجو ممکن نشد. وضعیت Wi-Fi و مجوزها را بررسی کنید.</string>
+    <string name="discovery_error_operation">عملیات ناموفق: %1$s</string>
+    <string name="discovery_stage_clear_requests">پاک‌سازی درخواست‌های کشف قبلی</string>
+    <string name="discovery_stage_clear_services">پاک‌سازی سرویس‌های محلی قبلی</string>
+    <string name="discovery_stage_add_local_service">ثبت سرویس پیوند روی دستگاه</string>
+    <string name="discovery_stage_add_request">ثبت درخواست جست‌وجوی دستگاه‌های پیوند</string>
+    <string name="discovery_stage_start_scan">شروع جست‌وجوی Wi-Fi Direct</string>
     <string name="discovery_empty">هنوز دستگاه سازگار دیگری پیدا نشده است. در گوشی دوم نیز پیوند را باز و جست‌وجو را فعال کنید.</string>
     <string name="discovery_unknown_device">دستگاه بدون نام</string>
     <string name="discovery_peer_compatible">سرویس کشف پیوند شناسایی شد</string>
