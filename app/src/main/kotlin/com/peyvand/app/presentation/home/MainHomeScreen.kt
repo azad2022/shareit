@@ -171,6 +171,7 @@ private fun NotificationButton(
     onClick: () -> Unit,
 ) {
     val description = stringResource(R.string.home_activity)
+    val bellTint = MaterialTheme.colorScheme.primary
     Box(
         modifier = Modifier
             .size(48.dp)
@@ -203,9 +204,9 @@ private fun NotificationButton(
                 )
                 close()
             }
-            drawPath(bell, color = MaterialTheme.colorScheme.primary)
+            drawPath(bell, color = bellTint)
             drawCircle(
-                color = MaterialTheme.colorScheme.primary,
+                color = bellTint,
                 radius = size.minDimension * 0.055f,
                 center = Offset(size.width * 0.5f, size.height * 0.91f),
             )

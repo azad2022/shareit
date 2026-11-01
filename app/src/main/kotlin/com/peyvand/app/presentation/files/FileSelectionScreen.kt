@@ -183,6 +183,34 @@ fun FileSelectionScreen(
             placeholder = { Text(stringResource(R.string.file_search_hint)) },
         )
 
+        if (hasPartialVisualMediaAccess(context, state.category)) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.file_permission_partial),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            permissionLauncher.launch(platformPermissions(state.category))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.file_permission_reselect_media))
+                    }
+                }
+            }
+        }
+
         if (state.category != ShareCategory.APPLICATIONS &&
             state.category != ShareCategory.FILES &&
             !hasPermissionForCategory(context, state.category)
@@ -489,7 +517,7 @@ private fun platformPermissions(category: ShareCategory): Array<String> {
             ShareCategory.PHOTOS -> if (Build.VERSION.SDK_INT >= 34) {
                 arrayOf(
                     Manifest.permission.READ_MEDIA_IMAGES,
-                    "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+                    Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
                 )
             } else {
                 arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
@@ -497,7 +525,7 @@ private fun platformPermissions(category: ShareCategory): Array<String> {
             ShareCategory.VIDEOS -> if (Build.VERSION.SDK_INT >= 34) {
                 arrayOf(
                     Manifest.permission.READ_MEDIA_VIDEO,
-                    "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+                    Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
                 )
             } else {
                 arrayOf(Manifest.permission.READ_MEDIA_VIDEO)
@@ -514,6 +542,30 @@ private fun platformPermissions(category: ShareCategory): Array<String> {
 
         else -> emptyArray()
     }
+}
+
+@SuppressLint("InlinedApi")
+private fun hasPartialVisualMediaAccess(
+    context: Context,
+    category: ShareCategory,
+): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return false
+
+    val fullPermission = when (category) {
+        ShareCategory.PHOTOS -> Manifest.permission.READ_MEDIA_IMAGES
+        ShareCategory.VIDEOS -> Manifest.permission.READ_MEDIA_VIDEO
+        else -> return false
+    }
+    val fullAccessGranted = ContextCompat.checkSelfPermission(
+        context,
+        fullPermission,
+    ) == PackageManager.PERMISSION_GRANTED
+    val selectedAccessGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+    ) == PackageManager.PERMISSION_GRANTED
+
+    return selectedAccessGranted && !fullAccessGranted
 }
 
 @SuppressLint("InlinedApi")
@@ -535,7 +587,7 @@ private fun hasPermissionForCategory(
             Manifest.permission.READ_MEDIA_AUDIO -> SharePermission.READ_MEDIA_AUDIO
             Manifest.permission.READ_MEDIA_IMAGES -> SharePermission.READ_MEDIA_IMAGES
             Manifest.permission.READ_MEDIA_VIDEO -> SharePermission.READ_MEDIA_VIDEO
-            "android.permission.READ_MEDIA_VISUAL_USER_SELECTED" ->
+            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED ->
                 SharePermission.READ_MEDIA_VISUAL_USER_SELECTED
             else -> null
         }

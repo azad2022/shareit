@@ -49,6 +49,8 @@
     <string name="file_search_hint">نام فایل یا برنامه را وارد کنید</string>
     <string name="file_permission_explanation">برای نمایش محتوای این دسته، اجازهٔ دسترسی مربوط به همان نوع رسانه لازم است. این مجوز فقط برای خواندن رسانه‌های قابل‌دسترسی در دستگاه استفاده می‌شود.</string>
     <string name="file_permission_denied">دسترسی داده نشد. برای مشاهدهٔ این دسته، مجوز را تأیید کنید.</string>
+    <string name="file_permission_partial">در حال حاضر فقط رسانه‌هایی که خودتان انتخاب کرده‌اید در دسترس پیوند هستند.</string>
+    <string name="file_permission_reselect_media">انتخاب عکس‌ها و ویدیوهای بیشتر</string>
     <string name="file_permission_action">اجازهٔ دسترسی به رسانه‌ها</string>
     <string name="file_documents_picker_explanation">برای انتخاب اسناد و سایر فایل‌ها، فایل‌گزین امن Android باز می‌شود. فقط مواردی که خودتان انتخاب کنید در اختیار پیوند قرار می‌گیرند.</string>
     <string name="file_documents_picker_action">انتخاب فایل‌ها از دستگاه</string>
