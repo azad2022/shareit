@@ -1,4 +1,4 @@
-# SHAREit Android — Product Requirements
+# PEYVAND (پیوند) — Android Product Requirements
 
 - **Status:** Product definition / planning. No application implementation is authorized yet.
 - **Repository:** `azad2022/shareit` (private), default branch `main`.
@@ -6,12 +6,13 @@
 
 ## 1. Product vision
 
-Build a premium-quality Android application for fast, secure, reliable, direct wireless transfer of files and eligible Android application packages between nearby devices. The product is inspired by the user needs served by SHAREit but must be independently designed and implemented.
+Build PEYVAND (پیوند), a premium-quality, native Android application for fast, secure, reliable, direct wireless transfer of files and eligible Android application packages between nearby devices. SHAREit is a category benchmark only. PEYVAND must have an independently designed brand, interface, assets, and implementation.
 
 ## 2. Confirmed scope and constraints
 
 | Area | Confirmed requirement |
 |---|---|
+| Product name | PEYVAND (پیوند); repository remains `azad2022/shareit` |
 | Platform | Android only |
 | Core connectivity | Offline, local peer-to-peer; no central server required |
 | Primary wireless method | Wi-Fi Direct |
@@ -19,7 +20,11 @@ Build a premium-quality Android application for fast, secure, reliable, direct w
 | Content | User-selected files/media and eligible app packages (APK/split APK where supported) |
 | Performance | Competitive, SHAREit-class performance where hardware and conditions allow; benchmark rather than promise universal parity |
 | Product priorities | Security, integrity, reliability, compatibility, maintainability |
-| Frontend | Bespoke premium UI, polished purposeful animations, coherent design system |
+| Frontend | Premium bespoke UI; blue-and-white brand palette; purposeful feature-linked animations; coherent design system |
+| Language | Kotlin is mandatory for new Android application code |
+| UI toolkit | Jetpack Compose is strongly recommended; record the selection/version strategy in an ADR |
+| Localization | Persian, English, Arabic, Turkish, Kurdish, German, French; localization infrastructure from the first implementation stage |
+| Language selection | Select on first launch, persist the choice, and do not prompt again on every launch; a deliberate Settings change is recommended |
 | Architecture | Modular, layered, independently testable; avoid oversized files/classes |
 | Progress governance | Repository-based checkpoints with test evidence and commit SHA |
 | Current build mode | Debug only; standard Android debug signing |
@@ -67,29 +72,41 @@ Simultaneous multi-sender exchange among all group members is not confirmed for 
 - Keep file contents on participating devices; do not upload them to a server.
 - Avoid collecting or logging unnecessary personal metadata and secrets.
 
-## 7. Frontend and UX quality
+## 7. Brand, localization, and motion
 
-- Premium bespoke visual identity is a core requirement.
+- Customer-facing product name: **PEYVAND**; Persian display form: **پیوند**. Keep the GitHub repository name `shareit` unless separately approved for renaming.
+- Brand palette: blue and white as dominant colors. Define PEYVAND-specific semantic tokens and do not copy SHAREit logos, artwork, exact screen designs, text, or signature animations.
+- Kotlin is mandatory. Jetpack Compose is the preferred UI approach, subject to an ADR.
+- Target languages: Persian, English, Arabic, Turkish, Kurdish, German, and French. Persian is the first complete development/debug language. Establish localization infrastructure before feature UI expands; other translations may be completed in a staged localization milestone.
+- Show language choice on first launch, persist it, and do not prompt at every start. Do not silently replace the saved choice with the device locale. A user-controlled Settings action to change language is recommended.
+- Persian and Arabic need RTL. Kurdish is included, but its exact variant/script remains open: Sorani (Arabic-based/RTL) versus Kurmanji (commonly Latin/LTR) must be explicitly selected before release translation.
+- Externalize all UI strings; support locale-aware plurals, date/number formatting, font fallback, text scaling, and mixed-direction file names, paths, package identifiers, URLs, and IP addresses. No raw untranslated keys or incomplete screens.
+- Animations must be professional, purposeful, feature-specific, and state-driven. Discovery, pairing, transfer, group recipients, integrity verification, pause/resume, and completion may each have a distinct motion treatment. Never fake progress or celebrate completion before integrity verification. Respect reduced motion, accessibility, battery, and performance.
+
+## 8. Frontend and UX quality
+
+- Premium bespoke visual identity using PEYVAND blue-and-white brand tokens is a core requirement.
 - Build and maintain a centralized design system: typography, color tokens, spacing, shapes, iconography, components, states, and motion principles.
 - Use reusable feature-scoped components and explicit loading, empty, error, connecting, waiting, transferring, paused, recovering, completed, and failed states.
 - Animations should be polished and purposeful, with no impact on transfer correctness, responsiveness, accessibility, or battery beyond accepted budgets.
 - UI must remain separate from network, storage, package extraction, and cryptographic implementation.
 
-## 8. Architecture and maintainability
+## 9. Architecture and maintainability
 
-- Preferred native stack: Kotlin and Jetpack Compose, subject to recorded ADRs.
+- Kotlin is mandatory for new Android product code.
+- Jetpack Compose is strongly recommended; confirm the toolkit and version/dependency strategy in an ADR before scaffolding.
 - Use layered boundaries for presentation, domain, data, platform adapters, networking, security, and transfer infrastructure.
 - Split features into focused modules where stable ownership justifies it.
 - Avoid giant files/classes, circular dependencies, UI-owned business logic, and unnecessary abstraction.
 - Record consequential decisions as ADRs before locking in implementation.
 
-## 9. Checkpoint and quality governance
+## 10. Checkpoint and quality governance
 
 Maintain `docs/PROJECT_STATUS.md`, `docs/checkpoints/`, `docs/architecture/`, and `docs/decisions/` as the project grows. Each checkpoint records: ID, objective, acceptance criteria, status, commit SHA, test commands/results, device and OS details, evidence, known issues, and reviewer/approval.
 
 Allowed statuses: `IN_PROGRESS`, `BLOCKED`, `PASSED`. Only mark `PASSED` when the acceptance criteria have reproducible supporting evidence. Major verified milestones should be recoverable through Git history and, where useful, tags.
 
-## 10. Build, signing, and distribution
+## 11. Build, signing, and distribution
 
 ### Current development stage
 
@@ -106,7 +123,7 @@ Allowed statuses: `IN_PROGRESS`, `BLOCKED`, `PASSED`. Only mark `PASSED` when th
 - Review Play App Signing and the distinction between upload and app-signing keys if Google Play is used.
 - Keep Play and direct-distribution release procedures explicit and separately testable.
 
-## 11. Open decisions — do not guess
+## 12. Open decisions — do not guess
 
 - Minimum supported Android API level and target SDK policy.
 - Exact fallback transport order when Wi-Fi Direct is unavailable.
@@ -116,9 +133,13 @@ Allowed statuses: `IN_PROGRESS`, `BLOCKED`, `PASSED`. Only mark `PASSED` when th
 - Initial maximum supported group size based on device testing.
 - Whether simultaneous multi-sender group exchange is required in a later release.
 - Transfer history retention and cleanup policy.
-- App identity, branding, localization, and package/application ID.
+- Exact Kurdish locale/script (Sorani/Arabic-based RTL, Kurmanji/Latin LTR, or another explicitly approved variant), and app package/application ID.
 - Quantified throughput and reliability acceptance thresholds after benchmark baselines.
 
-## 12. Implementation authorization
+## 13. Detailed design references
+
+See [`PRODUCT_IDENTITY_AND_LOCALIZATION.md`](PRODUCT_IDENTITY_AND_LOCALIZATION.md) for the detailed PEYVAND visual identity, localization architecture, language selection, RTL/bidi behavior, motion principles, and acceptance tests. See [the engineering skill](../.agents/skills/shareit-android/SKILL.md) for implementation and review rules.
+
+## 14. Implementation authorization
 
 This document records product requirements only. It does not authorize coding. Begin Android project scaffolding or implementation only after explicit product-owner approval.

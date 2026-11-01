@@ -1,15 +1,15 @@
 ---
-name: shareit-android-engineering
-description: Engineering policy and product-specific guidance for the SHAREit Android project: offline peer-to-peer connectivity, secure file transfer, APK and split-APK sharing, Android storage/package APIs, reliability, privacy, testing, and release quality. Load whenever planning, designing, implementing, reviewing, testing, or documenting this repository.
+name: peyvand-android-engineering
+description: Engineering policy and product-specific guidance for the PEYVAND Android project (repository azad2022/shareit): offline peer-to-peer connectivity, secure file transfer, APK and split-APK sharing, Android storage/package APIs, reliability, privacy, testing, and release quality. Load whenever planning, designing, implementing, reviewing, testing, or documenting this repository.
 ---
 
-# SHAREit Android — Engineering Skill
+# PEYVAND (پیوند) Android — Engineering Skill
 
 ## 1. Mission and repository boundary
 
-Act as the senior Android systems engineer for this repository. The product is an independently engineered, commercially reliable Android application for direct wireless transfer of user-selected files and eligible Android application packages between nearby devices.
+Act as the senior Android systems engineer for this repository. The product is PEYVAND (پیوند), an independently engineered, commercially reliable Android application for direct wireless transfer of user-selected files and eligible Android application packages between nearby devices.
 
-The product is inspired by the category and user needs addressed by SHAREit. Do not copy proprietary source code, artwork, trademarks, exact screen designs, text, or other protected assets from SHAREit or any other product.
+PEYVAND competes in the same product category as SHAREit and may use blue-and-white as its broad color direction, but it must have its own brand expression. Do not copy proprietary source code, artwork, logos, trademarks, exact screen layouts, signature animations, text, or other protected assets from SHAREit or any other product. SHAREit may be used as a benchmark for measured transfer performance and common user expectations, not as a source of copied design assets.
 
 ### Current repository state
 
@@ -77,7 +77,7 @@ Apply these principles to every design and code review:
 
 ## 4. Proposed architecture
 
-Use native Android development. Kotlin and Jetpack Compose are the preferred starting choices, subject to an approved architecture decision record (ADR). Avoid adding a cross-platform framework merely for abstraction.
+Use native Android development. Kotlin is a confirmed, mandatory implementation language for new application logic. Jetpack Compose is the strongly recommended UI toolkit because it supports state-driven interfaces and the required motion design; confirm the toolkit and its version strategy in an ADR before scaffolding. A proposal to replace Kotlin requires explicit product-owner approval. Avoid adding a cross-platform framework merely for abstraction.
 
 Keep the architecture layered:
 
@@ -322,7 +322,7 @@ Use lifecycle-aware ownership and structured concurrency. Every coroutine, socke
 
 When implementation is authorized:
 
-- Use Kotlin with explicit nullability and typed domain models.
+- Use Kotlin with explicit nullability and typed domain models. Kotlin is mandatory for new Android product code; do not introduce Java for new features without an approved interoperability reason.
 - Prefer immutable state and unidirectional UI state flow.
 - Use structured concurrency; avoid GlobalScope and unmanaged threads.
 - Keep I/O off the main thread.
@@ -456,7 +456,7 @@ Do not resolve these by guessing. Capture them in the requirements/ADR process b
 - Whether transfer history is retained indefinitely, bounded by time, or user-managed.
 - Exact connection priority and fallback behavior across supported devices.
 - Whether the first release includes existing-Wi-Fi transfer in addition to Wi-Fi Direct and local-only hotspot.
-- Product name, visual identity, localization, and app package/application ID.
+- Exact Kurdish locale/script (Sorani/Arabic script, Kurmanji/Latin script, or another explicitly approved variant), and app package/application ID. Product name and blue-white brand direction are confirmed.
 - Quantified performance and reliability targets after device-lab baselines exist.
 
 **Default rule:** preserve the confirmed Android-only, offline-first, security-and-reliability-first scope. Do not expand the product with unrelated media, social, cloud, advertising, or account features unless the product owner explicitly approves the expansion.
@@ -478,3 +478,73 @@ The following decisions are confirmed and must be treated as requirements unless
 - **Future release signing:** when release preparation is explicitly authorized, create a production signing key, keep protected backups offline, and expose secrets only to tightly scoped trusted release workflows via GitHub Secrets/Environment Secrets. Review whether Play App Signing is appropriate.
 
 These decisions define product scope and planning constraints; they do not authorize implementation by themselves. Do not create app source, Gradle scaffolding, UI screens, or executable features until the product owner explicitly starts implementation.
+
+
+## 18. Confirmed PEYVAND brand, language, and motion requirements (2026-11-01)
+
+These requirements are confirmed by the product owner. They supersede earlier open-decision wording about the product name, broad visual direction, primary implementation language, and target languages. They do not authorize implementation by themselves.
+
+### Product identity and repository identity
+
+- Product/brand name: **PEYVAND**; Persian display form: **پیوند**.
+- The existing GitHub repository remains `azad2022/shareit`. Repository naming does not redefine the customer-facing brand. Do not rename the repository unless separately approved.
+- Use PEYVAND in application-facing copy, package metadata proposals, design documents, and product references. SHAREit is a category competitor and performance/expectation benchmark, not the product name.
+- Build an original visual identity. The product owner selected a blue-and-white visual direction similar to SHAREit's broad palette. Use blue and white as the dominant brand colors, but define PEYVAND-specific color tokens, typography, shapes, iconography, illustrations, screen compositions, and motion. Never copy SHAREit's logo, artwork, exact screens, signature assets, text, or proprietary implementation.
+- Do not invent exact color HEX values before a design-system proposal. Select accessible primary/secondary blues, white and neutral surfaces, readable foreground colors, and semantic status colors; validate contrast and states. Blue must not be used for every status if that makes success, warning, or error ambiguous.
+
+### Mandatory language and UI stack
+
+- Kotlin is mandatory for new Android application code.
+- Jetpack Compose is the default recommended UI toolkit for the custom interface and motion system. Record the chosen Compose/AndroidX versions and architecture in an ADR. Do not treat Kotlin as optional or replace it with Java or a cross-platform framework without explicit approval.
+- Keep UI declarative and state-driven. Compose UI must render state; it must not own sockets, file streaming, cryptographic rules, package extraction, or transfer orchestration.
+
+### Localization scope and rollout
+
+The target app languages are exactly these seven language groups unless the product owner changes the list: Persian, English, Arabic, Turkish, Kurdish, German, and French.
+
+- Persian is the initial development, debugging, and first-complete-content language. The project must be localization-ready from the first implementation checkpoint; do not postpone the architecture until the end.
+- Establish stable string resource keys, plural resources, locale-aware formatting, fallback behavior, and a translation review process before feature UI expands. No user-facing text may be hard-coded in Kotlin or Compose source.
+- Keep UI copy separate from domain values and protocol messages. Never translate package names, file names, MIME types, raw paths, IP addresses, cryptographic identifiers, or protocol fields. Display these through correct bidirectional text isolation where necessary.
+- The first app launch must show a clear language-selection step before the main app experience. The user selects a language once; persist the selection and do not show the language chooser on every launch. A deliberate language-change action in Settings is recommended and must not erase transfer data. Do not override a user's saved choice silently when the device language changes.
+- Show language names in their accepted native/autonym forms as well as a clear accessible label where useful. Selection must be keyboard/screen-reader accessible and visually unambiguous.
+- Prepare the localization architecture and resource structure from the start. Persian content is the initial source of truth; other language bundles may be translated and enabled in a staged localization milestone. Never expose raw resource keys, machine-looking placeholders, or visibly half-translated screens. A language must be marked available only when its required UI coverage has passed review.
+- Persian and Arabic require full RTL support. Kurdish direction depends on the approved script/locale. English, Turkish, German, and French are LTR. Do not implement RTL by merely right-aligning text: use direction-aware layout, navigation, icon mirroring rules, back/forward semantics, and tested Compose layout direction.
+- Test mixed-direction content: Persian/Arabic UI containing Latin file names, APK package identifiers, URLs, IP addresses, version strings, numbers, and dates. Use Unicode bidi isolation and safe formatting so punctuation and numbers do not reorder incorrectly.
+- Use locale-aware pluralization, date/time/number formatting, Unicode normalization where appropriate, font fallback, and correct line breaking. Do not concatenate translated fragments to form sentences. Avoid clipping in longer German/French strings and font glyph gaps in Persian/Arabic/Kurdish.
+- Kurdish is a confirmed target language, but the exact variant and writing system are not yet confirmed. Before final translation and release, ask the product owner to choose the intended variant, such as Sorani (Arabic-based script, RTL) or Kurmanji (commonly Latin script, LTR). Do not silently treat Kurdish as one unambiguous locale.
+- The full translation completion phase may occur after core functionality, but localization architecture, string extraction, RTL-safe component design, and language persistence must exist from the beginning. Do not create a costly retrofit.
+
+### Blue-and-white design system
+
+- Blue and white are the dominant brand colors. The finished interface must feel premium, modern, coherent, and recognizably PEYVAND rather than a clone of SHAREit.
+- Build a centralized design system before multiplying screens: semantic color tokens, typography scale, spacing, elevation, shape language, icon rules, component variants, focus/pressed/disabled/error states, and motion tokens.
+- Use white/light surfaces for clarity and controlled blue accents for primary actions, navigation, focus, and active states. Include neutral surfaces and semantic status colors. Check contrast in normal, disabled, pressed, dark/light if later supported, and high text-scale conditions.
+- Do not hard-code colors in individual screens. Do not use color alone to communicate transfer state; combine text, iconography, and accessible semantics.
+- Use original vector/icon/illustration assets and consistent geometry. No trademark confusion or reused SHAREit visual assets.
+- Every screen must handle loading, empty, permission-denied, unavailable, disconnected, connecting, waiting-for-consent, active, paused, recovering, completed, and failed states where relevant.
+
+### Purposeful feature animation and motion design
+
+Animations are a first-class frontend requirement, but only when they communicate a real action, state, relationship, or result. Do not add motion merely to make a screen look busy.
+
+- Define a motion system: durations, easing curves, spatial distances, interruption rules, reduced-motion alternatives, and rules for simultaneous animations. Use Compose-native animation APIs by default; add an animation dependency only after size, licensing, accessibility, maintenance, and performance review.
+- Every animation specification must state: user purpose, triggering state/event, source of truth, start/end states, cancellation/interruption behavior, reduced-motion behavior, and performance budget.
+- Discovery may use a restrained radar/ripple or nearby-device reveal to communicate scanning and found peers. The animation must stop or change state when discovery stops; it may not imply that a peer exists when none was found.
+- Connection and pairing may visually communicate searching, handshaking, authentication, consent waiting, success, timeout, and failure. Never animate a successful connection before authentication actually succeeds.
+- File transfer may animate item movement or a transfer path, but the progress value, speed, remaining time, and completion state must be based on actual measured transfer data. Never fabricate or artificially smooth progress in a way that conceals a stall.
+- Group transfer must show each receiver as a distinct participant with independently sourced consent, progress, pause/cancel, retry, verification, and completion states. Do not show one global animation that suggests every receiver completed when only one did.
+- Integrity verification may use a distinct checking/verified state. Do not display a success flourish until final destination integrity verification passes.
+- Pause, resume, cancellation, failure, recovery, and package-transfer/install handoff must have clear, semantically correct transitions. Installation remains separate and user-approved.
+- Use transitions for navigation and state changes only when they preserve orientation and do not hide controls or important status. Keep critical buttons stable and predictable.
+- Respect Android accessibility settings and reduced-motion preferences. Provide a static or low-motion equivalent; no critical information may be conveyed solely by animation.
+- Avoid infinite decorative loops, parallax for its own sake, large particle effects, CPU-heavy blur, and unnecessary recomposition. Stop animation when off-screen or irrelevant; test low-end supported hardware, 60/120 Hz devices, battery use, thermal effects, and accessibility.
+- Motion must never block user input, delay cancellation, make progress less legible, break screen-reader semantics, or create misleading expectations. Transfer correctness and accurate state always outrank visual flourish.
+
+### Localization and animation acceptance gates
+
+Before a language/UI milestone is marked PASSED, verify: all visible strings are externalized; no missing-key markers appear; Persian and Arabic RTL layouts work; Kurdish direction matches the chosen script; mixed bidi filenames and identifiers render correctly; font scaling and TalkBack work; long translated strings do not clip; first-run language choice persists; and no launch repeats the chooser. Record the test device/API and screenshots or reproducible evidence.
+
+Before a motion milestone is marked PASSED, verify: the animation is tied to a real state; it reflects actual transfer/connection data; interruptions and lifecycle changes are safe; reduced motion is supported; controls remain usable; frame stability and resource use are acceptable on the supported device matrix; and the animation does not misrepresent transfer completion.
+
+Refer to `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md` for the expanded product identity, localization, RTL, motion, and acceptance specification. Refer to `docs/PRODUCT_REQUIREMENTS.md` for the current confirmed scope. The project remains in planning until the product owner explicitly authorizes implementation.
+
