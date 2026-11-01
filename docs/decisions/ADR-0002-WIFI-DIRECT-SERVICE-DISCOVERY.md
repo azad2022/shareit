@@ -2,55 +2,70 @@
 
 - **Status:** Accepted for CP-002 implementation; physical-device compatibility remains unverified.
 - **Date:** 2026-11-01
-- **Scope:** Runtime capability checks and PEYVAND service discovery only.
+- **Scope:** Runtime capability checks and PEYVAND Bonjour/DNS-SD service discovery only.
 
 ## Context
 
-The foundation is built and installed on a product-owner phone. The next user-visible capability should identify nearby devices that are running PEYVAND. Listing every Wi-Fi P2P peer would also list devices that do not run PEYVAND, and a discovery result must not be confused with an authenticated peer.
+The first user-visible nearby capability should identify compatible PEYVAND app instances without listing every unrelated P2P peer. A discovery result must not be confused with authenticated identity. DNS-SD callback data is untrusted network input and can be forged.
 
 ## Decision
 
 Use Android `WifiP2pManager` DNS-SD service discovery for CP-002:
 
 - Each actively discoverable PEYVAND instance registers a `WifiP2pDnsSdServiceInfo`.
-- The DNS-SD instance name uses `PEYVAND-` plus an eight-character random process-local suffix to avoid instance-name collisions; the service type is `_peyvand._tcp`.
-- The public TXT record contains only `app=peyvand` and `discovery=1`.
-- Each device registers a service request for this service type.
-- The app displays a peer only after both the service-response callback (with the PEYVAND prefix and valid suffix) and matching TXT callback have been received for the same transient P2P device address.
-- The P2P state receiver is registered only while the Activity is foregrounded and after the runtime permission is granted; its sticky state is used before enabling discovery.
-- Discovery metadata is a compatibility filter, not a secret or an authentication credential. Any nearby peer can forge it.
+- The instance name is `PEYVAND-` plus an eight-character random process-local hexadecimal suffix; service type is `_peyvand._tcp`.
+- Public TXT data contains only `app=peyvand` and `discovery=1`.
+- Each device registers a service request for the PEYVAND service type.
+- The service-response callback must have a valid PEYVAND instance name and the exact Bonjour registration type Android documents in the form `_service._tcp.local.`.
+- The TXT listener's full domain must parse as the exact same PEYVAND instance under `_peyvand._tcp.local.`; a substring match is insufficient.
+- Correlate service and TXT callbacks by both the transient P2P source-device address and normalized service instance name. Display a peer only after both records match and the TXT fields contain the expected app and schema values.
+- Bound pending peer records and visible peers. Pending records are process-local and transient.
+- A monotonically increasing scan generation invalidates callbacks after stop, availability loss, channel loss or failure.
 
-Do not include a listening port or transport endpoint in this milestone. No socket is opened and no connection is initiated.
+No port or transport endpoint is advertised. No socket is opened and no connection is initiated.
+
+## Lifecycle and cleanup
+
+- Initialize the P2P channel before P2P operations.
+- Observe the P2P enabled state only while PEYVAND is foregrounded and the version-appropriate permission is available.
+- When the app stops monitoring, discovery is cancelled, the permission is revoked, Location Mode becomes unavailable, P2P is disabled or an action fails, invalidate the active scan generation and clear pending records.
+- Independently attempt to clear registered service requests and local service advertisements. Failure to clear one resource must not prevent attempting to clear the other.
+- If the framework channel is lost and immediate reinitialization fails, retry channel initialization on a later foreground availability refresh.
+- Never silently toggle Wi-Fi or Location settings. Provide a user-directed settings path.
 
 ## Runtime requirements
 
-- Initialize the P2P channel before P2P operations.
-- Check `PackageManager.FEATURE_WIFI_DIRECT` and the framework service at runtime; Wi-Fi Direct is optional hardware and must not be required for installation.
-- On Android 13/API 33 and later, declare/request `NEARBY_WIFI_DEVICES` and assert `neverForLocation`.
-- On Android 12L/API 32 and earlier, declare both `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION`, each with `maxSdkVersion=32`, and request them together in one runtime permission transaction. Android 12 can grant only approximate location when the user chooses that option; PEYVAND must not start Wi-Fi Direct discovery unless `ACCESS_FINE_LOCATION` is granted because the legacy `WifiP2pManager.discoverServices()` API requires it.
-- When only coarse location is granted, show a clear, user-facing explanation and link to app settings. PEYVAND does not read location coordinates or store location history; the fine permission is present solely because the legacy Wi-Fi Direct platform API requires it.
+- Check `PackageManager.FEATURE_WIFI_DIRECT` and the framework service at runtime; Wi-Fi Direct is optional hardware.
+- Android 13/API 33 and later: declare/request `NEARBY_WIFI_DEVICES` with `neverForLocation`.
+- Android 12L/API 32 and earlier: declare FINE and COARSE Location permissions with `maxSdkVersion=32`, request them together, and proceed only when FINE is granted. The legacy P2P service discovery API requires precise location permission even though PEYVAND does not read location coordinates.
 - Declare `ACCESS_WIFI_STATE` and `CHANGE_WIFI_STATE`.
-- Check Location Mode because Android documents it as required for `discoverServices()`.
-- Observe P2P enabled/disabled state while the app is foregrounded. Stop discovery, remove P2P service requests/local services, unregister the receiver, and discard transient peer results when leaving the foreground or cancelling.
-- Handle missing permission, disabled Location Mode, unsupported hardware, disabled P2P, BUSY, channel loss, and other platform failures as distinct states.
-- Never silently toggle Wi-Fi or Location settings. Provide user-directed settings links where appropriate.
+- Check Location Mode because Android documents it as required by `discoverServices()`.
+- Handle permission denial, disabled Location Mode, unsupported hardware, disabled P2P, BUSY, channel loss and platform errors as distinct states.
+- Do not present a peer as authenticated based on service metadata, P2P address or device name.
 
 ## Network and security boundary
 
-No `INTERNET`, `ACCESS_NETWORK_STATE`, `CHANGE_NETWORK_STATE`, socket, hotspot, or TLS code is added by this ADR. Android's sample service-discovery guide includes INTERNET because its full sample subsequently uses Java sockets; CP-002 stops before that transport step. When the P2P socket transport is designed, re-check current Android requirements and add only the permission needed for local sockets. That permission does not imply use of public internet.
+No `INTERNET`, socket, TLS, pairing or transfer code is added by this ADR. Android's sample guide uses `INTERNET` for the subsequent Java socket transport, not because DNS-SD requires public internet. When the P2P socket transport is designed, re-check current Android requirements and declare only the required permission. The app-default VPN diagnostic and its `ACCESS_NETWORK_STATE` permission are separately defined in ADR-0003; they are not requirements of DNS-SD discovery.
 
-Discovery does not establish trust. Before any later connection or data exchange, PEYVAND must perform explicit peer authentication, a cryptographically protected session, and receiver consent. Discovery TXT values, P2P device names, and device addresses are not proof of identity.
+Discovery is not trust. Any later connection or data exchange requires explicit peer authentication, a cryptographically protected session and receiver consent.
 
 ## Alternatives considered
 
 - **Raw `discoverPeers()` list:** rejected for the first user-facing list because it does not establish that a peer runs PEYVAND.
-- **Network Service Discovery (NSD) on an existing LAN:** deferred; it requires a shared local network and therefore does not fulfill the direct nearby discovery goal by itself.
+- **Network Service Discovery (NSD) on an existing LAN:** deferred; it requires a shared local network and does not fulfil the direct nearby discovery goal by itself.
 - **Local-only hotspot fallback:** deferred to a separate ADR after device/API capability testing.
 
 ## Consequences and limitations
 
-- Devices must have PEYVAND open and actively advertising to appear in this version.
-- Device names and discovery behavior vary by vendor, Android version, and Wi-Fi chipset.
-- Wi-Fi Direct support and reliable discovery are not guaranteed across all devices.
-- The transient P2P address is used only to correlate callbacks within a scan; it is not persisted or displayed as an identity.
-- A two-physical-device test is mandatory before CP-002 can be marked PASSED.
+- Both devices must have PEYVAND open and actively advertising to appear in this version.
+- Device names and discovery behavior vary by vendor, Android version and Wi-Fi chipset.
+- The advertised app/schema fields are public compatibility markers, not secrets or credentials.
+- Transient P2P address and service instance name are used only to correlate callbacks within an active scan; neither is persisted or treated as identity.
+- Reciprocal discovery on two physical devices is mandatory before CP-002 can be marked PASSED.
+
+## Android references
+
+- Wi-Fi Direct overview and runtime permissions: https://developer.android.com/develop/connectivity/wifi/wifi-direct
+- Bonjour service discovery format and local registration: https://developer.android.com/develop/connectivity/wifi/nsd-wifi-direct
+- `DnsSdServiceResponseListener` documents registration type examples such as `_ipp._tcp.local.`: https://developer.android.com/reference/android/net/wifi/p2p/WifiP2pManager.DnsSdServiceResponseListener
+- `WifiP2pManager` documents that clearing all service requests stops a running service discovery when no requests remain: https://developer.android.com/reference/android/net/wifi/p2p/WifiP2pManager
