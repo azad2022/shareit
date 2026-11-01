@@ -10,13 +10,11 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -455,23 +453,36 @@ private fun RadarScanner(
     isActive: Boolean,
 ) {
     val animationsEnabled = remember { ValueAnimator.areAnimatorsEnabled() }
-    val transition = rememberInfiniteTransition(label = "peyvand-discovery-radar")
-    val pulseAnimationSpec: AnimationSpec<Float> =
-        if (isActive && animationsEnabled) {
-            infiniteRepeatable(
+
+    if (isActive && animationsEnabled) {
+        val transition = rememberInfiniteTransition(label = "peyvand-discovery-radar")
+        val pulse by transition.animateFloat(
+            initialValue = 0.18f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
                 animation = tween(durationMillis = 1_650, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart,
-            )
-        } else {
-            snap()
-        }
-    val pulse by transition.animateFloat(
-        initialValue = 0.18f,
-        targetValue = 1f,
-        animationSpec = pulseAnimationSpec,
-        label = "peyvand-discovery-pulse",
-    )
+            ),
+            label = "peyvand-discovery-pulse",
+        )
+        RadarDrawingCanvas(
+            isActive = true,
+            pulse = pulse,
+        )
+    } else {
+        // No infinite transition is composed while idle or when Android disables motion.
+        RadarDrawingCanvas(
+            isActive = false,
+            pulse = 0.18f,
+        )
+    }
+}
 
+@Composable
+private fun RadarDrawingCanvas(
+    isActive: Boolean,
+    pulse: Float,
+) {
     val description = stringResource(
         if (isActive) R.string.discovery_radar_active
         else R.string.discovery_radar_idle,

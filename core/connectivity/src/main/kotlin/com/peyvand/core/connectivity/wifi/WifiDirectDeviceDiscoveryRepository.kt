@@ -15,8 +15,8 @@ import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest
 import android.os.Build
 import android.os.Looper
 import android.provider.Settings
-import java.util.UUID
 import androidx.core.content.ContextCompat
+import java.util.UUID
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
 import com.peyvand.core.domain.discovery.DeviceDiscoverySnapshot
@@ -400,6 +400,7 @@ class WifiDirectDeviceDiscoveryRepository(
         return WifiDirectAvailability.READY
     }
 
+    @SuppressLint("InlinedApi")
     private fun hasRequiredRuntimePermission(): Boolean {
         val permission = when (
             WifiDirectPermissionPolicy.forApiLevel(Build.VERSION.SDK_INT)

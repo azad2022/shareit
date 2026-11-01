@@ -33,8 +33,11 @@ To be updated after source and CI read-back. This milestone must not silently ex
 
 ## Test evidence
 
+- Initial CI run `41283231293` reached compilation of `:core:connectivity`, `:core:data`, `:core:domain`, and `:core:designsystem`; three discovery policy tests and six language tests passed. The app compile then failed on a Compose animation-spec type mismatch in `HomeScreen.kt`.
+- Follow-up CI run `41283693851` exposed the precise API contract: `rememberInfiniteTransition.animateFloat` requires an `InfiniteRepeatableSpec`, not the common `AnimationSpec` type. The UI fix is to compose the infinite transition only while scanning is active and motion is enabled.
+- A subsequent validation run is required before treating this checkpoint as build-verified.
 - Local build: not run in the current remote workbench.
-- Unit/instrumentation/physical-device results: pending.
+- Physical-device test results: pending.
 - Emulator-only evidence, if later added, cannot replace the required physical-device test.
 
 ## Risks and deferred work
