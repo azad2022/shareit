@@ -345,32 +345,34 @@ class WifiDirectDeviceDiscoveryRepository(
                 },
             )
 
-            manager.clearServiceRequests(
+            // Do not issue unconditional clear* calls before the first scan.
+            // Android's Wi-Fi P2P framework is asynchronous, and some OEM
+            // implementations reject redundant cleanup with BUSY even when this
+            // repository has not registered any service in the current process.
+            // A fresh scan follows the documented add-local -> add-request ->
+            // discover sequence; teardown cleans resources after an active scan.
+            manager.addLocalService(
                 activeChannel,
-                actionListener(requestGeneration, DiscoveryOperation.CLEAR_SERVICE_REQUESTS) {
-                    manager.clearLocalServices(
+                serviceInfo,
+                actionListener(requestGeneration, DiscoveryOperation.ADD_LOCAL_SERVICE) {
+                    manager.addServiceRequest(
                         activeChannel,
-                        actionListener(requestGeneration, DiscoveryOperation.CLEAR_LOCAL_SERVICES) {
-                            manager.addLocalService(
+                        serviceRequest,
+                        actionListener(
+                            requestGeneration,
+                            DiscoveryOperation.ADD_SERVICE_REQUEST,
+                        ) {
+                            manager.discoverServices(
                                 activeChannel,
-                                serviceInfo,
-                                actionListener(requestGeneration, DiscoveryOperation.ADD_LOCAL_SERVICE) {
-                                    manager.addServiceRequest(
-                                        activeChannel,
-                                        serviceRequest,
-                                        actionListener(requestGeneration, DiscoveryOperation.ADD_SERVICE_REQUEST) {
-                                            manager.discoverServices(
-                                                activeChannel,
-                                                actionListener(requestGeneration, DiscoveryOperation.DISCOVER_SERVICES) {
-                                                    mutableSnapshot.value =
-                                                        mutableSnapshot.value.copy(
-                                                            status = DiscoveryStatus.DISCOVERING,
-                                                            failure = null,
-                                                        )
-                                                },
-                                            )
-                                        },
-                                    )
+                                actionListener(
+                                    requestGeneration,
+                                    DiscoveryOperation.DISCOVER_SERVICES,
+                                ) {
+                                    mutableSnapshot.value =
+                                        mutableSnapshot.value.copy(
+                                            status = DiscoveryStatus.DISCOVERING,
+                                            failure = null,
+                                        )
                                 },
                             )
                         },
@@ -385,6 +387,9 @@ class WifiDirectDeviceDiscoveryRepository(
     }
 
     override fun stopDiscovery() {
+        val wasActive = mutableSnapshot.value.status.let {
+            it == DiscoveryStatus.STARTING || it == DiscoveryStatus.DISCOVERING
+        }
         generation += 1
         clearPendingPeers()
         mutableSnapshot.value = mutableSnapshot.value.copy(
@@ -393,7 +398,9 @@ class WifiDirectDeviceDiscoveryRepository(
             failure = null,
             failureOperation = null,
         )
-        releaseDiscoveryRegistrations()
+        // Activity/background teardown can call stopMonitoring while discovery
+        // is already idle. Avoid sending redundant P2P cleanup requests then.
+        if (wasActive) releaseDiscoveryRegistrations()
     }
 
     @SuppressLint("MissingPermission")
