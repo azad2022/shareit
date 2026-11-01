@@ -4,6 +4,8 @@ import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -66,18 +68,22 @@ import androidx.core.text.BidiFormatter
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.peyvand.app.R
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
+import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DiscoveryStatus
 import com.peyvand.core.domain.discovery.NearbyPeer
 import com.peyvand.core.domain.discovery.WifiDirectAvailability
 import com.peyvand.core.domain.discovery.WifiDirectPermissionPolicy
+import com.peyvand.core.domain.network.VpnRouteStatus
 
 @SuppressLint("InlinedApi")
 @Composable
 fun HomeScreen(
     viewModel: DeviceDiscoveryViewModel,
+    networkEnvironmentViewModel: NetworkEnvironmentViewModel,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val networkEnvironment by networkEnvironmentViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = context as? Activity
     val permissionsToRequest = remember {
@@ -159,6 +165,12 @@ fun HomeScreen(
                 text = stringResource(R.string.discovery_subtitle),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (networkEnvironment.vpnRouteStatus == VpnRouteStatus.ACTIVE_FOR_APP) {
+            VpnWarningCard(
+                onOpenVpnSettings = { openVpnSettings(context) },
             )
         }
 
@@ -316,6 +328,49 @@ fun HomeScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun VpnWarningCard(
+    onOpenVpnSettings: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.vpn_route_warning_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(R.string.vpn_route_warning_message),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = onOpenVpnSettings,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.vpn_open_settings))
+            }
+        }
+    }
+}
+
+private fun openVpnSettings(context: Context) {
+    try {
+        context.startActivity(Intent(Settings.ACTION_VPN_SETTINGS))
+    } catch (_: ActivityNotFoundException) {
+        context.startActivity(Intent(Settings.ACTION_SETTINGS))
     }
 }
 

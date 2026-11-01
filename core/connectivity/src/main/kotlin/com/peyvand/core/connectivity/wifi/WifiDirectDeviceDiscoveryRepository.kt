@@ -409,6 +409,8 @@ class WifiDirectDeviceDiscoveryRepository(
                 Manifest.permission.NEARBY_WIFI_DEVICES
             WifiDirectPermissionPolicy.Permission.LEGACY_FINE_LOCATION ->
                 Manifest.permission.ACCESS_FINE_LOCATION
+            WifiDirectPermissionPolicy.Permission.LEGACY_COARSE_LOCATION ->
+                error("Coarse location alone cannot authorize Wi-Fi Direct discovery.")
         }
 
         return ContextCompat.checkSelfPermission(

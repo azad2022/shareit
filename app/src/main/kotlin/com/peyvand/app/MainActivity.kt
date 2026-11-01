@@ -19,6 +19,8 @@ import com.peyvand.app.presentation.StartupErrorScreen
 import com.peyvand.app.presentation.StartupLoadingScreen
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModelFactory
+import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
+import com.peyvand.app.presentation.network.NetworkEnvironmentViewModelFactory
 import com.peyvand.core.data.language.PreferencesLanguageRepository
 import com.peyvand.core.domain.language.AppLanguage
 import com.peyvand.core.domain.language.SelectLanguageUseCase
@@ -33,6 +35,7 @@ class MainActivity : AppCompatActivity() {
         data class Ready(
             val languageViewModel: MainViewModel,
             val discoveryViewModel: DeviceDiscoveryViewModel,
+            val networkEnvironmentViewModel: NetworkEnvironmentViewModel,
         ) : StartupState
     }
 
@@ -40,6 +43,9 @@ class MainActivity : AppCompatActivity() {
 
     private val discoveryRepository
         get() = (application as PeyvandApplication).deviceDiscoveryRepository
+
+    private val networkEnvironmentRepository
+        get() = (application as PeyvandApplication).networkEnvironmentRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,6 +61,7 @@ class MainActivity : AppCompatActivity() {
                     is StartupState.Ready -> PeyvandApp(
                         languageViewModel = state.languageViewModel,
                         discoveryViewModel = state.discoveryViewModel,
+                        networkEnvironmentViewModel = state.networkEnvironmentViewModel,
                     )
                 }
             }
@@ -66,15 +73,18 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         discoveryRepository.startMonitoring()
+        networkEnvironmentRepository.startMonitoring()
     }
 
     override fun onResume() {
         super.onResume()
         discoveryRepository.refreshAvailability()
+        networkEnvironmentRepository.refresh()
     }
 
     override fun onStop() {
         discoveryRepository.stopMonitoring()
+        networkEnvironmentRepository.stopMonitoring()
         super.onStop()
     }
 
@@ -109,9 +119,15 @@ class MainActivity : AppCompatActivity() {
                     DeviceDiscoveryViewModelFactory(discoveryRepository),
                 )[DeviceDiscoveryViewModel::class.java]
 
+                val networkEnvironmentViewModel = ViewModelProvider(
+                    this@MainActivity,
+                    NetworkEnvironmentViewModelFactory(networkEnvironmentRepository),
+                )[NetworkEnvironmentViewModel::class.java]
+
                 startupState = StartupState.Ready(
                     languageViewModel = languageViewModel,
                     discoveryViewModel = discoveryViewModel,
+                    networkEnvironmentViewModel = networkEnvironmentViewModel,
                 )
             } catch (cancellation: CancellationException) {
                 throw cancellation

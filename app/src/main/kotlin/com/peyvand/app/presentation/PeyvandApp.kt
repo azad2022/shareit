@@ -13,11 +13,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
 import com.peyvand.app.presentation.home.HomeScreen
 import com.peyvand.app.presentation.language.LanguageSelectionScreen
+import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
 
 @Composable
 fun PeyvandApp(
     languageViewModel: MainViewModel,
     discoveryViewModel: DeviceDiscoveryViewModel,
+    networkEnvironmentViewModel: NetworkEnvironmentViewModel,
 ) {
     val uiState by languageViewModel.uiState.collectAsStateWithLifecycle()
 
@@ -39,7 +41,10 @@ fun PeyvandApp(
                 onContinue = languageViewModel::confirmLanguageSelection,
             )
 
-            is MainUiState.Home -> HomeScreen(viewModel = discoveryViewModel)
+            is MainUiState.Home -> HomeScreen(
+                viewModel = discoveryViewModel,
+                networkEnvironmentViewModel = networkEnvironmentViewModel,
+            )
         }
     }
 }

@@ -2,6 +2,9 @@
 <resources>
     <string name="app_name">پیوند</string>
     <string name="brand_name">PEYVAND</string>
+    <string name="vpn_route_warning_title">VPN برای مسیر شبکهٔ پیوند فعال است</string>
+    <string name="vpn_route_warning_message">Android گزارش می‌کند شبکهٔ پیش‌فرض پیوند از VPN عبور می‌کند. بعضی VPNها ارتباط با شبکهٔ محلی را محدود می‌کنند و ممکن است اتصال یا انتقال را مختل کنند؛ اما روشن بودن VPN به‌تنهایی ثابت نمی‌کند که انتقال مسدود است. در صورت بروز مشکل، دسترسی شبکهٔ محلی (LAN) را در تنظیمات VPN مجاز کنید یا VPN را موقتاً خاموش کنید. پیوند VPN را خودکار خاموش نمی‌کند.</string>
+    <string name="vpn_open_settings">بررسی تنظیمات VPN</string>
     <string name="language_selection_title">زبان برنامه را انتخاب کنید</string>
     <string name="language_selection_subtitle">زبان دلخواه شما ذخیره می‌شود و در اجراهای بعدی دوباره پرسیده نخواهد شد.</string>
     <string name="language_persian">فارسی</string>
