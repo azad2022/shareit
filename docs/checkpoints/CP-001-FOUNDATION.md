@@ -28,11 +28,31 @@ Create the first reproducible native Android project foundation for PEYVAND (Ù¾Û
 
 ## Implemented scope (initial commit)
 
-Pending code commit SHA and GitHub Actions result. This section will be completed after read-back and CI verification.
+Implemented on `feature/foundation-bootstrap` (not merged to `main`).
+
+- Initial foundation commit: `949a95523831013bf35e8ebb844c523e5ce6b2b9`.
+- Gradle wrapper executable-mode correction: `8284210288c561f0d9d3f5c9fa502a1795843188`.
+- AGP built-in Kotlin, canonical Kotlin source roots, and CI setup correction: `202ce736a53a3416a48571dd9d6967968cb2e2c9`.
+- Android 17 SDK package-name and SDK-path compatibility correction: `765e0ba163c269af3a3fbd54dfafb33d7b5b759b`.
+
+Files created include the root Gradle configuration/version catalog/wrapper, four module build files, Android manifest/resources, first-run language flow, DataStore language repository, domain language catalogue/use cases, Compose design-system theme, unit tests, Android CI workflow, README, ADR-0001, foundation architecture, and project status.
+
+The feature scope intentionally excludes all discovery, network, security, file-transfer, and APK work.
 
 ## Test evidence
 
-Pending. Tests are not considered passed until a completed GitHub Actions run reports success for `testDebugUnitTest`, `lintDebug`, and `assembleDebug` on a named runner with Android SDK 37 and JDK 17.
+Local build: not run. The available remote workbench has no `java`, `gradle`, `ANDROID_HOME`, or `ANDROID_SDK_ROOT` installation.
+
+GitHub Actions:
+
+- Run `41278935375` (initial foundation): failed before Gradle at Android SDK setup because the setup action attempted to install the removed SDK package `tools`.
+- Run `41278975695` (wrapper executable fix): same SDK setup failure, before Gradle.
+- Run `41279407754` (AGP/Kotlin and CI correction): SDK setup passed, then failed because the workflow requested `platforms;android-37`, while the Android 17 SDK package is named `platforms;android-37.0`.
+- Run `41279528083` (latest): `Set up Android SDK`, `Install Android 17 SDK platform`, and `Validate Gradle wrapper and build` succeeded. The command step `:core:domain:testDebugUnitTest`, module lint tasks, and `:app:assembleDebug` was still `in_progress` at the last check (2026-11-01 06:08 UTC). No test/build conclusion is available yet.
+
+Latest run: https://github.com/azad2022/shareit/actions/runs/41279528083
+
+The test/build acceptance criteria remain unchecked until the latest workflow reaches a completed success. No test is reported as passed based on an in-progress job.
 
 ## Risks and deferred decisions
 
@@ -42,6 +62,14 @@ Pending. Tests are not considered passed until a completed GitHub Actions run re
 - No physical-device test has been run in CP-001.
 - No real discovery, pairing, transfer, integrity verification, resume, APK handling, or performance benchmarking is implemented in CP-001.
 - Google Play/API target requirements must be rechecked before a release milestone.
+
+## Commit and source-of-truth verification
+
+- Latest known branch commit: `765e0ba163c269af3a3fbd54dfafb33d7b5b759b`.
+- The branch tip was verified through the Git reference API.
+- The `gradlew` file mode was verified as `100755` in the branch tree.
+- Key app, DataStore adapter, and checkpoint files were read back from GitHub after commit.
+- Branch URL: https://github.com/azad2022/shareit/tree/feature/foundation-bootstrap
 
 ## Status rule
 
