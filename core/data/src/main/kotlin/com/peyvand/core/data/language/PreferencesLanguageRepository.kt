@@ -3,7 +3,9 @@ package com.peyvand.core.data.language
 import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.peyvand.core.domain.language.AppLanguage
@@ -14,6 +16,9 @@ import kotlinx.coroutines.withContext
 
 private val Context.peyvandSettingsDataStore by preferencesDataStore(
     name = "peyvand_settings",
+    // Language selection is the only persisted setting in this foundation.
+    // Recover a corrupt preferences file to an empty state instead of crashing startup.
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
 )
 
 private val selectedLanguageKey = stringPreferencesKey("selected_language_tag")
