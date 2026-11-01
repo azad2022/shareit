@@ -101,6 +101,22 @@ object PeyvandDiscoveryAdvertisement {
             }
     }
 
+    fun isCompatibleRegistrationType(registrationType: String): Boolean =
+        registrationType.trim().trimEnd('.').equals(SERVICE_TYPE, ignoreCase = true)
+
+    /**
+     * Extracts the instance name only from the expected DNS-SD service domain.
+     * Android reports domains in the form: <instance>._peyvand._tcp.local.
+     */
+    fun instanceNameFromFullDomain(fullDomain: String): String? {
+        val serviceDomainSuffix = ".$SERVICE_TYPE.local"
+        val normalizedDomain = fullDomain.trim().trimEnd('.')
+        if (!normalizedDomain.endsWith(serviceDomainSuffix, ignoreCase = true)) return null
+
+        val instanceName = normalizedDomain.dropLast(serviceDomainSuffix.length)
+        return instanceName.takeIf(::isCompatibleInstanceName)
+    }
+
     fun isCompatible(record: Map<String, String>): Boolean =
         record[APP_KEY] == APP_ID &&
             record[DISCOVERY_VERSION_KEY] == DISCOVERY_VERSION
