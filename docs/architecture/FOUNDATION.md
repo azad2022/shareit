@@ -1,44 +1,52 @@
-# PEYVAND Android foundation architecture
+# PEYVAND Android foundation and connectivity architecture
 
-## Current scope
+## Current implementation scope
 
-CP-001 establishes project/build structure, language preference persistence, the first-run language gate, and the visual foundation. It does not implement device discovery, Wi-Fi Direct, pairing, sockets, encryption, file streaming, APK extraction, installation, or transfer history.
+The repository currently contains the native Android foundation and the first connectivity vertical slice:
+
+- CP-001: Gradle/Kotlin/Compose foundation, Persian-first locale bootstrap, and the PEYVAND design-system entry point.
+- CP-002: runtime Wi-Fi Direct availability checks, version-aware permissions, and PEYVAND DNS-SD service discovery.
+
+CP-002 discovers PEYVAND service advertisements. It does **not** connect peers, authenticate peers, create sockets, or transfer files. A discovered advertisement is untrusted input and is not proof of identity.
 
 ## Project modules
 
 ```text
 :app
  ├── :core:domain
- ├── :core:data ───────> :core:domain
+ ├── :core:data ─────────> :core:domain
+ ├── :core:connectivity ─> :core:domain
  └── :core:designsystem
 ```
 
-- `:app` owns Activity entry, presentation state, Compose screen routing, and composition of implementations.
-- `:core:domain` contains the `AppLanguage` target catalogue, `LanguageRepository` contract, and language-selection use cases. Its source must remain Kotlin-only and must not import Android or Compose APIs. All Kotlin source directories are explicitly configured through `AndroidSourceSet.kotlin`. The Android library plugin is used to share AGP built-in Kotlin consistently; this is a build-system choice, not permission for domain source to use Android APIs.
-- `:core:data` owns the Android-specific Preferences DataStore implementation and AppCompat locale adapter. It implements the domain contract; it must not depend on app presentation.
-- `:core:designsystem` owns semantic PEYVAND colors and the Compose theme. It contains no business or transfer logic.
+- `:app` owns Activity entry, Compose presentation, lifecycle ownership, and explicit composition of implementations.
+- `:core:domain` contains Android-free language and discovery models, repository contracts, and policies. It exposes `StateFlow` in its repository contract and must not import Android or Compose APIs.
+- `:core:data` owns Preferences DataStore and AppCompat per-app locale integration.
+- `:core:connectivity` owns the Android `WifiP2pManager` adapter, P2P state receiver, DNS-SD service advertisement and discovery, and runtime capability reporting. It does not depend on app presentation.
+- `:core:designsystem` owns PEYVAND semantic colors and the Compose theme.
 
-Keep the dependency graph acyclic. Add connectivity, security, transfer, file access, and package-sharing modules only when their domain contracts and implementation ownership are defined in an ADR.
+Keep the project graph acyclic. Add security, transfer, storage, and package-sharing modules only when their contracts and ownership are defined in ADRs.
 
-## Language startup lifecycle
+## CP-002 Wi-Fi Direct discovery lifecycle
 
-1. `MainActivity` creates the language repository and asynchronously reads Preferences DataStore.
-2. A saved language wins. If there is no saved choice, Persian is applied as the initial UI locale but is not recorded as a user choice.
-3. If the AppCompat locale differs from the desired locale, `AppCompatDelegate.setApplicationLocales` is called from the `AppCompatActivity`; the Activity recreation completes before Compose content is exposed.
-4. `MainViewModel` starts in the language-selection state when no explicit choice exists, otherwise it starts in Home.
-5. The language list is sourced from the domain catalogue. Only languages with a complete resource bundle are selectable.
-6. On confirmation, the use case validates readiness, DataStore persists the choice, and AppCompat applies the locale.
+1. The Activity starts monitoring while the app is foregrounded and releases monitoring when it stops.
+2. The connectivity adapter initializes a Wi-Fi P2P channel and observes the P2P enabled/disabled system state.
+3. Before a scan, it checks hardware/API availability, the runtime permission appropriate to the Android version, and Location Mode because Android requires it for P2P service discovery.
+4. The user explicitly starts a scan. The app advertises a minimal PEYVAND DNS-SD service record and registers a matching service request.
+5. DNS-SD service and TXT callbacks are correlated only within the active scan. A peer is shown only when both callback records identify the expected PEYVAND service and discovery schema.
+6. Cancelling, leaving the foreground, revoking permission, or losing the P2P channel invalidates the scan generation, clears pending peer data, and removes registered requests/services.
+7. The UI renders actual platform state. A scan callback or animation never fabricates a discovered device.
 
-The initial release exposes only `fa` in `locale_config.xml`. Other target languages must not become system-selectable until their resources and layout direction are complete.
+The service TXT fields are public, spoofable compatibility markers. They contain no file names, account identifiers, long-lived secrets, or cryptographic identity.
 
-## UI state ownership
+## Permission model
 
-`MainViewModel` owns the current onboarding/home state and selection transaction state. Compose renders immutable state and emits a selection intent. UI code does not access DataStore or AppCompat directly. `MainActivity` owns app startup and the composition root; the repository owns persistence and the Android locale adapter.
-
-## Motion
-
-CP-001 uses a short, state-driven transition between language selection and the foundation home surface. It is navigation feedback, not a representation of network discovery or file-transfer progress. Transfer-related motion must be added only with real domain state in later milestones.
+- Android 13/API 33 and later: `NEARBY_WIFI_DEVICES` runtime permission with `neverForLocation`.
+- Android 12L/API 32 and earlier: `ACCESS_FINE_LOCATION` runtime permission, capped at API 32.
+- P2P system access: `ACCESS_WIFI_STATE` and `CHANGE_WIFI_STATE`.
+- Wi-Fi Direct hardware is declared optional; capability is checked at runtime.
+- No `INTERNET` permission is added for this discovery-only milestone. Local socket APIs and the INTERNET permission belong to a later, reviewed transport milestone; INTERNET permission does not imply public-internet dependency.
 
 ## Deferred responsibilities
 
-No transport APIs, permissions, background services, crypto, local socket protocols, file access, PackageManager visibility declarations, or PackageInstaller integration are introduced in this milestone. These require dedicated threat models, ADRs, and physical-device validation.
+No peer connection, pairing, TLS, local socket, transfer protocol, file selection, file streaming, integrity verification, resume, APK extraction, PackageInstaller, or background transfer is implemented in CP-002. These responsibilities require later ADRs, threat review, and physical-device interoperability tests.

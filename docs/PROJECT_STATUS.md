@@ -3,27 +3,48 @@
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
-- **Current checkpoint:** CP-001 — Initial Android foundation
+- **Current checkpoint:** CP-002 — Wi-Fi Direct service discovery
 - **Current branch:** `feature/foundation-bootstrap`
 - **Last updated:** 2026-11-01
-- **Latest source fix commit:** `71538591fcc2a3473920b26ba3388781dc2cfac1`
 
-## Current milestone
+## Milestones
 
-Establish the first native Android foundation: Kotlin/Compose build, four focused modules, localization preference infrastructure and first-run Persian language selection, PEYVAND blue/white theme, automated CI, and reproducible tests.
+### CP-001 — Initial Android foundation
 
-## Confirmed implementation limits
+- Debug APK built and CI passed on commit `b9523e084382b2efe14c837b3f345bb33e1cb79f`.
+- Product owner reports successful installation, Persian selection, and first entry to the app on a physical phone.
+- The exact phone model/API and a cold-relaunch persistence check have not yet been reported; keep CP-001 `IN_PROGRESS` until those details are verified.
 
-- Only CP-001 foundation scope is authorized by the product owner at this point.
-- No device discovery, Wi-Fi Direct transport, pairing, socket protocol, encryption, file transfer, resume, APK extraction, PackageInstaller, or background transfer is implemented yet.
-- Debug build only; no release keystore or signing secrets.
-- Persian is the only enabled language. The other six target languages remain disabled pending complete translation and validation.
+### CP-002 — Wi-Fi Direct service discovery
+
+- Implementing version-aware runtime permission checks and Wi-Fi Direct DNS-SD discovery.
+- Device list filters for the PEYVAND service marker; this is not peer authentication.
+- No socket, pairing, TLS, file transfer, or APK handling yet.
+- Requires physical two-device validation across API/manufacturer combinations.
+
+## Module boundaries
+
+- `:app`: Activity lifecycle, ViewModels, Compose presentation, explicit composition.
+- `:core:domain`: Android-free language and device-discovery contracts/policies.
+- `:core:data`: Preferences DataStore and AppCompat locale adapter.
+- `:core:connectivity`: Android Wi-Fi Direct/DNS-SD platform adapter.
+- `:core:designsystem`: PEYVAND Compose theme and semantic colors.
+
+## Security and distribution limits
+
+- Local network is untrusted; discovery metadata and device names are not credentials.
+- No authenticated connection, TLS session, file transfer, or resume is implemented yet.
+- Debug signing only; no release keystore or signing secrets.
+- No backend, account, cloud upload, relay, or public-internet requirement for the core transfer goal.
+- No `INTERNET` permission is added in CP-002; reassess for local sockets in a later transport ADR.
 
 ## Open decisions
 
 - Final `minSdk` and supported physical-device matrix (current `26` is provisional).
 - Final application ID (current `com.peyvand.app` is provisional).
 - Kurdish variant/script and locale tag.
-- First transport/security architecture ADRs for CP-002.
+- Fallback transport order if Wi-Fi Direct is unavailable.
+- Peer authentication/pairing and local socket protocol.
+- Transfer durability/resume and background execution model.
 
-See `docs/checkpoints/CP-001-FOUNDATION.md` for acceptance criteria, test evidence, and current risks.
+See `docs/checkpoints/CP-001-FOUNDATION.md` and `docs/checkpoints/CP-002-WIFI-DIRECT-DISCOVERY.md` for acceptance criteria, evidence, and remaining risks.

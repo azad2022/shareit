@@ -10,14 +10,16 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
 import com.peyvand.app.presentation.home.HomeScreen
 import com.peyvand.app.presentation.language.LanguageSelectionScreen
 
 @Composable
 fun PeyvandApp(
-    viewModel: MainViewModel,
+    languageViewModel: MainViewModel,
+    discoveryViewModel: DeviceDiscoveryViewModel,
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by languageViewModel.uiState.collectAsStateWithLifecycle()
 
     AnimatedContent(
         targetState = uiState,
@@ -34,10 +36,10 @@ fun PeyvandApp(
             is MainUiState.LanguageSelection -> LanguageSelectionScreen(
                 isSaving = targetState.isSaving,
                 hasError = targetState.hasError,
-                onContinue = viewModel::confirmLanguageSelection,
+                onContinue = languageViewModel::confirmLanguageSelection,
             )
 
-            is MainUiState.Home -> HomeScreen()
+            is MainUiState.Home -> HomeScreen(viewModel = discoveryViewModel)
         }
     }
 }

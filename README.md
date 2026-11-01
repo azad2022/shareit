@@ -1,24 +1,25 @@
 # PEYVAND (پیوند)
 
-Native Android application for discovering nearby devices and securely transferring user-selected files and eligible Android application packages directly between devices.
+Native Android application for discovering nearby PEYVAND devices and securely transferring user-selected files and eligible Android application packages directly between devices.
 
 - Product name: **PEYVAND** (Persian: **پیوند**)
 - Repository name remains: `azad2022/shareit`
 - Language: Kotlin
 - UI: Jetpack Compose
 - Brand direction: blue and white
-- Core connectivity target: offline peer-to-peer, with Wi-Fi Direct as the primary transport
+- Primary connectivity target: offline peer-to-peer using Wi-Fi Direct where supported
 
 ## Current development status
 
-The project is in **CP-001 — Initial Android foundation**. The current milestone establishes the Gradle/Kotlin/Compose project, module boundaries, Persian-first language preference flow, and design-system baseline. Device discovery and transfer are not implemented yet.
+The project has the native Android foundation and is implementing **CP-002 — Wi-Fi Direct service discovery**. The app can inspect runtime capability/permission state and discover compatible PEYVAND DNS-SD advertisements. Discovery is not authentication. Peer connection and file transfer are not implemented yet.
 
 ## Modules
 
-- `:app` — Android entry point and presentation.
-- `:core:domain` — Android-independent language and domain contracts.
-- `:core:data` — Android persistence and platform adapters.
-- `:core:designsystem` — PEYVAND Compose theme and semantic colors.
+- `:app` — Android entry point and Compose presentation.
+- `:core:domain` — Android-free language and discovery contracts/policies.
+- `:core:data` — Android persistence and locale adapter.
+- `:core:connectivity` — Wi-Fi Direct DNS-SD platform adapter.
+- `:core:designsystem` — PEYVAND theme and semantic colors.
 
 ## Build requirements
 
@@ -32,10 +33,10 @@ Build the Debug APK:
 ./gradlew assembleDebug
 ```
 
-Run unit tests and lint:
+Run unit tests, lint, and Debug build:
 
 ```bash
-./gradlew testDebugUnitTest lintDebug
+./gradlew :core:domain:testDebugUnitTest lintDebug assembleDebug
 ```
 
 ## Project documentation
@@ -43,7 +44,7 @@ Run unit tests and lint:
 - Engineering skill: `.agents/skills/shareit-android/SKILL.md`
 - Product requirements: `docs/PRODUCT_REQUIREMENTS.md`
 - Identity, localization, and motion: `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md`
-- Foundation architecture: `docs/architecture/FOUNDATION.md`
+- Foundation/connectivity architecture: `docs/architecture/FOUNDATION.md`
 - Project status: `docs/PROJECT_STATUS.md`
 - Checkpoints: `docs/checkpoints/`
 - Architecture decisions: `docs/decisions/`

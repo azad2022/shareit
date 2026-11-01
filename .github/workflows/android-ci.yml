@@ -39,7 +39,6 @@ jobs:
       - name: Install Android 17 SDK platform
         run: |
           sdkmanager "platforms;android-37.0"
-          # Android 17's package installs to android-37.0; AGP resolves compileSdk 37 as android-37.
           if [ -d "$ANDROID_HOME/platforms/android-37.0" ] && [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
             ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
           fi
@@ -56,6 +55,7 @@ jobs:
             :core:data:lintDebug \
             :core:designsystem:lintDebug \
             :core:domain:lintDebug \
+            :core:connectivity:lintDebug \
             :app:assembleDebug
 
       - name: Upload validation reports

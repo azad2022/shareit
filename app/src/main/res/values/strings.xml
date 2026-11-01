@@ -18,10 +18,42 @@
     <string name="language_save_failed">ذخیره زبان انجام نشد. دوباره تلاش کنید.</string>
     <string name="app_startup_loading">در حال آماده‌سازی پیوند…</string>
     <string name="app_startup_failed_title">راه‌اندازی برنامه انجام نشد</string>
-    <string name="app_startup_failed_message">خواندن تنظیمات اولیه با مشکل روبه‌رو شد. اتصال دوباره لازم نیست؛ می‌توانید دوباره تلاش کنید.</string>
-    <string name="foundation_ready_title">فونداسیون پیوند آماده است</string>
-    <string name="foundation_ready_message">ساختار اولیه برنامه، ذخیره تنظیمات زبان و زیرساخت رابط کاربری ایجاد شده‌اند.</string>
-    <string name="next_milestone_title">مرحله بعد</string>
-    <string name="next_milestone_message">کشف دستگاه‌های نزدیک، اتصال امن و انتقال مستقیم فایل‌ها در checkpointهای بعدی پیاده‌سازی و آزمایش می‌شوند.</string>
-    <string name="not_implemented_notice">قابلیت انتقال هنوز در این نسخه پیاده‌سازی نشده است.</string>
+    <string name="app_startup_failed_message">خواندن تنظیمات اولیه با مشکل روبه‌رو شد. می‌توانید دوباره تلاش کنید.</string>
+
+    <string name="discovery_title">دستگاه‌های نزدیک</string>
+    <string name="discovery_subtitle">گوشی‌های دارای پیوند را در نزدیکی خود پیدا کنید.</string>
+    <string name="discovery_idle">برای پیدا کردن دستگاه‌های پیوند، جست‌وجو را آغاز کنید.</string>
+    <string name="discovery_starting">در حال آماده‌سازی جست‌وجو…</string>
+    <string name="discovery_scanning">در حال جست‌وجوی دستگاه‌های دارای پیوند</string>
+    <string name="discovery_failed">جست‌وجو با مشکل روبه‌رو شد.</string>
+    <string name="discovery_start">جست‌وجوی دستگاه‌های نزدیک</string>
+    <string name="discovery_stop">توقف جست‌وجو</string>
+    <string name="discovery_permission_explanation">برای کشف مستقیم دستگاه‌های نزدیک، پیوند به مجوز Wi-Fi دستگاه‌های اطراف نیاز دارد. این قابلیت موقعیت مکانی شما را از اطلاعات Wi-Fi استخراج نمی‌کند.</string>
+    <string name="discovery_permission_required">برای شروع جست‌وجو، مجوز دستگاه‌های نزدیک لازم است.</string>
+    <string name="discovery_permission_denied">مجوز داده نشد. برای فعال‌سازی، دسترسی پیوند را در تنظیمات برنامه بررسی کنید.</string>
+    <string name="discovery_open_app_settings">باز کردن تنظیمات مجوزهای پیوند</string>
+    <string name="discovery_availability_checking">در حال بررسی پشتیبانی Wi-Fi Direct…</string>
+    <string name="discovery_availability_ready">Wi-Fi Direct آمادهٔ بررسی دستگاه‌های سازگار است.</string>
+    <string name="discovery_availability_permission">مجوز لازم برای جست‌وجوی Wi-Fi Direct در دسترس نیست.</string>
+    <string name="discovery_availability_location">برای جست‌وجوی Wi-Fi Direct، سرویس موقعیت مکانی دستگاه باید روشن باشد. پیوند از این سرویس برای استخراج موقعیت شما استفاده نمی‌کند.</string>
+    <string name="discovery_availability_wifi_disabled">Wi-Fi Direct در حال حاضر غیرفعال است. وضعیت Wi-Fi دستگاه را بررسی کنید.</string>
+    <string name="discovery_availability_unsupported">این دستگاه یا نسخهٔ سیستم‌عامل، Wi-Fi Direct را در اختیار پیوند قرار نمی‌دهد.</string>
+    <string name="discovery_availability_unavailable">سرویس Wi-Fi Direct در دسترس نیست. وضعیت دستگاه را بررسی کنید.</string>
+    <string name="discovery_open_location_settings">رفتن به تنظیمات موقعیت مکانی</string>
+    <string name="discovery_open_wifi_settings">رفتن به تنظیمات Wi-Fi</string>
+    <string name="discovery_error_busy">سرویس Wi-Fi Direct مشغول است. چند لحظه بعد دوباره تلاش کنید.</string>
+    <string name="discovery_error_unsupported">این دستگاه از سرویس کشف Wi-Fi Direct پشتیبانی نمی‌کند.</string>
+    <string name="discovery_error_generic">شروع جست‌وجو ممکن نشد. وضعیت Wi-Fi و مجوزها را بررسی کنید.</string>
+    <string name="discovery_empty">هنوز دستگاه سازگار دیگری پیدا نشده است. در گوشی دوم نیز پیوند را باز و جست‌وجو را فعال کنید.</string>
+    <string name="discovery_unknown_device">دستگاه بدون نام</string>
+    <string name="discovery_peer_compatible">سرویس کشف پیوند شناسایی شد</string>
+    <string name="discovery_security_title">مرحلهٔ کشف، احراز هویت نیست</string>
+    <string name="discovery_security_message">این فهرست فقط دستگاهی را نشان می‌دهد که سرویس کشف پیوند را اعلام کرده است. پیش از هر اتصال یا انتقال، احراز هویت رمزنگاری‌شده و تأیید کاربر لازم خواهد بود.</string>
+    <string name="discovery_radar_active">نمایشگر فعال فرایند جست‌وجوی دستگاه‌های نزدیک</string>
+    <string name="discovery_radar_idle">نمایشگر آمادهٔ جست‌وجوی دستگاه‌های نزدیک</string>
+
+    <plurals name="discovery_peers_found_count">
+        <item quantity="one">%d دستگاه پیوند پیدا شد</item>
+        <item quantity="other">%d دستگاه پیوند پیدا شد</item>
+    </plurals>
 </resources>

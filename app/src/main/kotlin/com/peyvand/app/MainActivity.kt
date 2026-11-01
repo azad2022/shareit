@@ -17,6 +17,8 @@ import com.peyvand.app.presentation.MainViewModelFactory
 import com.peyvand.app.presentation.PeyvandApp
 import com.peyvand.app.presentation.StartupErrorScreen
 import com.peyvand.app.presentation.StartupLoadingScreen
+import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
+import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModelFactory
 import com.peyvand.core.data.language.PreferencesLanguageRepository
 import com.peyvand.core.domain.language.AppLanguage
 import com.peyvand.core.domain.language.SelectLanguageUseCase
@@ -28,16 +30,20 @@ class MainActivity : AppCompatActivity() {
     private sealed interface StartupState {
         data object Loading : StartupState
         data object Failed : StartupState
-        data class Ready(val viewModel: MainViewModel) : StartupState
+        data class Ready(
+            val languageViewModel: MainViewModel,
+            val discoveryViewModel: DeviceDiscoveryViewModel,
+        ) : StartupState
     }
 
     private var startupState by mutableStateOf<StartupState>(StartupState.Loading)
-    private lateinit var languageRepository: PreferencesLanguageRepository
+
+    private val discoveryRepository
+        get() = (application as PeyvandApplication).deviceDiscoveryRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureSystemBars()
-        languageRepository = PreferencesLanguageRepository(applicationContext)
 
         setContent {
             PeyvandTheme {
@@ -46,7 +52,10 @@ class MainActivity : AppCompatActivity() {
                     StartupState.Failed -> StartupErrorScreen(
                         onRetry = ::initializeApplication,
                     )
-                    is StartupState.Ready -> PeyvandApp(viewModel = state.viewModel)
+                    is StartupState.Ready -> PeyvandApp(
+                        languageViewModel = state.languageViewModel,
+                        discoveryViewModel = state.discoveryViewModel,
+                    )
                 }
             }
         }
@@ -54,12 +63,26 @@ class MainActivity : AppCompatActivity() {
         initializeApplication()
     }
 
+    override fun onStart() {
+        super.onStart()
+        discoveryRepository.startMonitoring()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        discoveryRepository.refreshAvailability()
+    }
+
+    override fun onStop() {
+        discoveryRepository.stopMonitoring()
+        super.onStop()
+    }
+
     private fun initializeApplication() {
         startupState = StartupState.Loading
         lifecycleScope.launch {
             try {
-                // Read the persisted choice before exposing the actual app UI.
-                // Persian is only the initial UI locale until the user confirms it.
+                val languageRepository = PreferencesLanguageRepository(applicationContext)
                 val selectedLanguage = languageRepository.getSelectedLanguage()
                 val localeToApply = selectedLanguage?.localeTag
                     ?: AppLanguage.PERSIAN.localeTag
@@ -73,21 +96,26 @@ class MainActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                val factory = MainViewModelFactory(
-                    initialLanguage = selectedLanguage,
-                    selectLanguage = SelectLanguageUseCase(languageRepository),
-                )
-                val viewModel = ViewModelProvider(
+                val languageViewModel = ViewModelProvider(
                     this@MainActivity,
-                    factory,
+                    MainViewModelFactory(
+                        initialLanguage = selectedLanguage,
+                        selectLanguage = SelectLanguageUseCase(languageRepository),
+                    ),
                 )[MainViewModel::class.java]
 
-                startupState = StartupState.Ready(viewModel)
+                val discoveryViewModel = ViewModelProvider(
+                    this@MainActivity,
+                    DeviceDiscoveryViewModelFactory(discoveryRepository),
+                )[DeviceDiscoveryViewModel::class.java]
+
+                startupState = StartupState.Ready(
+                    languageViewModel = languageViewModel,
+                    discoveryViewModel = discoveryViewModel,
+                )
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {
-                // Keep the Activity usable and let the user retry a transient
-                // settings-storage or locale initialization failure.
                 startupState = StartupState.Failed
             }
         }
@@ -96,8 +124,6 @@ class MainActivity : AppCompatActivity() {
     @Suppress("DEPRECATION")
     private fun configureSystemBars() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        // These fallback colors apply on API 26–34. Newer Android versions
-        // enforce edge-to-edge and draw the app surface behind system bars.
         window.statusBarColor = android.graphics.Color.WHITE
         window.navigationBarColor = android.graphics.Color.WHITE
         WindowInsetsControllerCompat(window, window.decorView).apply {

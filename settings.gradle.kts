@@ -19,4 +19,5 @@ rootProject.name = "PEYVAND"
 include(":app")
 include(":core:domain")
 include(":core:data")
+include(":core:connectivity")
 include(":core:designsystem")
