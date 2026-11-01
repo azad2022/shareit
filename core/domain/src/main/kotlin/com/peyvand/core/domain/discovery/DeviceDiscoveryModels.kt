@@ -19,6 +19,15 @@ enum class DiscoveryStatus {
     FAILED,
 }
 
+/** Identifies which asynchronous framework operation failed during discovery. */
+enum class DiscoveryOperation {
+    CLEAR_SERVICE_REQUESTS,
+    CLEAR_LOCAL_SERVICES,
+    ADD_LOCAL_SERVICE,
+    ADD_SERVICE_REQUEST,
+    DISCOVER_SERVICES,
+}
+
 enum class DeviceDiscoveryFailure {
     PERMISSION_REQUIRED,
     BUSY,
@@ -42,6 +51,7 @@ data class DeviceDiscoverySnapshot(
     val status: DiscoveryStatus = DiscoveryStatus.IDLE,
     val peers: List<NearbyPeer> = emptyList(),
     val failure: DeviceDiscoveryFailure? = null,
+    val failureOperation: DiscoveryOperation? = null,
 )
 
 interface DeviceDiscoveryRepository {
