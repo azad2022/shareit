@@ -52,6 +52,11 @@ data class DeviceDiscoverySnapshot(
     val peers: List<NearbyPeer> = emptyList(),
     val failure: DeviceDiscoveryFailure? = null,
     val failureOperation: DiscoveryOperation? = null,
+    val serviceResponseCount: Int = 0,
+    val acceptedServiceResponseCount: Int = 0,
+    val txtRecordResponseCount: Int = 0,
+    val acceptedTxtDomainCount: Int = 0,
+    val compatibleTxtRecordCount: Int = 0,
 )
 
 interface DeviceDiscoveryRepository {

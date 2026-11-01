@@ -345,6 +345,40 @@ fun DeviceDiscoveryScreen(
             )
         }
 
+        if (state.status != DiscoveryStatus.IDLE) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.discovery_diagnostics_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.discovery_diagnostics_counts,
+                            state.serviceResponseCount,
+                            state.acceptedServiceResponseCount,
+                            state.txtRecordResponseCount,
+                            state.acceptedTxtDomainCount,
+                            state.compatibleTxtRecordCount,
+                            state.peers.size,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(

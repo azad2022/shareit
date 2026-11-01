@@ -299,6 +299,11 @@ class WifiDirectDeviceDiscoveryRepository(
             peers = emptyList(),
             failure = null,
             failureOperation = null,
+            serviceResponseCount = 0,
+            acceptedServiceResponseCount = 0,
+            txtRecordResponseCount = 0,
+            acceptedTxtDomainCount = 0,
+            compatibleTxtRecordCount = 0,
         )
 
         try {
@@ -309,18 +314,32 @@ class WifiDirectDeviceDiscoveryRepository(
                         registrationType,
                         device,
                     ->
-                    if (isCurrent(requestGeneration) &&
-                        PeyvandDiscoveryAdvertisement.isCompatibleInstanceName(instanceName) &&
-                        PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType(registrationType)
-                    ) {
-                        val address = device.deviceAddress
-                        if (address.isNotBlank()) {
-                            val key = PeerServiceKey(
-                                deviceAddress = address,
-                                instanceName = instanceName.lowercase(Locale.ROOT),
+                    if (isCurrent(requestGeneration)) {
+                        mutableSnapshot.value = mutableSnapshot.value.copy(
+                            serviceResponseCount = mutableSnapshot.value.serviceResponseCount + 1,
+                        )
+                        val compatible =
+                            PeyvandDiscoveryAdvertisement.isCompatibleInstanceName(instanceName) &&
+                                PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType(registrationType)
+                        if (compatible) {
+                            mutableSnapshot.value = mutableSnapshot.value.copy(
+                                acceptedServiceResponseCount =
+                                    mutableSnapshot.value.acceptedServiceResponseCount + 1,
                             )
-                            rememberService(key, device)
-                            publishPeerIfCompatible(key, requestGeneration)
+                            val address = device.deviceAddress
+                            if (address.isNotBlank()) {
+                                val key = PeerServiceKey(
+                                    deviceAddress = address,
+                                    instanceName = instanceName.lowercase(Locale.ROOT),
+                                )
+                                rememberService(key, device)
+                                publishPeerIfCompatible(key, requestGeneration)
+                            }
+                        } else {
+                            Log.d(
+                                LOG_TAG,
+                                "DNS-SD service response rejected by PEYVAND name/type validation",
+                            )
                         }
                     }
                 },
@@ -329,17 +348,43 @@ class WifiDirectDeviceDiscoveryRepository(
                         record,
                         device,
                     ->
-                    val instanceName =
-                        PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(fullDomain)
-                    if (isCurrent(requestGeneration) && instanceName != null) {
-                        val address = device.deviceAddress
-                        if (address.isNotBlank()) {
-                            val key = PeerServiceKey(
-                                deviceAddress = address,
-                                instanceName = instanceName.lowercase(Locale.ROOT),
+                    if (isCurrent(requestGeneration)) {
+                        mutableSnapshot.value = mutableSnapshot.value.copy(
+                            txtRecordResponseCount = mutableSnapshot.value.txtRecordResponseCount + 1,
+                        )
+                        val instanceName =
+                            PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(fullDomain)
+                        if (instanceName != null) {
+                            mutableSnapshot.value = mutableSnapshot.value.copy(
+                                acceptedTxtDomainCount =
+                                    mutableSnapshot.value.acceptedTxtDomainCount + 1,
                             )
-                            rememberRecord(key, record.toMap())
-                            publishPeerIfCompatible(key, requestGeneration)
+                            val recordMap = record.toMap()
+                            if (PeyvandDiscoveryAdvertisement.isCompatible(recordMap)) {
+                                mutableSnapshot.value = mutableSnapshot.value.copy(
+                                    compatibleTxtRecordCount =
+                                        mutableSnapshot.value.compatibleTxtRecordCount + 1,
+                                )
+                            } else {
+                                Log.d(
+                                    LOG_TAG,
+                                    "DNS-SD TXT response has a valid PEYVAND domain but incompatible app/schema metadata",
+                                )
+                            }
+                            val address = device.deviceAddress
+                            if (address.isNotBlank()) {
+                                val key = PeerServiceKey(
+                                    deviceAddress = address,
+                                    instanceName = instanceName.lowercase(Locale.ROOT),
+                                )
+                                rememberRecord(key, recordMap)
+                                publishPeerIfCompatible(key, requestGeneration)
+                            }
+                        } else {
+                            Log.d(
+                                LOG_TAG,
+                                "DNS-SD TXT response rejected by PEYVAND domain validation",
+                            )
                         }
                     }
                 },

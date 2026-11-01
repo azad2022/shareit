@@ -105,6 +105,10 @@
     <string name="discovery_stage_add_request">ثبت درخواست جست‌وجوی دستگاه‌های پیوند</string>
     <string name="discovery_stage_start_scan">شروع جست‌وجوی Wi-Fi Direct</string>
     <string name="discovery_empty">هنوز دستگاه سازگار دیگری پیدا نشده است. در گوشی دوم نیز پیوند را باز و جست‌وجو را فعال کنید.</string>
+    <string name="discovery_diagnostics_title">گزارش فنی کشف دستگاه</string>
+    <string name="discovery_diagnostics_counts">پاسخ سرویس: %1$d | سرویس پذیرفته‌شده: %2$d
+پاسخ TXT: %3$d | دامنه معتبر: %4$d | رکورد سازگار: %5$d
+دستگاه‌های نهایی: %6$d</string>
     <string name="discovery_unknown_device">دستگاه بدون نام</string>
     <string name="discovery_peer_compatible">سرویس کشف پیوند شناسایی شد</string>
     <string name="discovery_security_title">مرحلهٔ کشف، احراز هویت نیست</string>
