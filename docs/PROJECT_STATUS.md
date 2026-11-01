@@ -5,7 +5,7 @@
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-002 — Wi-Fi Direct service discovery
 - **Current branch:** `feature/foundation-bootstrap`
-- **Last updated:** 2026-11-01 (physical-device feedback and discovery diagnostics)
+- **Last updated:** 2026-11-01 (two-device compatibility investigation)
 
 ## Milestones
 
@@ -28,9 +28,10 @@
 - App-default VPN diagnostics are informational only. A VPN-backed route does not by itself prove that Wi-Fi Direct or local socket traffic is blocked. See ADR-0003.
 - No peer socket, pairing, TLS session, receiver consent flow, file transfer, integrity verification, resume, or APK extraction/installation is implemented.
 - The module-level `ACCESS_NETWORK_STATE` declaration was added in commit `7abd10a4aebdc1dd94c7158b8f44d080f7b0ec92` after CI exposed that the ConnectivityManager adapter's module manifest lacked the permission.
-- The latest source hardening is recorded through code commits ending at `a8518d473e20ca1159b16607284c211893b6e78e`. A completed CI result for this exact source revision had not yet been confirmed when this status was written; the earlier successful run 19 validates a prior source revision only.
+- The previous source revision `0363d7ff83ccca019cdf775d293d7f06945d6c7d` passed GitHub Actions run `41294583841`; that validates the prior implementation, not subsequent diagnostics/lifecycle changes.
 - Product-owner physical test on 2026-11-01: Samsung Galaxy A06 reports the app-level `Wi-Fi Direct busy` error; ASUS X017DA remains scanning and finds no PEYVAND peer. This is a failed interoperability observation, not a passing test. Exact Android versions, firmware builds and device logs are still pending.
-- The observed Samsung message maps to `WifiP2pManager.BUSY`; the previous source did not expose which P2P operation returned it. Current source head `6e781732afd91b41c331b2c22d5445fc0b3d85df` adds operation-stage reporting; its exact CI result and a retest on both handsets are pending.
+- The observed Samsung message maps to `WifiP2pManager.BUSY`. The discovery adapter now logs and displays which of its five asynchronous P2P operations failed; this improves diagnosis but does not itself guarantee that the framework BUSY condition is resolved. It also stops the active scan when the discovery screen leaves composition. App-source fixes are committed through `6e781732afd91b41c331b2c22d5445fc0b3d85df`; exact-head CI and a two-device retest are pending.
+- ADR-0004 proposes (but does not approve) a PEYVAND-specific QR/local-only-hotspot alternative for physical compatibility evaluation. No hotspot or QR transport has been implemented.
 - Reciprocal two-device physical discovery remains mandatory before CP-002 can be marked `PASSED`.
 
 ## Module boundaries
@@ -60,4 +61,4 @@
 - Transfer durability/resume and background execution model.
 - Verified local socket behavior with VPN, split-tunnel, LAN-exception and lockdown configurations.
 
-See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIRECT-DISCOVERY.md`, and the ADRs under `docs/decisions/` for acceptance criteria, decisions, evidence and remaining risks.
+See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIRECT-DISCOVERY.md`, and the ADRs under `docs/decisions/` (including proposed ADR-0004) for acceptance criteria, decisions, evidence and remaining risks.
