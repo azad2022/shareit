@@ -51,6 +51,48 @@ class WifiDirectDiscoveryPolicyTest {
     }
 
     @Test
+    fun `DNS-SD registration type must exactly match the PEYVAND service type`() {
+        assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType("_peyvand._tcp"))
+        assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType("_PEYVAND._TCP."))
+        assertFalse(PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType("_other._tcp"))
+        assertFalse(PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType("prefix._peyvand._tcp"))
+    }
+
+    @Test
+    fun `TXT full domain must identify the same valid PEYVAND service instance`() {
+        assertEquals(
+            "PEYVAND-a1b2c3d4",
+            PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(
+                "PEYVAND-a1b2c3d4._peyvand._tcp.local.",
+            ),
+        )
+        assertEquals(
+            "peyvand-0123ABCD",
+            PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(
+                "peyvand-0123ABCD._PEYVAND._TCP.local",
+            ),
+        )
+        assertEquals(
+            null,
+            PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(
+                "OTHER-a1b2c3d4._peyvand._tcp.local.",
+            ),
+        )
+        assertEquals(
+            null,
+            PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(
+                "PEYVAND-a1b2c3d4._other._tcp.local.",
+            ),
+        )
+        assertEquals(
+            null,
+            PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(
+                "PEYVAND-a1b2c3d4._peyvand._tcp.example.",
+            ),
+        )
+    }
+
+    @Test
     fun `advertisement accepts only the matching application and schema version`() {
         assertTrue(
             PeyvandDiscoveryAdvertisement.isCompatible(
