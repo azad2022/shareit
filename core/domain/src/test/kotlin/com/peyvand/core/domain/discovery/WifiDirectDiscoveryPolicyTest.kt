@@ -2,6 +2,7 @@ package com.peyvand.core.domain.discovery
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -72,20 +73,17 @@ class WifiDirectDiscoveryPolicyTest {
                 "peyvand-0123ABCD._PEYVAND._TCP.local",
             ),
         )
-        assertEquals(
-            null,
+        assertNull(
             PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(
                 "OTHER-a1b2c3d4._peyvand._tcp.local.",
             ),
         )
-        assertEquals(
-            null,
+        assertNull(
             PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(
                 "PEYVAND-a1b2c3d4._other._tcp.local.",
             ),
         )
-        assertEquals(
-            null,
+        assertNull(
             PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(
                 "PEYVAND-a1b2c3d4._peyvand._tcp.example.",
             ),
