@@ -113,6 +113,10 @@
     <string name="discovery_diagnostics_actions">ثبت سرویس محلی: %1$s | ثبت درخواست: %2$s | آغاز کشف: %3$s</string>
     <string name="discovery_diagnostics_done">موفق</string>
     <string name="discovery_diagnostics_not_done">انجام نشده</string>
+    <string name="discovery_diagnostics_platform_unknown">نامشخص</string>
+    <string name="discovery_diagnostics_platform_running">در حال اجرا</string>
+    <string name="discovery_diagnostics_platform_stopped">متوقف</string>
+    <string name="discovery_diagnostics_platform_state">وضعیت واقعی اسکن سیستم: %1$s | توقف‌ها: %2$d | شروع‌های مجدد موفق: %3$d</string>
     <string name="discovery_diagnostics_source">منبع %1$s — سرویس: %2$d، پذیرفته: %3$d | TXT: %4$d، دامنه معتبر: %5$d، سازگار: %6$d | نمایش دستگاه: %7$s</string>
     <string name="discovery_diagnostics_missing_source">%1$d پاسخ بدون نشانی منبع دریافت شد.</string>
     <string name="discovery_diagnostics_untracked_sources">%1$d منبع بیشتر از سقف تشخیصی بود و فقط در شمارندهٔ کلی ثبت شد.</string>

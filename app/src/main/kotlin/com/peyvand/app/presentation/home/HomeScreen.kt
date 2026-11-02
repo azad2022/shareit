@@ -77,6 +77,7 @@ import com.peyvand.core.domain.discovery.DiscoveryOperation
 import com.peyvand.core.domain.discovery.DiscoveryRole
 import com.peyvand.core.domain.discovery.DiscoveryMetadataStatus
 import com.peyvand.core.domain.discovery.DiscoveryStatus
+import com.peyvand.core.domain.discovery.PlatformDiscoveryState
 import com.peyvand.core.domain.discovery.NearbyPeer
 import com.peyvand.core.domain.discovery.WifiDirectAvailability
 import com.peyvand.core.domain.discovery.WifiDirectPermissionPolicy
@@ -426,6 +427,28 @@ fun DeviceDiscoveryScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (role == DiscoveryRole.BROWSE_ONLY) {
+                        val platformStateLabel = stringResource(
+                            when (state.platformDiscoveryState) {
+                                PlatformDiscoveryState.UNKNOWN ->
+                                    R.string.discovery_diagnostics_platform_unknown
+                                PlatformDiscoveryState.RUNNING ->
+                                    R.string.discovery_diagnostics_platform_running
+                                PlatformDiscoveryState.STOPPED ->
+                                    R.string.discovery_diagnostics_platform_stopped
+                            },
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.discovery_diagnostics_platform_state,
+                                platformStateLabel,
+                                state.discoveryStopCount,
+                                state.discoveryRestartCount,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     state.sourceDiagnostics.forEach { source ->
                         Text(
                             text = stringResource(

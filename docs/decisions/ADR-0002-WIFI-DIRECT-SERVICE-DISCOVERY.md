@@ -132,3 +132,15 @@ A follow-up source audit found that the preceding amendment described `WifiP2pMa
 - A P2P ENABLED state broadcast invalidates any outstanding state query, but must not cancel a BUSY retry belonging to an otherwise current discovery generation. Discovery retries are now cancelled by P2P DISABLED, explicit stop, channel loss, permission loss, or generation invalidation.
 - Cleanup operations are serialized: clear service requests first, then clear local services, and complete the cleanup pass only after both callbacks (or bounded terminal failures). Do not issue both framework mutations concurrently.
 - These ordering changes are intended to reduce self-induced BUSY contention and stale STARTING states. They are implemented in commit `6b14c8b75942e43b4cbaebd33462bb508ad124e1`. A subsequent source review moves the missing-channel check ahead of the unknown P2P-state branch and treats receiver-registration failure as unavailable, avoiding an unresolvable CHECKING state. These changes still require physical-device confirmation; they do not establish discovery performance or reliability by themselves.
+## 2026-11-02 amendment — event-driven service-discovery lifecycle
+
+The browser role now treats Android's discovery lifecycle as authoritative instead of assuming that one accepted `discoverServices()` request remains active indefinitely.
+
+- The existing foreground P2P receiver also listens for `WIFI_P2P_DISCOVERY_CHANGED_ACTION` and records actual `STARTED` / `STOPPED` state. This is distinct from the app's `discoverServices()` ActionListener success.
+- On API 29+, after an accepted service-discovery request and when no discovery broadcast has established the current state, the adapter reconciles with `requestDiscoveryState()`. Older supported API levels rely on the API-16+ discovery-state broadcast.
+- A confirmed `STOPPED` state schedules one delayed re-arm only while the user-requested role is still `BROWSE_ONLY`, the scan generation is current, permissions and P2P readiness remain valid, and no cleanup or start request is in flight.
+- Re-arm invokes `discoverServices()` again using the already-registered service request. It does **not** register duplicate service requests, call `discoverPeers()`, or use a blind periodic timer.
+- Re-arm delay uses bounded backoff (1, 2, 4, 8, then 15 seconds). A confirmed `STARTED` event resets consecutive-stop backoff and cancels a pending re-arm. Stop, permission loss, P2P disable, channel loss, foreground teardown, or a stale generation cancels the task and state query.
+- Discovery diagnostics distinguish framework state from accepted API calls and show stop/restart counts. Discovery metadata remains unverified; no connection, authentication, or transfer is introduced.
+
+Android documents that discovery can stop during connection setup. A future connection implementation must explicitly suspend this re-arm controller before initiating a connection and resume it only when connection state permits scanning. Physical-device testing remains a release gate; this amendment is not a claim of cross-vendor reliability.

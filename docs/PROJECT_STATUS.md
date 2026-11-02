@@ -104,3 +104,10 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - A final lifecycle review found that the first bounded-retry implementation cancelled pending discovery retries on every P2P state broadcast, including an ENABLED broadcast. Since ENABLED does not invalidate a scan, this could leave the operation in STARTING without its scheduled retry. Retry cancellation now occurs only when P2P becomes disabled or the scan/lifecycle generation is invalidated.
 - P2P cleanup now serializes `clearServiceRequests()` followed by `clearLocalServices()`, rather than submitting both framework mutations concurrently. BUSY remains bounded-retry with the same retry policy.
 - The retry cancellation and serialized cleanup correction is in commit `6b14c8b75942e43b4cbaebd33462bb508ad124e1` and is pending CI validation. A subsequent source review also makes missing P2P channel or receiver-registration failure resolve to UNAVAILABLE instead of CHECKING.
+## 2026-11-02 — event-driven DNS-SD lifecycle correction
+
+- The browser now observes `WIFI_P2P_DISCOVERY_CHANGED_ACTION` and records actual platform STARTED/STOPPED transitions. It no longer treats the initial `discoverServices()` ActionListener success as proof that the system scan remains active indefinitely.
+- API 29+ additionally reconciles state using `requestDiscoveryState()` when the initial accepted request has no observed state transition. API 26–28 use the discovery-state broadcast.
+- Confirmed STOPPED events cause a single delayed re-arm for the still-active browser role, reusing the existing service request and using bounded 1/2/4/8/15-second backoff. Duplicate starts, duplicate service requests, `discoverPeers()`, and blind periodic rescans are avoided.
+- The discovery screen exposes actual platform state and stop/restart counters. Pure unit coverage was added for the re-arm-delay policy.
+- CP-002 remains `IN_PROGRESS`. This connector-only source update has not been compiled or run on physical phones; CI was intentionally not awaited per product-owner instruction.

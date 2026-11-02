@@ -52,6 +52,17 @@ class WifiDirectDiscoveryPolicyTest {
     }
 
     @Test
+    fun `service discovery rearm policy backs off and remains bounded`() {
+        assertEquals(1_000L, WifiDirectServiceDiscoveryRearmPolicy.delayMillisForStopCount(0))
+        assertEquals(1_000L, WifiDirectServiceDiscoveryRearmPolicy.delayMillisForStopCount(1))
+        assertEquals(2_000L, WifiDirectServiceDiscoveryRearmPolicy.delayMillisForStopCount(2))
+        assertEquals(4_000L, WifiDirectServiceDiscoveryRearmPolicy.delayMillisForStopCount(3))
+        assertEquals(8_000L, WifiDirectServiceDiscoveryRearmPolicy.delayMillisForStopCount(4))
+        assertEquals(15_000L, WifiDirectServiceDiscoveryRearmPolicy.delayMillisForStopCount(5))
+        assertEquals(15_000L, WifiDirectServiceDiscoveryRearmPolicy.delayMillisForStopCount(20))
+    }
+
+    @Test
     fun `service instance name requires PEYVAND prefix and an eight digit hexadecimal suffix`() {
         assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("PEYVAND-a1b2c3d4"))
         assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("peyvand-0123ABCD"))

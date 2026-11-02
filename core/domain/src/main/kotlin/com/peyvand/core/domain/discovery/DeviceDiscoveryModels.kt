@@ -20,6 +20,13 @@ enum class DiscoveryStatus {
     FAILED,
 }
 
+/** Actual framework-level P2P scan state; distinct from an accepted API request. */
+enum class PlatformDiscoveryState {
+    UNKNOWN,
+    RUNNING,
+    STOPPED,
+}
+
 /** A scan has one explicit DNS-SD responsibility; send and receive are not symmetric. */
 enum class DiscoveryRole {
     ADVERTISE_ONLY,
@@ -74,6 +81,21 @@ object WifiDirectBusyRetryPolicy {
 }
 
 /**
+ * Delayed re-arm policy after Android reports that service discovery has stopped.
+ * Consecutive stops back off to avoid tight restart loops on OEM/framework stacks.
+ * A confirmed STARTED event resets the consecutive-stop counter.
+ */
+object WifiDirectServiceDiscoveryRearmPolicy {
+    fun delayMillisForStopCount(consecutiveStops: Int): Long = when {
+        consecutiveStops <= 1 -> 1_000L
+        consecutiveStops == 2 -> 2_000L
+        consecutiveStops == 3 -> 4_000L
+        consecutiveStops == 4 -> 8_000L
+        else -> 15_000L
+    }
+}
+
+/**
  * A transient peer discovered during the current scan.
  *
  * [id] is an ephemeral platform identifier used only to correlate callbacks
@@ -98,7 +120,12 @@ data class DeviceDiscoverySnapshot(
     val compatibleTxtRecordCount: Int = 0,
     val localServiceRegistered: Boolean = false,
     val serviceRequestRegistered: Boolean = false,
+    /** True only when discoverServices() was accepted by Android. */
     val discoveryStarted: Boolean = false,
+    /** Current system scan state; unknown is never presented as an active scan. */
+    val platformDiscoveryState: PlatformDiscoveryState = PlatformDiscoveryState.UNKNOWN,
+    val discoveryStopCount: Int = 0,
+    val discoveryRestartCount: Int = 0,
     val sourceDiagnostics: List<DiscoverySourceDiagnostics> = emptyList(),
     val missingSourceAddressCount: Int = 0,
     val untrackedSourceCount: Int = 0,
