@@ -4,7 +4,7 @@
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-002 — Wi-Fi Direct service discovery
-- **Current branch:** `feature/foundation-bootstrap`
+- **Current branch:** `experiment/dns-sd-wildcard-query` (isolated Debug compatibility experiment; integration target: `feature/foundation-bootstrap`)
 - **Last updated:** 2026-11-02 (TXT-independent candidate publication, source-aware diagnostics and serialized cleanup implemented; CI/physical retest pending)
 
 ## Milestones
@@ -118,3 +118,12 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - The active implementation has asymmetric roles: Receive registers only the local PEYVAND DNS-SD advertisement; Send registers only the PEYVAND service request and browses. Older text in this status document that described both routes advertising and browsing has been superseded.
 - The current lifecycle controller applies only to the browser role. No role change, fallback transport, connection, pairing, or file-transfer implementation is implied.
 - The scan-state controller has been extracted from the Wi-Fi Direct repository adapter into a focused connectivity class. The repository retains role ownership, platform permission checks, DNS-SD registration, error policy and snapshot publication; the lifecycle controller owns state queries, STARTED/STOPPED handling, bounded re-arm scheduling and cancellation.
+
+
+## 2026-11-02 — wildcard Bonjour request experiment
+
+- Created isolated branch `experiment/dns-sd-wildcard-query` from `feature/foundation-bootstrap` at `df7c595462ed445a721cc0ddb95bc754ae3b4ec8`.
+- The browser now uses Android's no-argument `WifiP2pDnsSdServiceRequest.newInstance()` to request all Bonjour services for a controlled compatibility test. The PEYVAND-only instance-name and registration-type checks in the service callback are unchanged, so unrelated Bonjour services must never be published as PEYVAND candidates.
+- The sender/receiver roles, local service advertisement, TXT-optional policy, lifecycle/retry behavior and cleanup ordering are unchanged.
+- This is not a confirmed root-cause fix. The purpose is to determine whether a device/firmware combination mishandles the narrower typed PTR request. A broader query may increase callback traffic.
+- ADR-0005 records the controlled two-device test and rollback criteria. CI and physical validation of the experiment are pending. CP-002 remains `IN_PROGRESS`.
