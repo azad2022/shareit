@@ -74,6 +74,7 @@ import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
 import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DiscoveryOperation
+import com.peyvand.core.domain.discovery.DiscoveryMetadataStatus
 import com.peyvand.core.domain.discovery.DiscoveryStatus
 import com.peyvand.core.domain.discovery.NearbyPeer
 import com.peyvand.core.domain.discovery.WifiDirectAvailability
@@ -375,6 +376,66 @@ fun DeviceDiscoveryScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Text(
+                        text = stringResource(
+                            R.string.discovery_diagnostics_actions,
+                            stringResource(
+                                if (state.localServiceRegistered) {
+                                    R.string.discovery_diagnostics_done
+                                } else {
+                                    R.string.discovery_diagnostics_not_done
+                                },
+                            ),
+                            stringResource(
+                                if (state.serviceRequestRegistered) {
+                                    R.string.discovery_diagnostics_done
+                                } else {
+                                    R.string.discovery_diagnostics_not_done
+                                },
+                            ),
+                            stringResource(
+                                if (state.discoveryStarted) {
+                                    R.string.discovery_diagnostics_done
+                                } else {
+                                    R.string.discovery_diagnostics_not_done
+                                },
+                            ),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    state.sourceDiagnostics.forEach { source ->
+                        Text(
+                            text = stringResource(
+                                R.string.discovery_diagnostics_source,
+                                source.token,
+                                source.serviceResponseCount,
+                                source.acceptedServiceResponseCount,
+                                source.txtRecordResponseCount,
+                                source.acceptedTxtDomainCount,
+                                source.compatibleTxtRecordCount,
+                                stringResource(
+                                    if (source.candidatePublished) {
+                                        R.string.discovery_diagnostics_done
+                                    } else {
+                                        R.string.discovery_diagnostics_not_done
+                                    },
+                                ),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (state.missingSourceAddressCount > 0) {
+                        Text(
+                            text = stringResource(
+                                R.string.discovery_diagnostics_missing_source,
+                                state.missingSourceAddressCount,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
         }
@@ -601,10 +662,22 @@ private fun PeerCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.SemiBold,
                 )
+                val metadataMessage = when (peer.metadataStatus) {
+                    DiscoveryMetadataStatus.NOT_RECEIVED ->
+                        R.string.discovery_peer_metadata_missing
+                    DiscoveryMetadataStatus.COMPATIBLE ->
+                        R.string.discovery_peer_metadata_compatible
+                    DiscoveryMetadataStatus.INCOMPATIBLE ->
+                        R.string.discovery_peer_metadata_incompatible
+                }
                 Text(
-                    text = stringResource(R.string.discovery_peer_compatible),
+                    text = stringResource(metadataMessage),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (peer.metadataStatus == DiscoveryMetadataStatus.INCOMPATIBLE) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
         }
