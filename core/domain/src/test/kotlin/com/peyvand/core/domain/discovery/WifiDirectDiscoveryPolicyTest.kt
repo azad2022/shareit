@@ -79,24 +79,14 @@ class WifiDirectDiscoveryPolicyTest {
 
     @Test
     fun `rearm is blocked for advertiser stopped unknown cleanup or pending start states`() {
-        val valid = mapOf(
-            "activeRole" to DiscoveryRole.BROWSE_ONLY,
-            "monitoring" to true,
-            "cleanupInProgress" to false,
-            "cleanupRequested" to false,
-            "startInFlight" to false,
-            "discoveryRequestAccepted" to true,
-            "platformState" to PlatformDiscoveryState.STOPPED,
-        )
-
         fun allowed(
-            activeRole: DiscoveryRole? = valid["activeRole"] as DiscoveryRole,
-            monitoring: Boolean = valid["monitoring"] as Boolean,
-            cleanupInProgress: Boolean = valid["cleanupInProgress"] as Boolean,
-            cleanupRequested: Boolean = valid["cleanupRequested"] as Boolean,
-            startInFlight: Boolean = valid["startInFlight"] as Boolean,
-            discoveryRequestAccepted: Boolean = valid["discoveryRequestAccepted"] as Boolean,
-            platformState: PlatformDiscoveryState = valid["platformState"] as PlatformDiscoveryState,
+            activeRole: DiscoveryRole? = DiscoveryRole.BROWSE_ONLY,
+            monitoring: Boolean = true,
+            cleanupInProgress: Boolean = false,
+            cleanupRequested: Boolean = false,
+            startInFlight: Boolean = false,
+            discoveryRequestAccepted: Boolean = true,
+            platformState: PlatformDiscoveryState = PlatformDiscoveryState.STOPPED,
         ) = WifiDirectServiceDiscoveryRearmPolicy.shouldRearm(
             activeRole,
             monitoring,
