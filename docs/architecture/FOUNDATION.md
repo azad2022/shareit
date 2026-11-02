@@ -33,9 +33,9 @@ Keep the project graph acyclic. Add security, transfer, storage and package-shar
 1. The Activity starts monitoring while the app is foregrounded and releases monitoring when it stops.
 2. The connectivity adapter initializes a Wi-Fi P2P channel and observes the P2P enabled/disabled state.
 3. Before a scan, it checks hardware/API availability, version-appropriate runtime permission, and Location Mode because Android requires it for P2P service discovery.
-4. The user explicitly starts a scan. The app advertises a minimal PEYVAND DNS-SD service record and registers a matching service request.
-5. A service callback is accepted only for a valid PEYVAND instance and exact Bonjour registration type. A TXT callback is accepted only for a valid PEYVAND full domain and expected schema.
-6. The two callbacks are correlated by source-device address and normalized instance name. A peer is displayed only when both are present for the same service instance.
+4. The selected screen starts one directional DNS-SD role: Receive registers the local PEYVAND service advertisement; Send registers a Bonjour service request and starts `discoverServices()`. The two roles are intentionally not symmetric.
+5. A service callback is accepted only for a valid PEYVAND instance name and exact Bonjour registration type. A valid service callback is sufficient to publish an **unverified** candidate. A TXT callback is optional metadata: if received, its full domain and schema are validated separately.
+6. When TXT arrives, it is correlated by source-device address and normalized instance name to enrich the existing candidate. Missing TXT leaves metadata status `NOT_RECEIVED`; it never suppresses a valid service candidate and never implies authentication.
 7. Cancellation, leaving the foreground, revoking permission, losing Location Mode/P2P availability or action failure invalidates the active scan generation, clears pending data and independently attempts to remove service requests and local advertisements.
 8. If the P2P channel is lost, the adapter attempts immediate reinitialization and retries on a later foreground availability refresh if necessary.
 9. The UI renders actual platform state. A scan callback or animation never fabricates a discovered device.
@@ -49,6 +49,12 @@ Service TXT fields are public compatibility markers. They contain no file names,
 - P2P system access: `ACCESS_WIFI_STATE` and `CHANGE_WIFI_STATE`.
 - App-default network diagnostic: `ACCESS_NETWORK_STATE`, declared in the `:core:connectivity` library manifest because that module uses ConnectivityManager APIs. This permission is not required by DNS-SD and does not imply a public-internet dependency.
 - Wi-Fi Direct hardware is declared optional; capability is checked at runtime.
+
+### Future local-socket permission gate
+
+The current app targets SDK 36. Do not add `ACCESS_LOCAL_NETWORK` before the target-SDK policy requires it. Android's current guidance makes local-network protection opt-in during Android 16, then mandatory for apps targeting Android 17 / SDK 37 or higher. Direct TCP connections to and from local devices require the new runtime `ACCESS_LOCAL_NETWORK` permission at that target level. The first-file transport checkpoint must add its manifest/runtime permission flow, denial/revocation handling and Android 16 opt-in / Android 17 enforcement tests before raising `targetSdk` to 37. The current Wi-Fi Direct discovery APIs and a future raw local TCP socket must be evaluated separately; permission granted for discovery must not be assumed to cover every transport operation.
+
+Official guidance: https://developer.android.com/privacy-and-security/local-network-permission
 - No `INTERNET` permission is added for this discovery-only milestone. Local socket APIs and their permission requirements belong to a later, reviewed transport milestone.
 
 ## VPN diagnostic boundary
