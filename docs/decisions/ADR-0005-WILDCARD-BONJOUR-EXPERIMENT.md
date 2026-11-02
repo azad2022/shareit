@@ -2,7 +2,7 @@
 
 - **Status:** Experimental, Debug-only; not accepted as the production discovery strategy.
 - **Date:** 2026-11-02
-- **Branch:** `experiment/dns-sd-wildcard-query`
+- **Branch:** `feature/dns-sd-wildcard-query-experiment`
 - **Base:** `feature/foundation-bootstrap` at `df7c595462ed445a721cc0ddb95bc754ae3b4ec8`
 - **Scope:** Isolate whether typed Bonjour PTR filtering contributes to the observed Wi-Fi Direct DNS-SD interoperability failure.
 
