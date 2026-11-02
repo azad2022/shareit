@@ -707,11 +707,19 @@ class WifiDirectDeviceDiscoveryRepository(
         // Serialize framework mutations. P2P service cleanup calls are not
         // submitted concurrently, which avoids self-inflicted BUSY responses.
         cleanupCallbacksRemaining = 1
-        requestClearServiceRequests(passId, manager, activeChannel) {
-            requestClearLocalServices(passId, manager, activeChannel) {
-                finishCleanupAction(passId)
-            }
-        }
+        requestClearServiceRequests(
+            passId,
+            manager,
+            activeChannel,
+            onComplete = {
+                requestClearLocalServices(
+                    passId,
+                    manager,
+                    activeChannel,
+                    onComplete = { finishCleanupAction(passId) },
+                )
+            },
+        )
     }
 
     @SuppressLint("MissingPermission")
