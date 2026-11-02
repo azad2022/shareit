@@ -80,6 +80,7 @@ class WifiDirectDeviceDiscoveryRepository(
     private val sourceTokensByAddress = linkedMapOf<String, String>()
     private val sourceDiagnosticsByToken = linkedMapOf<String, DiscoverySourceDiagnostics>()
     private var missingSourceAddressCount = 0
+    private var untrackedSourceCount = 0
 
     // Do not overlap a new scan with asynchronous cleanup from the previous scan.
     private var cleanupInProgress = false
@@ -322,6 +323,7 @@ class WifiDirectDeviceDiscoveryRepository(
         sourceTokensByAddress.clear()
         sourceDiagnosticsByToken.clear()
         missingSourceAddressCount = 0
+        untrackedSourceCount = 0
         mutableSnapshot.value = mutableSnapshot.value.copy(
             status = DiscoveryStatus.STARTING,
             peers = emptyList(),
@@ -337,6 +339,7 @@ class WifiDirectDeviceDiscoveryRepository(
             discoveryStarted = false,
             sourceDiagnostics = emptyList(),
             missingSourceAddressCount = 0,
+            untrackedSourceCount = 0,
         )
 
         try {
@@ -798,9 +801,18 @@ class WifiDirectDeviceDiscoveryRepository(
             return null
         }
 
-        return sourceTokensByAddress.getOrPut(deviceAddress) {
-            "P${sourceTokensByAddress.size + 1}"
+        sourceTokensByAddress[deviceAddress]?.let { return it }
+        if (sourceTokensByAddress.size >= MAX_PENDING_PEERS) {
+            untrackedSourceCount += 1
+            mutableSnapshot.value = mutableSnapshot.value.copy(
+                untrackedSourceCount = untrackedSourceCount,
+            )
+            return null
         }
+
+        val token = "P${sourceTokensByAddress.size + 1}"
+        sourceTokensByAddress[deviceAddress] = token
+        return token
     }
 
     private fun updateSourceDiagnostics(
