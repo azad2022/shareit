@@ -42,17 +42,19 @@ class DiscoveryCandidateRegistry(
         if (deviceAddress.isBlank()) return null
 
         val key = key(deviceAddress, instanceName)
-        putBounded(services, key, displayName?.takeIf(String::isNotBlank), maxPendingServices)
+        val previousPeer = visiblePeers[deviceAddress]
+            ?.takeIf { visiblePeerKeys[deviceAddress] == key }
+        val resolvedDisplayName = displayName?.takeIf(String::isNotBlank)
+            ?: previousPeer?.displayName
+        putBounded(services, key, resolvedDisplayName, maxPendingServices)
 
         val metadataStatus = records[key]
-            ?: visiblePeers[deviceAddress]
-                ?.takeIf { visiblePeerKeys[deviceAddress] == key }
-                ?.metadataStatus
+            ?: previousPeer?.metadataStatus
             ?: DiscoveryMetadataStatus.NOT_RECEIVED
 
         return NearbyPeer(
             id = deviceAddress,
-            displayName = displayName?.takeIf(String::isNotBlank),
+            displayName = resolvedDisplayName,
             metadataStatus = metadataStatus,
         ).also { upsertVisiblePeer(key, it) }
     }
