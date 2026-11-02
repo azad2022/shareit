@@ -130,4 +130,146 @@ class WifiDirectDiscoveryPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun `validated service response publishes candidate without TXT metadata`() {
+        val registry = DiscoveryCandidateRegistry()
+
+        val peer = registry.recordServiceResponse(
+            deviceAddress = "02:00:00:00:00:01",
+            instanceName = "PEYVAND-a1b2c3d4",
+            displayName = "Galaxy A12",
+        )
+
+        assertEquals("02:00:00:00:00:01", peer?.id)
+        assertEquals("Galaxy A12", peer?.displayName)
+        assertEquals(DiscoveryMetadataStatus.NOT_RECEIVED, peer?.metadataStatus)
+        assertEquals(listOf(peer), registry.snapshot())
+    }
+
+    @Test
+    fun `TXT received before service is correlated when service arrives`() {
+        val registry = DiscoveryCandidateRegistry()
+
+        assertNull(
+            registry.recordTxtResponse(
+                deviceAddress = "02:00:00:00:00:01",
+                instanceName = "PEYVAND-a1b2c3d4",
+                isCompatible = true,
+            ),
+        )
+
+        val peer = registry.recordServiceResponse(
+            deviceAddress = "02:00:00:00:00:01",
+            instanceName = "PEYVAND-a1b2c3d4",
+            displayName = "Receiver",
+        )
+
+        assertEquals(DiscoveryMetadataStatus.COMPATIBLE, peer?.metadataStatus)
+        assertEquals(1, registry.snapshot().size)
+    }
+
+    @Test
+    fun `TXT received after service enriches existing candidate`() {
+        val registry = DiscoveryCandidateRegistry()
+        val address = "02:00:00:00:00:01"
+        val instance = "PEYVAND-a1b2c3d4"
+
+        registry.recordServiceResponse(address, instance, "Sender")
+        val updated = registry.recordTxtResponse(address, instance, isCompatible = true)
+
+        assertEquals(DiscoveryMetadataStatus.COMPATIBLE, updated?.metadataStatus)
+        assertEquals(DiscoveryMetadataStatus.COMPATIBLE, registry.snapshot().single().metadataStatus)
+    }
+
+    @Test
+    fun `incompatible TXT metadata does not remove service candidate`() {
+        val registry = DiscoveryCandidateRegistry()
+        val address = "02:00:00:00:00:01"
+        val instance = "PEYVAND-a1b2c3d4"
+
+        registry.recordServiceResponse(address, instance, "Peer")
+        val updated = registry.recordTxtResponse(address, instance, isCompatible = false)
+
+        assertEquals(DiscoveryMetadataStatus.INCOMPATIBLE, updated?.metadataStatus)
+        assertEquals(1, registry.snapshot().size)
+    }
+
+    @Test
+    fun `TXT metadata from another source is never correlated to service candidate`() {
+        val registry = DiscoveryCandidateRegistry()
+
+        registry.recordTxtResponse(
+            deviceAddress = "02:00:00:00:00:02",
+            instanceName = "PEYVAND-a1b2c3d4",
+            isCompatible = true,
+        )
+        val peer = registry.recordServiceResponse(
+            deviceAddress = "02:00:00:00:00:01",
+            instanceName = "PEYVAND-a1b2c3d4",
+            displayName = "Peer",
+        )
+
+        assertEquals(DiscoveryMetadataStatus.NOT_RECEIVED, peer?.metadataStatus)
+    }
+
+    @Test
+    fun `blank source address is rejected without publishing a candidate`() {
+        val registry = DiscoveryCandidateRegistry()
+
+        assertNull(
+            registry.recordServiceResponse(
+                deviceAddress = " ",
+                instanceName = "PEYVAND-a1b2c3d4",
+                displayName = "Peer",
+            ),
+        )
+        assertNull(
+            registry.recordTxtResponse(
+                deviceAddress = "",
+                instanceName = "PEYVAND-a1b2c3d4",
+                isCompatible = true,
+            ),
+        )
+        assertTrue(registry.snapshot().isEmpty())
+    }
+
+    @Test
+    fun `duplicate callbacks update one candidate rather than duplicate it`() {
+        val registry = DiscoveryCandidateRegistry()
+        val address = "02:00:00:00:00:01"
+        val instance = "PEYVAND-a1b2c3d4"
+
+        registry.recordServiceResponse(address, instance, "Peer")
+        registry.recordServiceResponse(address, instance, "Peer")
+        registry.recordTxtResponse(address, instance, isCompatible = true)
+        registry.recordTxtResponse(address, instance, isCompatible = true)
+
+        assertEquals(1, registry.snapshot().size)
+        assertEquals(DiscoveryMetadataStatus.COMPATIBLE, registry.snapshot().single().metadataStatus)
+    }
+
+    @Test
+    fun `candidate storage and visible list remain bounded`() {
+        val registry = DiscoveryCandidateRegistry(
+            maxPendingServices = 1,
+            maxPendingRecords = 1,
+            maxVisiblePeers = 1,
+        )
+
+        registry.recordServiceResponse(
+            "02:00:00:00:00:01",
+            "PEYVAND-a1b2c3d4",
+            "First",
+        )
+        registry.recordServiceResponse(
+            "02:00:00:00:00:02",
+            "PEYVAND-b1b2c3d4",
+            "Second",
+        )
+
+        assertEquals(1, registry.snapshot().size)
+        assertEquals("02:00:00:00:00:02", registry.snapshot().single().id)
+    }
+
 }
