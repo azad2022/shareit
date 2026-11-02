@@ -43,6 +43,15 @@ class WifiDirectDiscoveryPolicyTest {
     }
 
     @Test
+    fun `BUSY retry policy uses bounded exponential delays`() {
+        assertEquals(500L, WifiDirectBusyRetryPolicy.delayMillisForRetry(1))
+        assertEquals(1_000L, WifiDirectBusyRetryPolicy.delayMillisForRetry(2))
+        assertEquals(2_000L, WifiDirectBusyRetryPolicy.delayMillisForRetry(3))
+        assertNull(WifiDirectBusyRetryPolicy.delayMillisForRetry(0))
+        assertNull(WifiDirectBusyRetryPolicy.delayMillisForRetry(4))
+    }
+
+    @Test
     fun `service instance name requires PEYVAND prefix and an eight digit hexadecimal suffix`() {
         assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("PEYVAND-a1b2c3d4"))
         assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("peyvand-0123ABCD"))

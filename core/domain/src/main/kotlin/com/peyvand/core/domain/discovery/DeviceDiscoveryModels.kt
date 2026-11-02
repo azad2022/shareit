@@ -61,6 +61,19 @@ enum class DeviceDiscoveryFailure {
 }
 
 /**
+ * Bounded retry delays for transient Android Wi-Fi P2P BUSY responses.
+ * Retry attempts are numbered from one; attempt zero is the initial request.
+ */
+object WifiDirectBusyRetryPolicy {
+    fun delayMillisForRetry(retryNumber: Int): Long? = when (retryNumber) {
+        1 -> 500L
+        2 -> 1_000L
+        3 -> 2_000L
+        else -> null
+    }
+}
+
+/**
  * A transient peer discovered during the current scan.
  *
  * [id] is an ephemeral platform identifier used only to correlate callbacks

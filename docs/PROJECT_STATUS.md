@@ -88,3 +88,12 @@
 - Verified local socket behavior with VPN, split-tunnel, LAN-exception and lockdown configurations.
 
 See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIRECT-DISCOVERY.md`, and the ADRs under `docs/decisions/` (including proposed ADR-0004) for acceptance criteria, decisions, evidence and remaining risks.
+
+
+## Owner field retest — persistent DNS-SD discovery failure (2026-11-02)
+
+- The owner reports approximately 20–50 manual attempts across multiple phone models, alternating sender/receiver roles. Only one attempt produced a visible device candidate. That candidate displayed the other handset's model name, TXT count was zero, and trust/authentication was correctly shown as unverified.
+- TXT count zero is not by itself a discovery failure: Android documents the TXT record as optional. A validated service response can publish an unverified candidate. CP-002 does not implement peer authentication or connection; the unverified label is expected and must remain.
+- A source audit of commit `2ac10cdb9e9abb2d7a7e11ad23f362b42ef62623` found that its documentation claimed an API 29+ `requestP2pState()` query, but its adapter did not actually invoke the API. The adapter could therefore remain in `CHECKING` if receiver registration yielded no sticky state intent. This documentation/implementation mismatch is corrected in the follow-up source change.
+- The follow-up also introduces bounded retries for transient Wi-Fi P2P `BUSY` responses during advertise, service-request registration, service browsing and cleanup. It does not add a fallback transport or connection/authentication/transfer code.
+- This correction has not yet been physically validated. Keep CP-002 `IN_PROGRESS`; green CI alone is not evidence of reliable two-phone discovery.

@@ -113,3 +113,15 @@ References:
 - Bonjour service discovery format and local registration: https://developer.android.com/develop/connectivity/wifi/nsd-wifi-direct
 - `DnsSdServiceResponseListener` documents registration type examples such as `_ipp._tcp.local.`: https://developer.android.com/reference/android/net/wifi/p2p/WifiP2pManager.DnsSdServiceResponseListener
 - `WifiP2pManager` documents that clearing all service requests stops a running service discovery when no requests remain: https://developer.android.com/reference/android/net/wifi/p2p/WifiP2pManager
+
+
+## 2026-11-02 corrective implementation amendment — readiness query and transient BUSY
+
+A follow-up source audit found that the preceding amendment described `WifiP2pManager.requestP2pState()` as implemented, but the adapter at commit `2ac10cdb9e9abb2d7a7e11ad23f362b42ef62623` did not call it. The source and decision text were inconsistent. The follow-up implementation corrects this:
+
+- On API 29+, query the enabled state using `requestP2pState()` after permission, receiver and channel readiness. Reject stale results after lifecycle/channel changes. If no callback arrives within five seconds, expose an actionable unavailable state instead of remaining in `CHECKING` forever. A later explicit foreground availability refresh may retry the query.
+- On API levels before 29, retain the version-appropriate broadcast/action-result behavior; do not call an unavailable API.
+- Android defines `BUSY` as the system being too busy to process the requested operation. The adapter now retries `addLocalService`, `addServiceRequest`, `discoverServices`, `clearServiceRequests`, and `clearLocalServices` with bounded 500/1,000/2,000 ms delays (three retries maximum). Every delayed retry is scoped to the active scan generation or cleanup pass and is cancelled/ignored after invalidation.
+- Retry exhaustion remains a visible failure; the app does not display an advertisement, active scan or peer unless the corresponding Android action succeeds.
+- No broad Bonjour query substitution is made in this amendment. The current typed PTR query remains standards-supported; comparison with Android's no-argument all-Bonjour sample remains an explicit controlled experiment, not an assumed fix.
+- No fallback transport, socket, connection, authentication or transfer feature is introduced. Physical reciprocal discovery is still required before CP-002 can be PASSED.

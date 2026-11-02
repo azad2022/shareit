@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Handler
 import android.location.LocationManager
 import android.net.wifi.p2p.WifiP2pManager
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo
@@ -27,6 +28,7 @@ import com.peyvand.core.domain.discovery.DiscoveryRole
 import com.peyvand.core.domain.discovery.DiscoveryStatus
 import com.peyvand.core.domain.discovery.PeyvandDiscoveryAdvertisement
 import com.peyvand.core.domain.discovery.WifiDirectAvailability
+import com.peyvand.core.domain.discovery.WifiDirectBusyRetryPolicy
 import com.peyvand.core.domain.discovery.WifiDirectPermissionPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,6 +59,14 @@ class WifiDirectDeviceDiscoveryRepository(
     private var p2pEnabled: Boolean? = null
     private var generation = 0L
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var p2pStateQueryInFlight = false
+    private var p2pStateQueryFailed = false
+    private var p2pStateQueryGeneration = 0L
+    private var p2pStateQueryTimeoutTask: Runnable? = null
+    private val pendingDiscoveryRetryTasks = linkedSetOf<Runnable>()
+    private val pendingCleanupRetryTasks = linkedSetOf<Runnable>()
+
     private val serviceInstanceName by lazy {
         PeyvandDiscoveryAdvertisement.INSTANCE_NAME_PREFIX +
             UUID.randomUUID().toString().replace("-", "").take(
@@ -68,6 +78,7 @@ class WifiDirectDeviceDiscoveryRepository(
         const val LOG_TAG = "PeyvandP2P"
         const val MAX_PENDING_PEERS = 128
         const val MAX_VISIBLE_PEERS = 64
+        const val P2P_STATE_QUERY_TIMEOUT_MS = 5_000L
     }
 
     private val candidateRegistry = DiscoveryCandidateRegistry(
@@ -112,6 +123,10 @@ class WifiDirectDeviceDiscoveryRepository(
     private val channelListener = object : WifiP2pManager.ChannelListener {
         override fun onChannelDisconnected() {
             val wasMonitoring = monitoring
+            invalidateP2pStateQuery()
+            cancelDiscoveryRetryTasks()
+            cancelCleanupRetryTasks()
+            p2pEnabled = null
             generation += 1
             clearPendingPeers()
             cleanupPassId += 1L
@@ -150,6 +165,8 @@ class WifiDirectDeviceDiscoveryRepository(
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION) return
 
+            invalidateP2pStateQuery()
+            cancelDiscoveryRetryTasks()
             p2pEnabled = intent.getIntExtra(
                 WifiP2pManager.EXTRA_WIFI_STATE,
                 WifiP2pManager.WIFI_P2P_STATE_DISABLED,
@@ -162,6 +179,7 @@ class WifiDirectDeviceDiscoveryRepository(
                         it == DiscoveryStatus.DISCOVERING
                 }
                 generation += 1
+                cancelDiscoveryRetryTasks()
                 clearPendingPeers()
                 if (wasDiscovering) releaseDiscoveryRegistrations()
                 activeRole = null
@@ -246,6 +264,9 @@ class WifiDirectDeviceDiscoveryRepository(
     override fun refreshAvailability() {
         val permissionGranted = hasRequiredRuntimePermission()
         if (permissionGranted) {
+            // A previous state-query failure is retried only when a later
+            // foreground refresh explicitly asks us to re-check availability.
+            if (p2pStateQueryFailed) p2pStateQueryFailed = false
             // A P2P channel can disconnect while the Activity remains visible.
             // Retry initialization on the next availability refresh rather than
             // leaving the adapter permanently unavailable until process restart.
@@ -256,7 +277,9 @@ class WifiDirectDeviceDiscoveryRepository(
                 channel = initializeChannel()
             }
             registerP2pStateReceiverIfPermitted()
+            requestP2pStateIfNeeded()
         } else {
+            invalidateP2pStateQuery()
             p2pEnabled = null
             unregisterP2pStateReceiver()
         }
@@ -286,6 +309,7 @@ class WifiDirectDeviceDiscoveryRepository(
         )
 
         if (availability != WifiDirectAvailability.READY) {
+            cancelDiscoveryRetryTasks()
             val wasDiscovering = current.status.let {
                 it == DiscoveryStatus.STARTING ||
                     it == DiscoveryStatus.ADVERTISING ||
@@ -500,45 +524,13 @@ class WifiDirectDeviceDiscoveryRepository(
 
             when (role) {
                 DiscoveryRole.ADVERTISE_ONLY -> {
-                    manager.addLocalService(
-                        activeChannel,
-                        serviceInfo,
-                        actionListener(
-                            requestGeneration,
-                            DiscoveryOperation.ADD_LOCAL_SERVICE,
-                        ) {
-                            mutableSnapshot.value = mutableSnapshot.value.copy(
-                                status = DiscoveryStatus.ADVERTISING,
-                                failure = null,
-                            )
-                        },
-                    )
+                    registerLocalServiceWithRetry(manager, activeChannel, requestGeneration)
                 }
-
                 DiscoveryRole.BROWSE_ONLY -> {
-                    manager.addServiceRequest(
-                        activeChannel,
-                        serviceRequest,
-                        actionListener(
-                            requestGeneration,
-                            DiscoveryOperation.ADD_SERVICE_REQUEST,
-                        ) {
-                            manager.discoverServices(
-                                activeChannel,
-                                actionListener(
-                                    requestGeneration,
-                                    DiscoveryOperation.DISCOVER_SERVICES,
-                                ) {
-                                    mutableSnapshot.value = mutableSnapshot.value.copy(
-                                        status = DiscoveryStatus.DISCOVERING,
-                                        failure = null,
-                                    )
-                                },
-                            )
-                        },
-                    )
+                    registerServiceRequestWithRetry(manager, activeChannel, requestGeneration)
                 }
             }
+
         } catch (_: SecurityException) {
             setPermissionRequired(requestGeneration)
         } catch (_: RuntimeException) {
@@ -546,7 +538,128 @@ class WifiDirectDeviceDiscoveryRepository(
         }
     }
 
+    private fun registerLocalServiceWithRetry(
+        manager: WifiP2pManager,
+        activeChannel: WifiP2pManager.Channel,
+        expectedGeneration: Long,
+        retryAttempt: Int = 0,
+    ) {
+        try {
+            manager.addLocalService(
+                activeChannel,
+                serviceInfo,
+                actionListener(
+                    expectedGeneration = expectedGeneration,
+                    operation = DiscoveryOperation.ADD_LOCAL_SERVICE,
+                    retryAttempt = retryAttempt,
+                    onBusyRetry = { nextAttempt ->
+                        registerLocalServiceWithRetry(
+                            manager,
+                            activeChannel,
+                            expectedGeneration,
+                            nextAttempt,
+                        )
+                    },
+                ) {
+                    mutableSnapshot.value = mutableSnapshot.value.copy(
+                        status = DiscoveryStatus.ADVERTISING,
+                        failure = null,
+                    )
+                },
+            )
+        } catch (_: SecurityException) {
+            setPermissionRequired(expectedGeneration)
+        } catch (_: RuntimeException) {
+            setFailure(
+                DeviceDiscoveryFailure.PLATFORM_ERROR,
+                expectedGeneration,
+                failureOperation = DiscoveryOperation.ADD_LOCAL_SERVICE,
+            )
+        }
+    }
+
+    private fun registerServiceRequestWithRetry(
+        manager: WifiP2pManager,
+        activeChannel: WifiP2pManager.Channel,
+        expectedGeneration: Long,
+        retryAttempt: Int = 0,
+    ) {
+        try {
+            manager.addServiceRequest(
+                activeChannel,
+                serviceRequest,
+                actionListener(
+                    expectedGeneration = expectedGeneration,
+                    operation = DiscoveryOperation.ADD_SERVICE_REQUEST,
+                    retryAttempt = retryAttempt,
+                    onBusyRetry = { nextAttempt ->
+                        registerServiceRequestWithRetry(
+                            manager,
+                            activeChannel,
+                            expectedGeneration,
+                            nextAttempt,
+                        )
+                    },
+                ) {
+                    startServiceDiscoveryWithRetry(
+                        manager,
+                        activeChannel,
+                        expectedGeneration,
+                    )
+                },
+            )
+        } catch (_: SecurityException) {
+            setPermissionRequired(expectedGeneration)
+        } catch (_: RuntimeException) {
+            setFailure(
+                DeviceDiscoveryFailure.PLATFORM_ERROR,
+                expectedGeneration,
+                failureOperation = DiscoveryOperation.ADD_SERVICE_REQUEST,
+            )
+        }
+    }
+
+    private fun startServiceDiscoveryWithRetry(
+        manager: WifiP2pManager,
+        activeChannel: WifiP2pManager.Channel,
+        expectedGeneration: Long,
+        retryAttempt: Int = 0,
+    ) {
+        try {
+            manager.discoverServices(
+                activeChannel,
+                actionListener(
+                    expectedGeneration = expectedGeneration,
+                    operation = DiscoveryOperation.DISCOVER_SERVICES,
+                    retryAttempt = retryAttempt,
+                    onBusyRetry = { nextAttempt ->
+                        startServiceDiscoveryWithRetry(
+                            manager,
+                            activeChannel,
+                            expectedGeneration,
+                            nextAttempt,
+                        )
+                    },
+                ) {
+                    mutableSnapshot.value = mutableSnapshot.value.copy(
+                        status = DiscoveryStatus.DISCOVERING,
+                        failure = null,
+                    )
+                },
+            )
+        } catch (_: SecurityException) {
+            setPermissionRequired(expectedGeneration)
+        } catch (_: RuntimeException) {
+            setFailure(
+                DeviceDiscoveryFailure.PLATFORM_ERROR,
+                expectedGeneration,
+                failureOperation = DiscoveryOperation.DISCOVER_SERVICES,
+            )
+        }
+    }
+
     override fun stopDiscovery() {
+        cancelDiscoveryRetryTasks()
         val wasActive = mutableSnapshot.value.status.let {
             it == DiscoveryStatus.STARTING ||
                 it == DiscoveryStatus.ADVERTISING ||
@@ -570,12 +683,9 @@ class WifiDirectDeviceDiscoveryRepository(
     @SuppressLint("MissingPermission")
     private fun releaseDiscoveryRegistrations() {
         if (cleanupInProgress) {
-            // A second stop/failure signal arrived while the framework was still
-            // processing the first cleanup. Run one more pass before restart.
             cleanupRequested = true
             return
         }
-
         cleanupInProgress = true
         beginCleanupPass()
     }
@@ -594,13 +704,27 @@ class WifiDirectDeviceDiscoveryRepository(
         cleanupRequested = false
         val passId = ++cleanupPassId
         cleanupCallbacksRemaining = 2
+        requestClearServiceRequests(passId, manager, activeChannel)
+        requestClearLocalServices(passId, manager, activeChannel)
+    }
 
-        // Keep both cleanup operations independent, but do not allow another
-        // scan to register services until both asynchronous callbacks complete.
+    @SuppressLint("MissingPermission")
+    private fun requestClearServiceRequests(
+        passId: Long,
+        manager: WifiP2pManager,
+        activeChannel: WifiP2pManager.Channel,
+        retryAttempt: Int = 0,
+    ) {
         try {
             manager.clearServiceRequests(
                 activeChannel,
-                cleanupActionListener(passId, DiscoveryOperation.CLEAR_SERVICE_REQUESTS),
+                cleanupActionListener(
+                    passId,
+                    DiscoveryOperation.CLEAR_SERVICE_REQUESTS,
+                    retryAttempt,
+                ) { nextAttempt ->
+                    requestClearServiceRequests(passId, manager, activeChannel, nextAttempt)
+                },
             )
         } catch (exception: SecurityException) {
             Log.w(LOG_TAG, "P2P cleanup clearServiceRequests denied", exception)
@@ -609,11 +733,25 @@ class WifiDirectDeviceDiscoveryRepository(
             Log.w(LOG_TAG, "P2P cleanup clearServiceRequests failed", exception)
             finishCleanupAction(passId)
         }
+    }
 
+    @SuppressLint("MissingPermission")
+    private fun requestClearLocalServices(
+        passId: Long,
+        manager: WifiP2pManager,
+        activeChannel: WifiP2pManager.Channel,
+        retryAttempt: Int = 0,
+    ) {
         try {
             manager.clearLocalServices(
                 activeChannel,
-                cleanupActionListener(passId, DiscoveryOperation.CLEAR_LOCAL_SERVICES),
+                cleanupActionListener(
+                    passId,
+                    DiscoveryOperation.CLEAR_LOCAL_SERVICES,
+                    retryAttempt,
+                ) { nextAttempt ->
+                    requestClearLocalServices(passId, manager, activeChannel, nextAttempt)
+                },
             )
         } catch (exception: SecurityException) {
             Log.w(LOG_TAG, "P2P cleanup clearLocalServices denied", exception)
@@ -627,6 +765,8 @@ class WifiDirectDeviceDiscoveryRepository(
     private fun cleanupActionListener(
         passId: Long,
         operation: DiscoveryOperation,
+        retryAttempt: Int,
+        onBusyRetry: (Int) -> Unit,
     ): WifiP2pManager.ActionListener = object : WifiP2pManager.ActionListener {
         override fun onSuccess() {
             if (passId != cleanupPassId) return
@@ -635,7 +775,22 @@ class WifiDirectDeviceDiscoveryRepository(
         }
 
         override fun onFailure(reason: Int) {
-            if (passId != cleanupPassId) return
+            if (passId != cleanupPassId || !cleanupInProgress) return
+            val nextAttempt = retryAttempt + 1
+            val retryDelay = if (reason == WifiP2pManager.BUSY) {
+                WifiDirectBusyRetryPolicy.delayMillisForRetry(nextAttempt)
+            } else {
+                null
+            }
+            if (retryDelay != null) {
+                Log.w(
+                    LOG_TAG,
+                    "Wi-Fi Direct cleanup operation $operation is BUSY; retry $nextAttempt in ${retryDelay}ms",
+                )
+                scheduleCleanupRetry(passId, retryDelay) { onBusyRetry(nextAttempt) }
+                return
+            }
+
             Log.w(
                 LOG_TAG,
                 "Wi-Fi Direct cleanup operation $operation failed with framework reason=$reason",
@@ -644,13 +799,31 @@ class WifiDirectDeviceDiscoveryRepository(
         }
     }
 
+    private fun scheduleCleanupRetry(
+        expectedPassId: Long,
+        delayMillis: Long,
+        action: () -> Unit,
+    ) {
+        lateinit var task: Runnable
+        task = Runnable {
+            pendingCleanupRetryTasks.remove(task)
+            if (cleanupInProgress && cleanupPassId == expectedPassId) action()
+        }
+        pendingCleanupRetryTasks += task
+        mainHandler.postDelayed(task, delayMillis)
+    }
+
+    private fun cancelCleanupRetryTasks() {
+        pendingCleanupRetryTasks.forEach(mainHandler::removeCallbacks)
+        pendingCleanupRetryTasks.clear()
+    }
+
     private fun finishCleanupAction(passId: Long) {
         if (passId != cleanupPassId || !cleanupInProgress) return
         if (cleanupCallbacksRemaining <= 0) return
 
         cleanupCallbacksRemaining -= 1
         if (cleanupCallbacksRemaining > 0) return
-
         if (cleanupRequested) {
             beginCleanupPass()
             return
@@ -662,6 +835,115 @@ class WifiDirectDeviceDiscoveryRepository(
         if (roleToRestart != null && monitoring) {
             startDiscovery(roleToRestart)
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun requestP2pStateIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            !monitoring ||
+            !receiverRegistered ||
+            p2pEnabled != null ||
+            p2pStateQueryInFlight ||
+            p2pStateQueryFailed
+        ) return
+
+        val manager = wifiP2pManager ?: return
+        val activeChannel = channel ?: return
+        val queryGeneration = ++p2pStateQueryGeneration
+        p2pStateQueryInFlight = true
+
+        val timeoutTask = Runnable {
+            if (isCurrentP2pStateQuery(queryGeneration, activeChannel)) {
+                p2pStateQueryInFlight = false
+                p2pStateQueryTimeoutTask = null
+                p2pStateQueryFailed = true
+                publishP2pStateQueryFailure("timed out")
+            }
+        }
+        p2pStateQueryTimeoutTask = timeoutTask
+        mainHandler.postDelayed(timeoutTask, P2P_STATE_QUERY_TIMEOUT_MS)
+
+        try {
+            manager.requestP2pState(
+                activeChannel,
+                object : WifiP2pManager.P2pStateListener {
+                    override fun onP2pStateAvailable(state: Int) {
+                        if (!isCurrentP2pStateQuery(queryGeneration, activeChannel)) return
+                        finishP2pStateQuery(queryGeneration)
+                        p2pEnabled = when (state) {
+                            WifiP2pManager.WIFI_P2P_STATE_ENABLED -> true
+                            WifiP2pManager.WIFI_P2P_STATE_DISABLED -> false
+                            else -> null
+                        }
+                        if (p2pEnabled == null) {
+                            p2pStateQueryFailed = true
+                            publishP2pStateQueryFailure("returned an unknown state")
+                        } else {
+                            p2pStateQueryFailed = false
+                            refreshAvailability()
+                        }
+                    }
+                },
+            )
+        } catch (exception: SecurityException) {
+            failP2pStateQuery(queryGeneration, activeChannel, "permission denied", exception)
+        } catch (exception: RuntimeException) {
+            failP2pStateQuery(queryGeneration, activeChannel, "platform error", exception)
+        }
+    }
+
+    private fun isCurrentP2pStateQuery(
+        expectedGeneration: Long,
+        expectedChannel: WifiP2pManager.Channel,
+    ): Boolean =
+        monitoring &&
+            receiverRegistered &&
+            p2pStateQueryInFlight &&
+            p2pStateQueryGeneration == expectedGeneration &&
+            channel === expectedChannel &&
+            hasRequiredRuntimePermission()
+
+    private fun finishP2pStateQuery(expectedGeneration: Long) {
+        if (p2pStateQueryGeneration != expectedGeneration) return
+        p2pStateQueryInFlight = false
+        p2pStateQueryTimeoutTask?.let(mainHandler::removeCallbacks)
+        p2pStateQueryTimeoutTask = null
+    }
+
+    private fun failP2pStateQuery(
+        expectedGeneration: Long,
+        expectedChannel: WifiP2pManager.Channel,
+        reason: String,
+        exception: RuntimeException? = null,
+    ) {
+        if (!isCurrentP2pStateQuery(expectedGeneration, expectedChannel)) return
+        finishP2pStateQuery(expectedGeneration)
+        p2pStateQueryFailed = true
+        if (exception != null) {
+            Log.w(LOG_TAG, "Wi-Fi P2P state query failed: $reason", exception)
+        } else {
+            Log.w(LOG_TAG, "Wi-Fi P2P state query failed: $reason")
+        }
+        publishP2pStateQueryFailure(reason)
+    }
+
+    private fun publishP2pStateQueryFailure(reason: String) {
+        Log.w(LOG_TAG, "Wi-Fi P2P state is unavailable: $reason")
+        mutableSnapshot.value = mutableSnapshot.value.copy(
+            availability = WifiDirectAvailability.UNAVAILABLE,
+            status = DiscoveryStatus.FAILED,
+            peers = emptyList(),
+            failure = DeviceDiscoveryFailure.PLATFORM_ERROR,
+            failureOperation = null,
+        )
+    }
+
+    private fun invalidateP2pStateQuery() {
+        p2pStateQueryGeneration += 1
+        p2pStateQueryInFlight = false
+        p2pStateQueryFailed = false
+        p2pStateQueryTimeoutTask?.let(mainHandler::removeCallbacks)
+        p2pStateQueryTimeoutTask = null
     }
 
     private fun initializeChannel(): WifiP2pManager.Channel? =
@@ -697,7 +979,11 @@ class WifiDirectDeviceDiscoveryRepository(
         }
 
         if (p2pEnabled == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            return WifiDirectAvailability.CHECKING
+            return if (p2pStateQueryFailed) {
+                WifiDirectAvailability.UNAVAILABLE
+            } else {
+                WifiDirectAvailability.CHECKING
+            }
         }
 
         // requestP2pState() is unavailable before API 29. If the initial
@@ -743,9 +1029,32 @@ class WifiDirectDeviceDiscoveryRepository(
         }
     }
 
+    private fun scheduleDiscoveryRetry(
+        expectedGeneration: Long,
+        delayMillis: Long,
+        action: () -> Unit,
+    ) {
+        lateinit var task: Runnable
+        task = Runnable {
+            pendingDiscoveryRetryTasks.remove(task)
+            if (isCurrent(expectedGeneration) && !cleanupInProgress && !cleanupRequested) {
+                action()
+            }
+        }
+        pendingDiscoveryRetryTasks += task
+        mainHandler.postDelayed(task, delayMillis)
+    }
+
+    private fun cancelDiscoveryRetryTasks() {
+        pendingDiscoveryRetryTasks.forEach(mainHandler::removeCallbacks)
+        pendingDiscoveryRetryTasks.clear()
+    }
+
     private fun actionListener(
         expectedGeneration: Long,
         operation: DiscoveryOperation,
+        retryAttempt: Int = 0,
+        onBusyRetry: ((Int) -> Unit)? = null,
         onSuccess: () -> Unit,
     ): WifiP2pManager.ActionListener = object : WifiP2pManager.ActionListener {
         override fun onSuccess() {
@@ -756,6 +1065,23 @@ class WifiDirectDeviceDiscoveryRepository(
         }
 
         override fun onFailure(reason: Int) {
+            if (!isCurrent(expectedGeneration)) return
+            val nextAttempt = retryAttempt + 1
+            val retryDelay = if (reason == WifiP2pManager.BUSY && onBusyRetry != null) {
+                WifiDirectBusyRetryPolicy.delayMillisForRetry(nextAttempt)
+            } else {
+                null
+            }
+            if (retryDelay != null) {
+                Log.w(
+                    LOG_TAG,
+                    "Wi-Fi Direct operation $operation is BUSY; retry $nextAttempt in ${retryDelay}ms",
+                )
+                scheduleDiscoveryRetry(expectedGeneration, retryDelay) {
+                    onBusyRetry?.invoke(nextAttempt)
+                }
+                return
+            }
             handlePlatformFailure(expectedGeneration, reason, operation)
         }
     }
@@ -892,6 +1218,7 @@ class WifiDirectDeviceDiscoveryRepository(
         // Invalidate queued framework callbacks before requesting best-effort
         // teardown. A late DNS-SD response cannot repopulate a failed scan.
         generation += 1
+        cancelDiscoveryRetryTasks()
         activeRole = null
         restartRoleAfterCleanup = null
         clearPendingPeers()

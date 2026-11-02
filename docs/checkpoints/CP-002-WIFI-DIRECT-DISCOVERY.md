@@ -103,3 +103,14 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 ## Status rule
 
 Keep `IN_PROGRESS` until every applicable criterion has reproducible evidence. Use `BLOCKED` if a mandatory criterion cannot be completed; never mark it PASSED merely because files were committed or a build succeeded.
+
+
+## Owner field retest — reliability failure (2026-11-02)
+
+- The owner reports approximately 20–50 manual attempts across multiple Android phone models, switching which phone is in Receive/advertiser mode and which is in Send/browser mode. Only one attempt produced a visible device candidate.
+- In that single candidate result, the peer model name appeared, TXT count was zero, and the peer was shown as unverified/not authenticated. This is the correct trust state: Android documents TXT as optional, and CP-002 does not implement peer authentication. The absence of TXT did not prevent that one candidate from appearing.
+- This hit rate is a release-blocking reliability defect for the discovery milestone. The earlier passing CI run did not prove physical discovery.
+- A source audit found a material mismatch in commit `2ac10cdb9e9abb2d7a7e11ad23f362b42ef62623`: the ADR/status text claimed `requestP2pState()` was used on API 29+, but the adapter did not invoke it. The adapter could stay at `CHECKING` when no sticky state intent was returned. The follow-up source change implements the API call with lifecycle/generation checks and a finite timeout.
+- Transient `WifiP2pManager.BUSY` responses were previously terminal. The follow-up retries advertise registration, typed service-request registration, service discovery and both P2P cleanup operations with bounded backoff (500/1,000/2,000 ms; at most three retries per operation). Retries are cancelled when the scan generation or cleanup pass becomes stale.
+- Keep the current directional roles: Receive advertises only; Send browses only. Do not add a second transport, connect, authentication or transfer as an unreviewed response to this discovery defect.
+- CP-002 remains `IN_PROGRESS`. Required next physical test: one device stays on Receive while the other starts Send; capture both screens and counters. Then reverse roles. Record exact model/API, app build SHA, permission/Location Mode state and elapsed time to first candidate. Repeat enough trials to measure reliability, not a single success.
