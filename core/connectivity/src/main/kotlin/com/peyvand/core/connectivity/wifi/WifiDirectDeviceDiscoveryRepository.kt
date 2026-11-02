@@ -162,9 +162,11 @@ class WifiDirectDeviceDiscoveryRepository(
     }
 
     private val serviceRequest by lazy {
-        WifiP2pDnsSdServiceRequest.newInstance(
-            PeyvandDiscoveryAdvertisement.SERVICE_TYPE,
-        )
+        // Debug compatibility experiment: search all Bonjour services, then
+        // retain PEYVAND-only filtering in the DNS-SD callback. This isolates
+        // OEM behavior differences in typed PTR requests without broadening
+        // the set of peers that can be published by the application.
+        WifiP2pDnsSdServiceRequest.newInstance()
     }
 
     private val channelListener = object : WifiP2pManager.ChannelListener {
