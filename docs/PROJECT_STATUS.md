@@ -5,7 +5,7 @@
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-002 — Wi-Fi Direct service discovery
 - **Current branch:** `feature/foundation-bootstrap`
-- **Last updated:** 2026-11-01 (discovery diagnostics build; two-device retest still failing)
+- **Last updated:** 2026-11-02 (owner diagnostics reviewed; DNS-SD candidate/TXT gating defects documented)
 
 ## Milestones
 
@@ -40,6 +40,12 @@
 - Diagnostics instrumentation commit `58c4d86e655e6f3e6800c845ce4792661d9b07f3` adds visible counters for raw DNS-SD service responses, accepted service responses, TXT responses, accepted TXT domains, compatible TXT records, and final peers. CI run `41327944528` succeeded: 21 unit tests passed (0 failures/errors/skips), lint reported 8 warnings and 0 errors, and `:app:assembleDebug` succeeded. Debug APK artifact `13092725538`; APK SHA-256 `e36988f49f55b05b6e9ec87f119c932f878bc07f042afa1a4e966c15cd123187`.
 - The current implementation still contains no Wi-Fi P2P `connect()` flow, local socket transport, TLS peer authentication, recipient consent protocol, or file streaming. The diagnostics APK does not implement file transfer.
 - Reciprocal two-device physical discovery remains mandatory before CP-002 can be marked `PASSED`.
+
+## Latest discovery review (2026-11-02)
+
+- Owner-reported diagnostics: one phone received one service callback and one accepted service callback, but no TXT callback and no peer publication; the second phone received no service or TXT callbacks. The current implementation explains the first result because peer publication requires a matching compatible TXT record. The second result remains unlocalized.
+- Android API review found that TXT is optional in Wi-Fi Direct DNS-SD and that the current one-argument newInstance(SERVICE_TYPE) request is defined as service-type search, whereas the two-argument overload requests TXT for a particular instance. This is recorded as a plausible source of zero TXT callbacks requiring controlled physical verification.
+- ADR-0002 and CP-002 now distinguish service candidate discovery from optional TXT metadata and authenticated identity. CP-002 remains IN_PROGRESS; no peer connection, pairing, TLS or transfer is implemented.
 
 ## Module boundaries
 

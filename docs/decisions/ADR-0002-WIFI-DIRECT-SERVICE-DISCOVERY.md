@@ -1,6 +1,6 @@
 # ADR-0002 — Wi-Fi Direct service discovery
 
-- **Status:** Accepted for CP-002 implementation; physical-device compatibility remains unverified.
+- **Status:** Accepted for Wi-Fi Direct DNS-SD candidate discovery; amended 2026-11-02 to make TXT optional and clarify request overload semantics. Physical-device compatibility remains unverified.
 - **Date:** 2026-11-01
 - **Scope:** Runtime capability checks and PEYVAND Bonjour/DNS-SD service discovery only.
 
@@ -18,7 +18,12 @@ Use Android `WifiP2pManager` DNS-SD service discovery for CP-002:
 - Each device registers a service request for the PEYVAND service type.
 - The service-response callback must have a valid PEYVAND instance name and the exact Bonjour registration type Android documents in the form `_service._tcp.local.`.
 - The TXT listener's full domain must parse as the exact same PEYVAND instance under `_peyvand._tcp.local.`; a substring match is insufficient.
-- Correlate service and TXT callbacks by both the transient P2P source-device address and normalized service instance name. Display a peer only after both records match and the TXT fields contain the expected app and schema values.
+- Treat the service-response callback as the primary discovery signal: after strict PEYVAND instance-name and Bonjour registration-type validation, create an unverified discovery candidate without waiting for TXT.
+- TXT is optional metadata. Its absence must not suppress a service candidate. When a TXT callback arrives, parse its full domain strictly, correlate it by transient source-device address plus normalized service instance name, and validate app/schema values as a separate metadata status.
+- A candidate or compatible public TXT record is not authentication. UI must not imply trust; connection and transfer require a separate authenticated peer handshake and explicit consent.
+- Keep service/TXT association order-independent, bounded, generation-scoped and resilient to delayed, duplicated or absent callbacks.
+- Select the service-request factory overload intentionally. Android documents newInstance() as all Bonjour services, newInstance(serviceType) as services matching a type, and newInstance(instanceName, serviceType) as a TXT-data request for a specific instance. Do not assume the one-argument form requests TXT for every instance. The present implementation uses the one-argument service-type form; zero TXT callbacks are a plausible consequence and require a controlled device test.
+- The current sender and receiver UI flows both enter the same adapter method, which registers a local advertisement and a discovery request. Keep this bidirectional behavior only as a provisional implementation detail until one-way advertiser/browser role tests verify the intended product flow.
 - Bound pending peer records and visible peers. Pending records are process-local and transient.
 - A monotonically increasing scan generation invalidates callbacks after stop, availability loss, channel loss or failure.
 
@@ -62,6 +67,32 @@ Discovery is not trust. Any later connection or data exchange requires explicit 
 - The advertised app/schema fields are public compatibility markers, not secrets or credentials.
 - Transient P2P address and service instance name are used only to correlate callbacks within an active scan; neither is persisted or treated as identity.
 - Reciprocal discovery on two physical devices is mandatory before CP-002 can be marked PASSED.
+
+## 2026-11-02 amendment — TXT optionality and request semantics
+
+The original decision incorrectly made a matching TXT record a hard prerequisite for listing a service response. That is now superseded. Android's Wi-Fi Direct guide states that TXT may optionally be broadcast and demonstrates service discovery through separate service and TXT listeners. The API reference further distinguishes the three request factory overloads: all Bonjour services, services of a specified type, and TXT data for a specified instance.
+
+The current source has two related defects to resolve in the next implementation change:
+
+1. publishPeerIfCompatible() currently requires both callback maps and compatible TXT metadata before publishing any peer. A service callback that passed the strict name/type filters is discarded from the visible peer list if TXT never arrives.
+2. The current serviceRequest uses newInstance(SERVICE_TYPE), which the API reference describes as a service-type search, not the per-instance TXT request. This is a credible explanation for the observed missing TXT callback, but must be confirmed with controlled testing rather than stated as certain.
+
+Owner-reported diagnostic result on 2026-11-02: one test phone reported service=1, accepted service=1, TXT=0, valid TXT domain=0, compatible TXT=0, peers=0; the other reported all counters=0. Aggregate counters do not identify the callback's source phone. Keep CP-002 IN_PROGRESS.
+
+### Required verification
+
+- Test the current service-type-only request against the official no-argument all-Bonjour request and/or an explicitly added bounded per-instance TXT request. Record exact request overload and per-action outcomes.
+- Verify that a valid service callback becomes a visible, explicitly unverified candidate even when no TXT arrives.
+- Test no-TXT, compatible-TXT, invalid-domain, incompatible-schema, delayed-TXT, duplicate callbacks and callbacks arriving in either order.
+- Test one phone advertising while the other browses, then reverse the roles; separately test both advertising+browsing.
+- Verify source callback context with redacted/pseudonymized identifiers. Do not display a callback count as proof that the intended second phone was discovered.
+- Audit asynchronous cleanup/restart ordering for stale registrations and BUSY; no workaround may weaken validation or security.
+
+References:
+- https://developer.android.com/develop/connectivity/wifi/nsd-wifi-direct
+- https://developer.android.com/reference/android/net/wifi/p2p/nsd/WifiP2pDnsSdServiceRequest
+- https://developer.android.com/reference/android/net/wifi/p2p/WifiP2pManager.DnsSdServiceResponseListener
+- https://developer.android.com/reference/android/net/wifi/p2p/WifiP2pManager.DnsSdTxtRecordListener
 
 ## Android references
 

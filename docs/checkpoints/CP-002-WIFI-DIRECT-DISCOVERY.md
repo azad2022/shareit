@@ -19,8 +19,13 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 - [ ] Location Mode, P2P enabled state, channel readiness and permission status are represented accurately; unknown P2P state remains CHECKING until the sticky system state is observed.
 - [ ] DNS-SD advertisement contains only PEYVAND application/schema compatibility fields and a process-local random instance suffix.
 - [ ] Service callback registration type exactly matches the PEYVAND Bonjour type in Android's documented `_service._tcp.local.` form.
-- [ ] TXT callback full domain is parsed and validated as a PEYVAND instance; arbitrary domains containing a substring are rejected.
-- [ ] Service and TXT callbacks are correlated by both transient device address and the same normalized instance name.
+- [ ] A valid service callback with the exact PEYVAND instance-name and Bonjour registration-type format creates a discovery candidate without waiting for a TXT callback.
+- [ ] TXT is treated as optional metadata. A missing TXT callback never suppresses a valid service candidate.
+- [ ] When TXT is received, its full domain is parsed strictly, arbitrary substring matches are rejected, and schema metadata is validated separately from candidate discovery.
+- [ ] Service/TXT correlation is order-independent and keyed by transient source-device address plus normalized instance name; late, duplicate, missing and mismatched callbacks are handled with bounded, generation-scoped state.
+- [ ] The selected WifiP2pDnsSdServiceRequest factory overload is justified against Android's documented semantics and physically tested. The implementation must not assume newInstance(serviceType) automatically requests TXT data for every discovered instance.
+- [ ] The UI distinguishes an unverified discovery candidate from a metadata-compatible peer and from an authenticated peer. Discovery metadata never authorizes a connection.
+- [ ] Diagnostics distinguish local advertisement registration, service-request registration, discovery-start action results, raw callbacks, filter results, source correlation and peer publication without exposing full MAC addresses or user-chosen device names.
 - [ ] Discovery metadata is never described as peer authentication; no socket, pairing, transfer or APK operation is part of CP-002.
 - [ ] Cancellation, Activity stop, permission loss, Location Mode loss, P2P disabled state, channel loss and action failure invalidate stale callbacks, clear pending peer data and perform independent best-effort cleanup of P2P requests and local service advertisements.
 - [ ] A lost P2P channel can be reinitialized on a later foreground availability refresh.
@@ -30,14 +35,14 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 - [ ] VPN route diagnosis observes only the app-default network and shows a non-blocking warning; it does not block discovery or assert that local traffic is blocked.
 - [ ] `ACCESS_NETWORK_STATE` is declared by the connectivity module that calls ConnectivityManager APIs.
 - [x] CI unit tests, all module lint tasks and Debug APK build passed on checkpoint tree `4251e6df630747b8a78bb7a1161a3cedbd4909ad` (run `41317903875`).
-- [ ] Two physical Android devices with model/API details demonstrate reciprocal PEYVAND advertisements before this checkpoint is marked PASSED.
+- [ ] Two physical Android devices demonstrate discovery in each supported sender/receiver direction. Test both role assignments separately; require reciprocal list visibility only if the approved UX explicitly needs it.
 
 ## Implemented scope
 
 - Kotlin/Compose Android foundation, Persian-first language bootstrap and PEYVAND design-system entry point.
 - Wi-Fi Direct DNS-SD local service advertisement and PEYVAND service discovery.
 - Version-aware runtime permissions, optional hardware detection, Location Mode/P2P state/channel checks and retry after a channel loss.
-- Strict validation of Bonjour registration type and TXT full domain; callback matching by transient device address plus service instance.
+- Strict validation of Bonjour registration type and TXT full domain; callback matching by transient device address plus service instance. The current implementation still incorrectly gates peer publication on a compatible TXT record; this is a documented unresolved defect, not an accepted behavior.
 - Bounded pending peer records, generation-based stale-callback invalidation and best-effort cleanup of service requests and local advertisements.
 - Discovery UI states, bidi-safe device-name display and actual-state radar feedback.
 - App-default VPN route diagnostics with a non-blocking Persian warning and user-directed VPN settings shortcut.
@@ -59,6 +64,17 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 - The diagnostics APK does not add peer connection, sockets, TLS, pairing, receiver consent, file transfer, integrity verification, resume or APK handling. Those features remain unimplemented.
 - The latest physical discovery result remains failed. The diagnostics APK has not yet been tested on both physical phones. Emulator-only evidence cannot replace this requirement.
 
+## Latest owner diagnostic evidence and source review
+
+- **Owner diagnostic retest (2026-11-02):** on one of the two test phones the counters were service responses 1, accepted service responses 1, TXT responses 0, accepted TXT domains 0, compatible TXT records 0, final peers 0. On the other phone all six counters were 0. No additional compatible test device has been found. The owner states that model/Android-version mismatch should not be assumed; the current evidence does not prove a model-specific cause either way.
+- **Confirmed source-level publication defect:** publishPeerIfCompatible() returns unless both a service callback and a matching TXT record are already stored and the TXT schema is compatible. Therefore the observed 1 / 1 / 0 / 0 / 0 / 0 sequence is sufficient for the current code to suppress a service candidate by design. This is not merely an inference from the UI counters.
+- **High-priority request-construction finding:** the current repository creates its request with WifiP2pDnsSdServiceRequest.newInstance(SERVICE_TYPE). Android's API reference defines this one-argument overload as a search for services of the specified type; the two-argument overload newInstance(instanceName, serviceType) is specifically for requesting TXT data for that Bonjour instance, while the no-argument overload searches all Bonjour services. The official Wi-Fi Direct guide also marks TXT broadcast as optional and demonstrates a no-argument request. This makes the current request construction a plausible explanation for the absence of TXT callbacks, but it must be verified by a controlled physical test before being declared the definitive cause: https://developer.android.com/reference/android/net/wifi/p2p/nsd/WifiP2pDnsSdServiceRequest and https://developer.android.com/develop/connectivity/wifi/nsd-wifi-direct.
+- **Interpretation boundary:** one accepted service callback proves that a callback passed the PEYVAND instance-name and registration-type filters. The current aggregate counters do not identify which phone emitted it, because callback source context is not displayed. Do not claim that the callback definitely came from the intended counterpart until source-aware diagnostics verify it.
+- **Second-phone boundary:** all raw callback counters at zero means no DNS-SD service/TXT callback reached the current listeners during that scan. Because the raw service count is zero, this is earlier than the PEYVAND name/type filters; changing those filters alone cannot explain or fix this phone's result. Advertisement/request/discovery action outcomes, role direction, framework state and scan lifecycle still need isolation.
+- **Role/lifecycle issue to audit:** both send and receive routes currently call the same discovery operation; that operation registers a local PEYVAND service and a service request before calling discoverServices(). Thus each side presently advertises and browses at the same time. This may be intentional, but it obscures one-way diagnostics. Test advertiser-only versus browser-only roles in a controlled A/B matrix before changing product behavior. Also inspect whether asynchronous clearServiceRequests/clearLocalServices teardown can race with an immediate new scan and produce BUSY or stale registrations; this is a hypothesis, not a confirmed root cause.
+- **Diagnostics limitation:** the visible counters are aggregate totals. Add transient, privacy-safe event context for the service instance, registration type, source correlation token, elapsed time and each P2P action result. Do not log complete MAC addresses or device names.
+- The existing green CI run 41327944528 validates source commit 58c4d86e655e6f3e6800c845ce4792661d9b07f3 only (21 unit tests passed; 8 lint warnings and 0 errors; Debug APK assembled). It does not validate the new owner-reported physical results or any source changes made after that commit.
+
 ## Risks and deferred work
 
 - Wi-Fi P2P support, DNS-SD behavior, service naming, and radio concurrency vary by manufacturer, chipset and Android build.
@@ -74,7 +90,7 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 - DNS-SD and lifecycle hardening: commits `e6d70738a042b0bfa22bfa788f414e09de426666`, `fc8bbf1a828cf9f20f778b8b7365fb1dfaa078f7`, `4690d5dd57a78da30ac7e71337076aeb3d45ae46`, `fb401a45c6972ed1f7929eece296f9e2e7dbd8e8`, `225fc83afc04f7d443c6a16f33dd15207b38571d`, `2897297ffb3d12a92b80a31d55ac1ec9a9884b0e`, and `a8518d473e20ca1159b16607284c211893b6e78e`.
 - App-source diagnostics revision: `6e781732afd91b41c331b2c22d5445fc0b3d85df`.
 - CI `41317903875` completed successfully on branch tree `4251e6df630747b8a78bb7a1161a3cedbd4909ad`: 21 unit tests, 0 failures/errors/skips; 8 lint warnings, 0 lint errors; Debug APK assembled and uploaded (artifact `13087339471`, SHA-256 `0a20f9f63530774b46d659c9d4523ae9812acf4ab15b78387784a97018d1eb12`).
-- Physical two-device result: reciprocal discovery failed on the owner's Galaxy A06 and ASUS X017DA; the diagnostics build has not yet been retested.
+- Physical two-device result: discovery remains unresolved on the owner's Samsung Galaxy A12 (SM-A125F) and ASUS X017DA. The 2026-11-02 owner-reported diagnostic counters are recorded above; full firmware/build details for the ASUS test phone and source-correlated callback evidence remain unavailable.
 
 ## Status rule
 

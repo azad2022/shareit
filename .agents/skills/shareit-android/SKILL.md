@@ -11,19 +11,16 @@ Act as the senior Android systems engineer for this repository. The product is P
 
 PEYVAND competes in the same product category as SHAREit and may use blue-and-white as its broad color direction, but it must have its own brand expression. Do not copy proprietary source code, artwork, logos, trademarks, exact screen layouts, signature animations, text, or other protected assets from SHAREit or any other product. SHAREit may be used as a benchmark for measured transfer performance and common user expectations, not as a source of copied design assets.
 
-### Current repository state
+### Current repository state and implementation authorization
 
-The product owner explicitly authorized the first Android foundation milestone (CP-001) on 2026-11-01. The repository has entered implementation for that limited scope. Do not expand authorization to Wi-Fi Direct, transfer, security, APK handling, or release work unless the product owner approves the relevant next milestone.
-
-- The current authorization covers CP-001 only: Android project scaffolding, core module boundaries, language onboarding/persistence, design-system foundation, CI, and their tests. Do not implement transfer/network/security/APK features in CP-001.
-- For later milestones, do not create additional application functionality unless the user explicitly authorizes that scope.
-- A request to discuss, review, plan, or refine the product does not authorize coding. The explicit CP-001 authorization is an exception for the foundation scope only.
-- When asked to plan, return a decision-ready engineering proposal and identify unresolved decisions.
-- When asked to implement, make the smallest complete, testable change that satisfies the approved scope.
+- The master product specifications are maintained on main; active Android implementation is on feature/foundation-bootstrap.
+- The product owner explicitly authorized implementation on 2026-11-01. This authorization is already recorded in CP-001/CP-002 and must not be treated as an unanswered permission question.
+- Continue work on feature/foundation-bootstrap unless the owner explicitly selects another branch. Before repository work, read the latest skill and relevant product documents from main, then inspect the active branch and exact current file contents.
+- The existing authorization covers the agreed PEYVAND Android scope. It does not silently approve an unreviewed fallback transport, public backend/cloud dependency, release signing setup, or unrelated feature expansion.
+- Discussion and planning alone do not authorize additional implementation. For already authorized scope, do not ask the owner to repeat the 2026-11-01 implementation authorization.
 - Never claim that a feature works, a test passed, a build succeeded, or a device is supported without direct evidence from repository state or test output.
 
-The product owner's explicit decisions take precedence over assumptions in this skill. If a material decision is unclear, explain its impact and ask one focused question rather than silently choosing a consequential behavior.
-
+The product owner's explicit, most recent decisions take precedence over stale planning-only wording in older documentation. Update the relevant checkpoint or ADR when a decision or verified implementation state changes.
 ## 2. Confirmed product definition
 
 ### Confirmed scope
@@ -164,6 +161,18 @@ Model connection state explicitly. At minimum distinguish:
 Every transition must have defined timeout, cancellation, cleanup, and error behavior. Avoid hidden global connection state. Prevent duplicate connections and orphaned sockets.
 
 Discovery advertisements should expose only the metadata needed to find a compatible app instance. Never expose file names, private identifiers, or long-lived secrets in discovery payloads.
+
+### DNS-SD request and callback semantics
+
+- Treat DnsSdServiceResponseListener and DnsSdTxtRecordListener as separate callbacks. Android explicitly documents TXT records as optional; a missing TXT callback must not suppress a service-discovered candidate.
+- Understand the request factory semantics before selecting an overload: WifiP2pDnsSdServiceRequest.newInstance() searches all Bonjour services; newInstance(serviceType) searches services of that type; newInstance(instanceName, serviceType) requests TXT data for that specific Bonjour service. Do not assume the service-type-only request also requests each instance's TXT record.
+- When TXT metadata is needed, explicitly design and test the request strategy (broad Bonjour discovery followed by callback filtering, or bounded per-instance TXT requests). Account for request registration, removal, duplicate callbacks, limits, timeout, and asynchronous ordering. Do not create unbounded per-peer service requests.
+- A valid service callback may create a discovery candidate after strict instance-name and registration-type validation. It is not proof that the remote app is genuine or compatible. A missing TXT record means metadata is unavailable, not that the candidate does not exist.
+- If TXT is received, validate its full domain and schema independently, and associate it with the service candidate using the transient source-device address plus normalized instance name. TXT may enrich or classify the candidate; it must never be treated as authentication.
+- Keep the UI and domain model distinctions explicit: candidate discovered, metadata unavailable, metadata compatible/incompatible, connecting, and authenticated are different states. Never label a candidate as authenticated or verified solely because a public DNS-SD name/TXT marker matches.
+- Service and TXT callbacks can be delivered independently and may be delayed or duplicated. Correlation logic must be order-independent, bounded, generation-scoped, and safe when either callback never arrives.
+- Diagnostics must distinguish request setup/action success and failure from callback counts. Capture enough transient callback context to distinguish events and sources, but redact/pseudonymize P2P addresses and avoid logging user-chosen device names, secrets, file metadata, or persistent identifiers.
+- Make advertiser and browser roles explicit where the product flow requires them. Test sender-searching/receiver-advertising and the reverse as separate cases. Do not impose reciprocal list visibility as an acceptance condition unless the approved UX requires both devices to show each other.
 
 ## 6. Secure peer authentication
 
@@ -547,5 +556,5 @@ Before a language/UI milestone is marked PASSED, verify: all visible strings are
 
 Before a motion milestone is marked PASSED, verify: the animation is tied to a real state; it reflects actual transfer/connection data; interruptions and lifecycle changes are safe; reduced motion is supported; controls remain usable; frame stability and resource use are acceptable on the supported device matrix; and the animation does not misrepresent transfer completion.
 
-Refer to `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md` for the expanded product identity, localization, RTL, motion, and acceptance specification. Refer to `docs/PRODUCT_REQUIREMENTS.md` for the current confirmed scope. The project remains in planning until the product owner explicitly authorizes implementation.
+Refer to `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md` for the expanded product identity, localization, RTL, motion, and acceptance specification. Refer to `docs/PRODUCT_REQUIREMENTS.md` for the current confirmed scope. Implementation was explicitly authorized by the product owner on 2026-11-01 and is active on feature/foundation-bootstrap; future scope expansions still require explicit approval.
 
