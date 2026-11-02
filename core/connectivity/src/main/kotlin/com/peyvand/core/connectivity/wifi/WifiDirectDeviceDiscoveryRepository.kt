@@ -245,6 +245,7 @@ class WifiDirectDeviceDiscoveryRepository(
 
         stopDiscovery()
         monitoring = false
+        invalidateP2pStateQuery()
         p2pEnabled = null
         unregisterP2pStateReceiver()
     }
