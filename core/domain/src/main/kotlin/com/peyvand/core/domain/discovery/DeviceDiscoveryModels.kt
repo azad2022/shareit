@@ -19,6 +19,24 @@ enum class DiscoveryStatus {
     FAILED,
 }
 
+/** TXT describes public compatibility metadata; it is not peer authentication. */
+enum class DiscoveryMetadataStatus {
+    NOT_RECEIVED,
+    COMPATIBLE,
+    INCOMPATIBLE,
+}
+
+/** Per-scan source counters use local pseudonyms (P1, P2...), never raw P2P addresses. */
+data class DiscoverySourceDiagnostics(
+    val token: String,
+    val serviceResponseCount: Int = 0,
+    val acceptedServiceResponseCount: Int = 0,
+    val txtRecordResponseCount: Int = 0,
+    val acceptedTxtDomainCount: Int = 0,
+    val compatibleTxtRecordCount: Int = 0,
+    val candidatePublished: Boolean = false,
+)
+
 /** Identifies which asynchronous framework operation failed during discovery. */
 enum class DiscoveryOperation {
     CLEAR_SERVICE_REQUESTS,
@@ -44,6 +62,7 @@ enum class DeviceDiscoveryFailure {
 data class NearbyPeer(
     val id: String,
     val displayName: String?,
+    val metadataStatus: DiscoveryMetadataStatus = DiscoveryMetadataStatus.NOT_RECEIVED,
 )
 
 data class DeviceDiscoverySnapshot(
@@ -57,6 +76,11 @@ data class DeviceDiscoverySnapshot(
     val txtRecordResponseCount: Int = 0,
     val acceptedTxtDomainCount: Int = 0,
     val compatibleTxtRecordCount: Int = 0,
+    val localServiceRegistered: Boolean = false,
+    val serviceRequestRegistered: Boolean = false,
+    val discoveryStarted: Boolean = false,
+    val sourceDiagnostics: List<DiscoverySourceDiagnostics> = emptyList(),
+    val missingSourceAddressCount: Int = 0,
 )
 
 interface DeviceDiscoveryRepository {
