@@ -81,6 +81,7 @@ data class DeviceDiscoverySnapshot(
     val discoveryStarted: Boolean = false,
     val sourceDiagnostics: List<DiscoverySourceDiagnostics> = emptyList(),
     val missingSourceAddressCount: Int = 0,
+    val untrackedSourceCount: Int = 0,
 )
 
 interface DeviceDiscoveryRepository {
