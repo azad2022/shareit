@@ -17,10 +17,11 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
-import java.util.Locale
 import java.util.UUID
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
+import com.peyvand.core.domain.discovery.DiscoveryCandidateRegistry
+import com.peyvand.core.domain.discovery.DiscoverySourceDiagnostics
 import com.peyvand.core.domain.discovery.DeviceDiscoverySnapshot
 import com.peyvand.core.domain.discovery.DiscoveryOperation
 import com.peyvand.core.domain.discovery.DiscoveryStatus
@@ -70,13 +71,24 @@ class WifiDirectDeviceDiscoveryRepository(
         const val MAX_VISIBLE_PEERS = 64
     }
 
-    private data class PeerServiceKey(
-        val deviceAddress: String,
-        val instanceName: String,
+    private val candidateRegistry = DiscoveryCandidateRegistry(
+        maxPendingServices = MAX_PENDING_PEERS,
+        maxPendingRecords = MAX_PENDING_PEERS,
+        maxVisiblePeers = MAX_VISIBLE_PEERS,
     )
 
-    private val discoveredServices = linkedMapOf<PeerServiceKey, WifiP2pDevice>()
-    private val discoveredRecords = linkedMapOf<PeerServiceKey, Map<String, String>>()
+    // Address-to-token mapping exists only for the active scan. Raw addresses are
+    // never copied into the UI diagnostics snapshot or written to logs.
+    private val sourceTokensByAddress = linkedMapOf<String, String>()
+    private val sourceDiagnosticsByToken = linkedMapOf<String, DiscoverySourceDiagnostics>()
+    private var missingSourceAddressCount = 0
+
+    // Do not overlap a new scan with asynchronous cleanup from the previous scan.
+    private var cleanupInProgress = false
+    private var cleanupRequested = false
+    private var restartAfterCleanup = false
+    private var cleanupCallbacksRemaining = 0
+    private var cleanupPassId = 0L
 
     private val serviceInfo by lazy {
         WifiP2pDnsSdServiceInfo.newInstance(
@@ -101,6 +113,11 @@ class WifiDirectDeviceDiscoveryRepository(
             val wasMonitoring = monitoring
             generation += 1
             clearPendingPeers()
+            cleanupPassId += 1L
+            cleanupInProgress = false
+            cleanupRequested = false
+            restartAfterCleanup = false
+            cleanupCallbacksRemaining = 0
             channel = if (wasMonitoring) initializeChannel() else null
 
             mutableSnapshot.value = mutableSnapshot.value.copy(
@@ -115,6 +132,8 @@ class WifiDirectDeviceDiscoveryRepository(
                     DiscoveryStatus.IDLE
                 },
                 peers = emptyList(),
+                sourceDiagnostics = emptyList(),
+                missingSourceAddressCount = 0,
                 failure = if (wasMonitoring) {
                     DeviceDiscoveryFailure.PLATFORM_ERROR
                 } else {
@@ -277,9 +296,17 @@ class WifiDirectDeviceDiscoveryRepository(
         ) {
             return
         }
+        if (cleanupInProgress || cleanupRequested) {
+            restartAfterCleanup = true
+            return
+        }
 
         refreshAvailability()
         if (mutableSnapshot.value.availability != WifiDirectAvailability.READY) return
+        if (cleanupInProgress || cleanupRequested) {
+            restartAfterCleanup = true
+            return
+        }
 
         val manager = wifiP2pManager ?: run {
             setUnavailable()
@@ -294,6 +321,9 @@ class WifiDirectDeviceDiscoveryRepository(
 
         val requestGeneration = ++generation
         clearPendingPeers()
+        sourceTokensByAddress.clear()
+        sourceDiagnosticsByToken.clear()
+        missingSourceAddressCount = 0
         mutableSnapshot.value = mutableSnapshot.value.copy(
             status = DiscoveryStatus.STARTING,
             peers = emptyList(),
@@ -304,6 +334,11 @@ class WifiDirectDeviceDiscoveryRepository(
             txtRecordResponseCount = 0,
             acceptedTxtDomainCount = 0,
             compatibleTxtRecordCount = 0,
+            localServiceRegistered = false,
+            serviceRequestRegistered = false,
+            discoveryStarted = false,
+            sourceDiagnostics = emptyList(),
+            missingSourceAddressCount = 0,
         )
 
         try {
@@ -318,6 +353,15 @@ class WifiDirectDeviceDiscoveryRepository(
                         mutableSnapshot.value = mutableSnapshot.value.copy(
                             serviceResponseCount = mutableSnapshot.value.serviceResponseCount + 1,
                         )
+                        val sourceToken = sourceTokenFor(device.deviceAddress)
+                        sourceToken?.let { token ->
+                            updateSourceDiagnostics(token) { summary ->
+                                summary.copy(
+                                    serviceResponseCount = summary.serviceResponseCount + 1,
+                                )
+                            }
+                        }
+
                         val compatible =
                             PeyvandDiscoveryAdvertisement.isCompatibleInstanceName(instanceName) &&
                                 PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType(registrationType)
@@ -326,14 +370,27 @@ class WifiDirectDeviceDiscoveryRepository(
                                 acceptedServiceResponseCount =
                                     mutableSnapshot.value.acceptedServiceResponseCount + 1,
                             )
-                            val address = device.deviceAddress
-                            if (address.isNotBlank()) {
-                                val key = PeerServiceKey(
-                                    deviceAddress = address,
-                                    instanceName = instanceName.lowercase(Locale.ROOT),
-                                )
-                                rememberService(key, device)
-                                publishPeerIfCompatible(key, requestGeneration)
+                            sourceToken?.let { token ->
+                                updateSourceDiagnostics(token) { summary ->
+                                    summary.copy(
+                                        acceptedServiceResponseCount =
+                                            summary.acceptedServiceResponseCount + 1,
+                                    )
+                                }
+                            }
+
+                            val candidate = candidateRegistry.recordServiceResponse(
+                                deviceAddress = device.deviceAddress,
+                                instanceName = instanceName,
+                                displayName = device.deviceName,
+                            )
+                            if (candidate != null) {
+                                publishCandidates(requestGeneration)
+                                sourceToken?.let { token ->
+                                    updateSourceDiagnostics(token) { summary ->
+                                        summary.copy(candidatePublished = true)
+                                    }
+                                }
                             }
                         } else {
                             Log.d(
@@ -352,6 +409,15 @@ class WifiDirectDeviceDiscoveryRepository(
                         mutableSnapshot.value = mutableSnapshot.value.copy(
                             txtRecordResponseCount = mutableSnapshot.value.txtRecordResponseCount + 1,
                         )
+                        val sourceToken = sourceTokenFor(device.deviceAddress)
+                        sourceToken?.let { token ->
+                            updateSourceDiagnostics(token) { summary ->
+                                summary.copy(
+                                    txtRecordResponseCount = summary.txtRecordResponseCount + 1,
+                                )
+                            }
+                        }
+
                         val instanceName =
                             PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(fullDomain)
                         if (instanceName != null) {
@@ -359,26 +425,50 @@ class WifiDirectDeviceDiscoveryRepository(
                                 acceptedTxtDomainCount =
                                     mutableSnapshot.value.acceptedTxtDomainCount + 1,
                             )
+                            sourceToken?.let { token ->
+                                updateSourceDiagnostics(token) { summary ->
+                                    summary.copy(
+                                        acceptedTxtDomainCount =
+                                            summary.acceptedTxtDomainCount + 1,
+                                    )
+                                }
+                            }
+
                             val recordMap = record.toMap()
-                            if (PeyvandDiscoveryAdvertisement.isCompatible(recordMap)) {
+                            val metadataCompatible =
+                                PeyvandDiscoveryAdvertisement.isCompatible(recordMap)
+                            if (metadataCompatible) {
                                 mutableSnapshot.value = mutableSnapshot.value.copy(
                                     compatibleTxtRecordCount =
                                         mutableSnapshot.value.compatibleTxtRecordCount + 1,
                                 )
+                                sourceToken?.let { token ->
+                                    updateSourceDiagnostics(token) { summary ->
+                                        summary.copy(
+                                            compatibleTxtRecordCount =
+                                                summary.compatibleTxtRecordCount + 1,
+                                        )
+                                    }
+                                }
                             } else {
                                 Log.d(
                                     LOG_TAG,
                                     "DNS-SD TXT response has a valid PEYVAND domain but incompatible app/schema metadata",
                                 )
                             }
-                            val address = device.deviceAddress
-                            if (address.isNotBlank()) {
-                                val key = PeerServiceKey(
-                                    deviceAddress = address,
-                                    instanceName = instanceName.lowercase(Locale.ROOT),
-                                )
-                                rememberRecord(key, recordMap)
-                                publishPeerIfCompatible(key, requestGeneration)
+
+                            val candidate = candidateRegistry.recordTxtResponse(
+                                deviceAddress = device.deviceAddress,
+                                instanceName = instanceName,
+                                isCompatible = metadataCompatible,
+                            )
+                            if (candidate != null) {
+                                publishCandidates(requestGeneration)
+                                sourceToken?.let { token ->
+                                    updateSourceDiagnostics(token) { summary ->
+                                        summary.copy(candidatePublished = true)
+                                    }
+                                }
                             }
                         } else {
                             Log.d(
@@ -435,6 +525,7 @@ class WifiDirectDeviceDiscoveryRepository(
         val wasActive = mutableSnapshot.value.status.let {
             it == DiscoveryStatus.STARTING || it == DiscoveryStatus.DISCOVERING
         }
+        restartAfterCleanup = false
         generation += 1
         clearPendingPeers()
         mutableSnapshot.value = mutableSnapshot.value.copy(
@@ -450,25 +541,97 @@ class WifiDirectDeviceDiscoveryRepository(
 
     @SuppressLint("MissingPermission")
     private fun releaseDiscoveryRegistrations() {
-        val manager = wifiP2pManager ?: return
-        val activeChannel = channel ?: return
+        if (cleanupInProgress) {
+            // A second stop/failure signal arrived while the framework was still
+            // processing the first cleanup. Run one more pass before restart.
+            cleanupRequested = true
+            return
+        }
 
-        // Release both sides independently: one denied/failed platform call must
-        // not prevent the other registration from being cleared.
+        cleanupInProgress = true
+        beginCleanupPass()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun beginCleanupPass() {
+        val manager = wifiP2pManager
+        val activeChannel = channel
+        if (manager == null || activeChannel == null) {
+            cleanupInProgress = false
+            cleanupRequested = false
+            restartAfterCleanup = false
+            return
+        }
+
+        cleanupRequested = false
+        val passId = ++cleanupPassId
+        cleanupCallbacksRemaining = 2
+
+        // Keep both cleanup operations independent, but do not allow another
+        // scan to register services until both asynchronous callbacks complete.
         try {
-            manager.clearServiceRequests(activeChannel, noOpActionListener())
-        } catch (_: SecurityException) {
-            // Permission may have been revoked while discovery was active.
-        } catch (_: RuntimeException) {
-            // The framework may already have invalidated the P2P channel.
+            manager.clearServiceRequests(
+                activeChannel,
+                cleanupActionListener(passId, DiscoveryOperation.CLEAR_SERVICE_REQUESTS),
+            )
+        } catch (exception: SecurityException) {
+            Log.w(LOG_TAG, "P2P cleanup clearServiceRequests denied", exception)
+            finishCleanupAction(passId)
+        } catch (exception: RuntimeException) {
+            Log.w(LOG_TAG, "P2P cleanup clearServiceRequests failed", exception)
+            finishCleanupAction(passId)
         }
 
         try {
-            manager.clearLocalServices(activeChannel, noOpActionListener())
-        } catch (_: SecurityException) {
-            // Permission may have been revoked while discovery was active.
-        } catch (_: RuntimeException) {
-            // The framework may already have invalidated the P2P channel.
+            manager.clearLocalServices(
+                activeChannel,
+                cleanupActionListener(passId, DiscoveryOperation.CLEAR_LOCAL_SERVICES),
+            )
+        } catch (exception: SecurityException) {
+            Log.w(LOG_TAG, "P2P cleanup clearLocalServices denied", exception)
+            finishCleanupAction(passId)
+        } catch (exception: RuntimeException) {
+            Log.w(LOG_TAG, "P2P cleanup clearLocalServices failed", exception)
+            finishCleanupAction(passId)
+        }
+    }
+
+    private fun cleanupActionListener(
+        passId: Long,
+        operation: DiscoveryOperation,
+    ): WifiP2pManager.ActionListener = object : WifiP2pManager.ActionListener {
+        override fun onSuccess() {
+            if (passId != cleanupPassId) return
+            Log.d(LOG_TAG, "Wi-Fi Direct cleanup operation $operation succeeded")
+            finishCleanupAction(passId)
+        }
+
+        override fun onFailure(reason: Int) {
+            if (passId != cleanupPassId) return
+            Log.w(
+                LOG_TAG,
+                "Wi-Fi Direct cleanup operation $operation failed with framework reason=$reason",
+            )
+            finishCleanupAction(passId)
+        }
+    }
+
+    private fun finishCleanupAction(passId: Long) {
+        if (passId != cleanupPassId || !cleanupInProgress) return
+        if (cleanupCallbacksRemaining <= 0) return
+
+        cleanupCallbacksRemaining -= 1
+        if (cleanupCallbacksRemaining > 0) return
+
+        if (cleanupRequested) {
+            beginCleanupPass()
+            return
+        }
+
+        cleanupInProgress = false
+        if (restartAfterCleanup) {
+            restartAfterCleanup = false
+            if (monitoring) startDiscovery()
         }
     }
 
@@ -554,7 +717,10 @@ class WifiDirectDeviceDiscoveryRepository(
         onSuccess: () -> Unit,
     ): WifiP2pManager.ActionListener = object : WifiP2pManager.ActionListener {
         override fun onSuccess() {
-            if (isCurrent(expectedGeneration)) onSuccess()
+            if (isCurrent(expectedGeneration)) {
+                recordActionSuccess(expectedGeneration, operation)
+                onSuccess()
+            }
         }
 
         override fun onFailure(reason: Int) {
@@ -562,11 +728,23 @@ class WifiDirectDeviceDiscoveryRepository(
         }
     }
 
-    private fun noOpActionListener(): WifiP2pManager.ActionListener =
-        object : WifiP2pManager.ActionListener {
-            override fun onSuccess() = Unit
-            override fun onFailure(reason: Int) = Unit
-        }
+    private fun recordActionSuccess(
+        expectedGeneration: Long,
+        operation: DiscoveryOperation,
+    ) {
+        if (!isCurrent(expectedGeneration)) return
+        Log.d(LOG_TAG, "Wi-Fi Direct operation $operation succeeded")
+
+        val current = mutableSnapshot.value
+        mutableSnapshot.value = current.copy(
+            localServiceRegistered = current.localServiceRegistered ||
+                operation == DiscoveryOperation.ADD_LOCAL_SERVICE,
+            serviceRequestRegistered = current.serviceRequestRegistered ||
+                operation == DiscoveryOperation.ADD_SERVICE_REQUEST,
+            discoveryStarted = current.discoveryStarted ||
+                operation == DiscoveryOperation.DISCOVER_SERVICES,
+        )
+    }
 
     private fun handlePlatformFailure(
         expectedGeneration: Long,
@@ -604,66 +782,43 @@ class WifiDirectDeviceDiscoveryRepository(
         }
     }
 
-    private fun publishPeerIfCompatible(
-        key: PeerServiceKey,
-        expectedGeneration: Long,
-    ) {
+    private fun publishCandidates(expectedGeneration: Long) {
         if (!isCurrent(expectedGeneration)) return
-
-        val device = discoveredServices[key] ?: return
-        val record = discoveredRecords[key] ?: return
-        if (!PeyvandDiscoveryAdvertisement.isCompatible(record)) return
-
-        val address = key.deviceAddress
-        val peer = NearbyPeer(
-            id = address,
-            displayName = device.deviceName.takeIf { it.isNotBlank() },
-        )
-
-        val existingPeers = mutableSnapshot.value.peers
-        if (existingPeers.none { it.id == address } &&
-            existingPeers.size >= MAX_VISIBLE_PEERS
-        ) {
-            return
-        }
-        val peers = (existingPeers.filterNot { it.id == address } + peer)
-            .sortedBy { it.displayName?.lowercase().orEmpty() }
-
         mutableSnapshot.value = mutableSnapshot.value.copy(
-            peers = peers,
+            peers = candidateRegistry.snapshot(),
             failure = null,
         )
     }
 
-    private fun rememberService(key: PeerServiceKey, device: WifiP2pDevice) {
-        if (!discoveredServices.containsKey(key) &&
-            discoveredServices.size >= MAX_PENDING_PEERS
-        ) {
-            val oldestKey = discoveredServices.keys.firstOrNull()
-            if (oldestKey != null) {
-                discoveredServices.remove(oldestKey)
-                discoveredRecords.remove(oldestKey)
-            }
+    private fun sourceTokenFor(deviceAddress: String): String? {
+        if (deviceAddress.isBlank()) {
+            missingSourceAddressCount += 1
+            mutableSnapshot.value = mutableSnapshot.value.copy(
+                missingSourceAddressCount = missingSourceAddressCount,
+            )
+            Log.w(LOG_TAG, "DNS-SD callback omitted its source device address")
+            return null
         }
-        discoveredServices[key] = device
+
+        return sourceTokensByAddress.getOrPut(deviceAddress) {
+            "P${sourceTokensByAddress.size + 1}"
+        }
     }
 
-    private fun rememberRecord(key: PeerServiceKey, record: Map<String, String>) {
-        if (!discoveredRecords.containsKey(key) &&
-            discoveredRecords.size >= MAX_PENDING_PEERS
-        ) {
-            val oldestKey = discoveredRecords.keys.firstOrNull()
-            if (oldestKey != null) {
-                discoveredRecords.remove(oldestKey)
-                discoveredServices.remove(oldestKey)
-            }
-        }
-        discoveredRecords[key] = record
+    private fun updateSourceDiagnostics(
+        token: String,
+        update: (DiscoverySourceDiagnostics) -> DiscoverySourceDiagnostics,
+    ) {
+        val current = sourceDiagnosticsByToken[token] ?: DiscoverySourceDiagnostics(token)
+        val updated = update(current)
+        sourceDiagnosticsByToken[token] = updated
+        mutableSnapshot.value = mutableSnapshot.value.copy(
+            sourceDiagnostics = sourceDiagnosticsByToken.values.toList(),
+        )
     }
 
     private fun clearPendingPeers() {
-        discoveredServices.clear()
-        discoveredRecords.clear()
+        candidateRegistry.clear()
     }
 
     private fun isCurrent(expectedGeneration: Long): Boolean =
