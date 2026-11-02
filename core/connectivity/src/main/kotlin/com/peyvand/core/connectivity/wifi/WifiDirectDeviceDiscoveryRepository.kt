@@ -166,7 +166,6 @@ class WifiDirectDeviceDiscoveryRepository(
             if (intent.action != WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION) return
 
             invalidateP2pStateQuery()
-            cancelDiscoveryRetryTasks()
             p2pEnabled = intent.getIntExtra(
                 WifiP2pManager.EXTRA_WIFI_STATE,
                 WifiP2pManager.WIFI_P2P_STATE_DISABLED,
@@ -704,9 +703,14 @@ class WifiDirectDeviceDiscoveryRepository(
 
         cleanupRequested = false
         val passId = ++cleanupPassId
-        cleanupCallbacksRemaining = 2
-        requestClearServiceRequests(passId, manager, activeChannel)
-        requestClearLocalServices(passId, manager, activeChannel)
+        // Serialize framework mutations. P2P service cleanup calls are not
+        // submitted concurrently, which avoids self-inflicted BUSY responses.
+        cleanupCallbacksRemaining = 1
+        requestClearServiceRequests(passId, manager, activeChannel) {
+            requestClearLocalServices(passId, manager, activeChannel) {
+                finishCleanupAction(passId)
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -714,6 +718,7 @@ class WifiDirectDeviceDiscoveryRepository(
         passId: Long,
         manager: WifiP2pManager,
         activeChannel: WifiP2pManager.Channel,
+        onComplete: () -> Unit,
         retryAttempt: Int = 0,
     ) {
         try {
@@ -723,16 +728,23 @@ class WifiDirectDeviceDiscoveryRepository(
                     passId,
                     DiscoveryOperation.CLEAR_SERVICE_REQUESTS,
                     retryAttempt,
+                    onComplete,
                 ) { nextAttempt ->
-                    requestClearServiceRequests(passId, manager, activeChannel, nextAttempt)
+                    requestClearServiceRequests(
+                        passId,
+                        manager,
+                        activeChannel,
+                        onComplete,
+                        nextAttempt,
+                    )
                 },
             )
         } catch (exception: SecurityException) {
             Log.w(LOG_TAG, "P2P cleanup clearServiceRequests denied", exception)
-            finishCleanupAction(passId)
+            onComplete()
         } catch (exception: RuntimeException) {
             Log.w(LOG_TAG, "P2P cleanup clearServiceRequests failed", exception)
-            finishCleanupAction(passId)
+            onComplete()
         }
     }
 
@@ -741,6 +753,7 @@ class WifiDirectDeviceDiscoveryRepository(
         passId: Long,
         manager: WifiP2pManager,
         activeChannel: WifiP2pManager.Channel,
+        onComplete: () -> Unit,
         retryAttempt: Int = 0,
     ) {
         try {
@@ -750,16 +763,23 @@ class WifiDirectDeviceDiscoveryRepository(
                     passId,
                     DiscoveryOperation.CLEAR_LOCAL_SERVICES,
                     retryAttempt,
+                    onComplete,
                 ) { nextAttempt ->
-                    requestClearLocalServices(passId, manager, activeChannel, nextAttempt)
+                    requestClearLocalServices(
+                        passId,
+                        manager,
+                        activeChannel,
+                        onComplete,
+                        nextAttempt,
+                    )
                 },
             )
         } catch (exception: SecurityException) {
             Log.w(LOG_TAG, "P2P cleanup clearLocalServices denied", exception)
-            finishCleanupAction(passId)
+            onComplete()
         } catch (exception: RuntimeException) {
             Log.w(LOG_TAG, "P2P cleanup clearLocalServices failed", exception)
-            finishCleanupAction(passId)
+            onComplete()
         }
     }
 
@@ -767,12 +787,13 @@ class WifiDirectDeviceDiscoveryRepository(
         passId: Long,
         operation: DiscoveryOperation,
         retryAttempt: Int,
+        onComplete: () -> Unit,
         onBusyRetry: (Int) -> Unit,
     ): WifiP2pManager.ActionListener = object : WifiP2pManager.ActionListener {
         override fun onSuccess() {
-            if (passId != cleanupPassId) return
+            if (passId != cleanupPassId || !cleanupInProgress) return
             Log.d(LOG_TAG, "Wi-Fi Direct cleanup operation $operation succeeded")
-            finishCleanupAction(passId)
+            onComplete()
         }
 
         override fun onFailure(reason: Int) {
@@ -796,7 +817,7 @@ class WifiDirectDeviceDiscoveryRepository(
                 LOG_TAG,
                 "Wi-Fi Direct cleanup operation $operation failed with framework reason=$reason",
             )
-            finishCleanupAction(passId)
+            onComplete()
         }
     }
 

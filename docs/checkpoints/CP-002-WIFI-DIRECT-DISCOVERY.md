@@ -114,3 +114,10 @@ Keep `IN_PROGRESS` until every applicable criterion has reproducible evidence. U
 - Transient `WifiP2pManager.BUSY` responses were previously terminal. The follow-up retries advertise registration, typed service-request registration, service discovery and both P2P cleanup operations with bounded backoff (500/1,000/2,000 ms; at most three retries per operation). Retries are cancelled when the scan generation or cleanup pass becomes stale.
 - Keep the current directional roles: Receive advertises only; Send browses only. Do not add a second transport, connect, authentication or transfer as an unreviewed response to this discovery defect.
 - CP-002 remains `IN_PROGRESS`. Required next physical test: one device stays on Receive while the other starts Send; capture both screens and counters. Then reverse roles. Record exact model/API, app build SHA, permission/Location Mode state and elapsed time to first candidate. Repeat enough trials to measure reliability, not a single success.
+
+
+## Final retry-path review (2026-11-02)
+
+- A review of the retry implementation found that an ENABLED P2P state broadcast was cancelling active BUSY retries even though the radio remained available. The correction limits discovery-retry cancellation to P2P DISABLED and explicit lifecycle/scan invalidation.
+- Cleanup now submits `clearServiceRequests()` and only after its completion submits `clearLocalServices()`. This removes concurrent cleanup mutations as a source of avoidable framework contention. Each operation retains bounded BUSY retry.
+- These are source-level corrections only; physical discovery reliability remains unverified. CP-002 stays `IN_PROGRESS`.

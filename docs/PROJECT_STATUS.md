@@ -97,3 +97,10 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - A source audit of commit `2ac10cdb9e9abb2d7a7e11ad23f362b42ef62623` found that its documentation claimed an API 29+ `requestP2pState()` query, but its adapter did not actually invoke the API. The adapter could therefore remain in `CHECKING` if receiver registration yielded no sticky state intent. This documentation/implementation mismatch is corrected in the follow-up source change.
 - The follow-up also introduces bounded retries for transient Wi-Fi P2P `BUSY` responses during advertise, service-request registration, service browsing and cleanup. It does not add a fallback transport or connection/authentication/transfer code.
 - This correction has not yet been physically validated. Keep CP-002 `IN_PROGRESS`; green CI alone is not evidence of reliable two-phone discovery.
+
+
+## DNS-SD retry and cleanup ordering correction (2026-11-02)
+
+- A final lifecycle review found that the first bounded-retry implementation cancelled pending discovery retries on every P2P state broadcast, including an ENABLED broadcast. Since ENABLED does not invalidate a scan, this could leave the operation in STARTING without its scheduled retry. Retry cancellation now occurs only when P2P becomes disabled or the scan/lifecycle generation is invalidated.
+- P2P cleanup now serializes `clearServiceRequests()` followed by `clearLocalServices()`, rather than submitting both framework mutations concurrently. BUSY remains bounded-retry with the same retry policy.
+- The source correction is in follow-up commit `78278c37e1fa17574b69f408a23a1bb0cc61ffaf` and is pending CI validation.

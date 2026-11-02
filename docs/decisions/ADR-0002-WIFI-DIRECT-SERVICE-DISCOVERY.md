@@ -125,3 +125,10 @@ A follow-up source audit found that the preceding amendment described `WifiP2pMa
 - Retry exhaustion remains a visible failure; the app does not display an advertisement, active scan or peer unless the corresponding Android action succeeds.
 - No broad Bonjour query substitution is made in this amendment. The current typed PTR query remains standards-supported; comparison with Android's no-argument all-Bonjour sample remains an explicit controlled experiment, not an assumed fix.
 - No fallback transport, socket, connection, authentication or transfer feature is introduced. Physical reciprocal discovery is still required before CP-002 can be PASSED.
+
+
+## 2026-11-02 amendment — retry lifecycle and serialized cleanup
+
+- A P2P ENABLED state broadcast invalidates any outstanding state query, but must not cancel a BUSY retry belonging to an otherwise current discovery generation. Discovery retries are now cancelled by P2P DISABLED, explicit stop, channel loss, permission loss, or generation invalidation.
+- Cleanup operations are serialized: clear service requests first, then clear local services, and complete the cleanup pass only after both callbacks (or bounded terminal failures). Do not issue both framework mutations concurrently.
+- These ordering changes are intended to reduce self-induced BUSY contention and stale STARTING states. They still require physical-device confirmation; they do not establish discovery performance or reliability by themselves.
