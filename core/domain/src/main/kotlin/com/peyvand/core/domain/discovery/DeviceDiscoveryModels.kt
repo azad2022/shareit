@@ -93,6 +93,23 @@ object WifiDirectServiceDiscoveryRearmPolicy {
         consecutiveStops == 4 -> 8_000L
         else -> 15_000L
     }
+
+    fun shouldRearm(
+        activeRole: DiscoveryRole?,
+        monitoring: Boolean,
+        cleanupInProgress: Boolean,
+        cleanupRequested: Boolean,
+        startInFlight: Boolean,
+        discoveryRequestAccepted: Boolean,
+        platformState: PlatformDiscoveryState,
+    ): Boolean =
+        monitoring &&
+            activeRole == DiscoveryRole.BROWSE_ONLY &&
+            !cleanupInProgress &&
+            !cleanupRequested &&
+            !startInFlight &&
+            discoveryRequestAccepted &&
+            platformState == PlatformDiscoveryState.STOPPED
 }
 
 /**
@@ -125,6 +142,7 @@ data class DeviceDiscoverySnapshot(
     /** Current system scan state; unknown is never presented as an active scan. */
     val platformDiscoveryState: PlatformDiscoveryState = PlatformDiscoveryState.UNKNOWN,
     val discoveryStopCount: Int = 0,
+    /** Re-arm discoverServices() requests accepted by Android; not confirmed STARTED events. */
     val discoveryRestartCount: Int = 0,
     val sourceDiagnostics: List<DiscoverySourceDiagnostics> = emptyList(),
     val missingSourceAddressCount: Int = 0,

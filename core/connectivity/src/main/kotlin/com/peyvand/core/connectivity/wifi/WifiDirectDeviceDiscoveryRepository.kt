@@ -799,11 +799,15 @@ class WifiDirectDeviceDiscoveryRepository(
         source: String,
     ) {
         if (!isCurrent(expectedGeneration) ||
-            activeRole != DiscoveryRole.BROWSE_ONLY ||
-            !monitoring ||
-            cleanupInProgress ||
-            cleanupRequested ||
-            serviceDiscoveryStartInFlight ||
+            !WifiDirectServiceDiscoveryRearmPolicy.shouldRearm(
+                activeRole = activeRole,
+                monitoring = monitoring,
+                cleanupInProgress = cleanupInProgress,
+                cleanupRequested = cleanupRequested,
+                startInFlight = serviceDiscoveryStartInFlight,
+                discoveryRequestAccepted = mutableSnapshot.value.discoveryStarted,
+                platformState = mutableSnapshot.value.platformDiscoveryState,
+            ) ||
             pendingServiceDiscoveryRearmTask != null
         ) {
             return
@@ -819,12 +823,15 @@ class WifiDirectDeviceDiscoveryRepository(
                 pendingServiceDiscoveryRearmTask = null
             }
             if (!isCurrent(expectedGeneration) ||
-                activeRole != DiscoveryRole.BROWSE_ONLY ||
-                !monitoring ||
-                cleanupInProgress ||
-                cleanupRequested ||
-                serviceDiscoveryStartInFlight ||
-                mutableSnapshot.value.platformDiscoveryState == PlatformDiscoveryState.RUNNING
+                !WifiDirectServiceDiscoveryRearmPolicy.shouldRearm(
+                    activeRole = activeRole,
+                    monitoring = monitoring,
+                    cleanupInProgress = cleanupInProgress,
+                    cleanupRequested = cleanupRequested,
+                    startInFlight = serviceDiscoveryStartInFlight,
+                    discoveryRequestAccepted = mutableSnapshot.value.discoveryStarted,
+                    platformState = mutableSnapshot.value.platformDiscoveryState,
+                )
             ) {
                 return@Runnable
             }

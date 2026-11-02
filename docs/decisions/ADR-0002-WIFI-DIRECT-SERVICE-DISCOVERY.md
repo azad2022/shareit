@@ -144,3 +144,8 @@ The browser role now treats Android's discovery lifecycle as authoritative inste
 - Discovery diagnostics distinguish framework state from accepted API calls and show stop/restart counts. Discovery metadata remains unverified; no connection, authentication, or transfer is introduced.
 
 Android documents that discovery can stop during connection setup. A future connection implementation must explicitly suspend this re-arm controller before initiating a connection and resume it only when connection state permits scanning. Physical-device testing remains a release gate; this amendment is not a claim of cross-vendor reliability.
+### Diagnostic and motion accuracy clarification
+
+- The discovery radar animation is active for the browser only when the framework state is confirmed as `RUNNING`. `STOPPED` displays a re-arm state; `UNKNOWN` does not animate as though the radio scan were active.
+- The restart counter represents `discoverServices()` re-arm requests accepted by the framework ActionListener, not proof that the radio scan entered `STARTED`. The separate platform-state field is the evidence for that transition.
+- Re-arm eligibility is expressed as a pure domain policy and covered by tests for advertiser role, monitoring, cleanup, in-flight start, accepted initial request, and platform STOPPED state.

@@ -79,6 +79,8 @@
     <string name="discovery_starting">در حال آماده‌سازی جست‌وجو…</string>
     <string name="discovery_advertising">دستگاه برای دریافت فایل آمادهٔ شناسایی است.</string>
     <string name="discovery_scanning">در حال جست‌وجوی دستگاه‌های دارای پیوند</string>
+    <string name="discovery_scanning_rearming">جست‌وجوی سیستم متوقف شده؛ در حال راه‌اندازی مجدد آن هستیم…</string>
+    <string name="discovery_scanning_state_unknown">در انتظار تأیید وضعیت جست‌وجو از سیستم…</string>
     <string name="discovery_failed">جست‌وجو با مشکل روبه‌رو شد.</string>
     <string name="discovery_start">جست‌وجوی دستگاه‌های نزدیک</string>
     <string name="discovery_stop">توقف جست‌وجو</string>
@@ -116,7 +118,7 @@
     <string name="discovery_diagnostics_platform_unknown">نامشخص</string>
     <string name="discovery_diagnostics_platform_running">در حال اجرا</string>
     <string name="discovery_diagnostics_platform_stopped">متوقف</string>
-    <string name="discovery_diagnostics_platform_state">وضعیت واقعی اسکن سیستم: %1$s | توقف‌ها: %2$d | شروع‌های مجدد موفق: %3$d</string>
+    <string name="discovery_diagnostics_platform_state">وضعیت واقعی اسکن سیستم: %1$s | توقف‌ها: %2$d | درخواست‌های شروع مجدد پذیرفته‌شده: %3$d</string>
     <string name="discovery_diagnostics_source">منبع %1$s — سرویس: %2$d، پذیرفته: %3$d | TXT: %4$d، دامنه معتبر: %5$d، سازگار: %6$d | نمایش دستگاه: %7$s</string>
     <string name="discovery_diagnostics_missing_source">%1$d پاسخ بدون نشانی منبع دریافت شد.</string>
     <string name="discovery_diagnostics_untracked_sources">%1$d منبع بیشتر از سقف تشخیصی بود و فقط در شمارندهٔ کلی ثبت شد.</string>

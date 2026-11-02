@@ -63,6 +63,61 @@ class WifiDirectDiscoveryPolicyTest {
     }
 
     @Test
+    fun `rearm requires an active browser and a confirmed stopped platform scan`() {
+        assertTrue(
+            WifiDirectServiceDiscoveryRearmPolicy.shouldRearm(
+                activeRole = DiscoveryRole.BROWSE_ONLY,
+                monitoring = true,
+                cleanupInProgress = false,
+                cleanupRequested = false,
+                startInFlight = false,
+                discoveryRequestAccepted = true,
+                platformState = PlatformDiscoveryState.STOPPED,
+            ),
+        )
+    }
+
+    @Test
+    fun `rearm is blocked for advertiser stopped unknown cleanup or pending start states`() {
+        val valid = mapOf(
+            "activeRole" to DiscoveryRole.BROWSE_ONLY,
+            "monitoring" to true,
+            "cleanupInProgress" to false,
+            "cleanupRequested" to false,
+            "startInFlight" to false,
+            "discoveryRequestAccepted" to true,
+            "platformState" to PlatformDiscoveryState.STOPPED,
+        )
+
+        fun allowed(
+            activeRole: DiscoveryRole? = valid["activeRole"] as DiscoveryRole,
+            monitoring: Boolean = valid["monitoring"] as Boolean,
+            cleanupInProgress: Boolean = valid["cleanupInProgress"] as Boolean,
+            cleanupRequested: Boolean = valid["cleanupRequested"] as Boolean,
+            startInFlight: Boolean = valid["startInFlight"] as Boolean,
+            discoveryRequestAccepted: Boolean = valid["discoveryRequestAccepted"] as Boolean,
+            platformState: PlatformDiscoveryState = valid["platformState"] as PlatformDiscoveryState,
+        ) = WifiDirectServiceDiscoveryRearmPolicy.shouldRearm(
+            activeRole,
+            monitoring,
+            cleanupInProgress,
+            cleanupRequested,
+            startInFlight,
+            discoveryRequestAccepted,
+            platformState,
+        )
+
+        assertFalse(allowed(activeRole = DiscoveryRole.ADVERTISE_ONLY))
+        assertFalse(allowed(monitoring = false))
+        assertFalse(allowed(cleanupInProgress = true))
+        assertFalse(allowed(cleanupRequested = true))
+        assertFalse(allowed(startInFlight = true))
+        assertFalse(allowed(discoveryRequestAccepted = false))
+        assertFalse(allowed(platformState = PlatformDiscoveryState.RUNNING))
+        assertFalse(allowed(platformState = PlatformDiscoveryState.UNKNOWN))
+    }
+
+    @Test
     fun `service instance name requires PEYVAND prefix and an eight digit hexadecimal suffix`() {
         assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("PEYVAND-a1b2c3d4"))
         assertTrue(PeyvandDiscoveryAdvertisement.isCompatibleInstanceName("peyvand-0123ABCD"))

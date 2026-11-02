@@ -27,6 +27,7 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 - [ ] The UI distinguishes an unverified discovery candidate from a metadata-compatible peer and from an authenticated peer. Discovery metadata never authorizes a connection.
 - [ ] Diagnostics distinguish local advertisement registration, service-request registration, discovery-start action results, raw callbacks, filter results, source correlation and peer publication without exposing full MAC addresses or user-chosen device names.
 - [ ] Browser diagnostics distinguish accepted `discoverServices()` calls from actual framework discovery state; a confirmed `STOPPED` state re-arms service discovery once with bounded backoff, without duplicate service requests or overlapping starts.
+- [ ] Browser radar animation and status text reflect only a confirmed framework `RUNNING` state; `STOPPED` and `UNKNOWN` are visibly distinct and do not imply active radio scanning.
 - [ ] Discovery metadata is never described as peer authentication; no socket, pairing, transfer or APK operation is part of CP-002.
 - [ ] Cancellation, Activity stop, permission loss, Location Mode loss, P2P disabled state, channel loss and action failure invalidate stale callbacks, clear pending peer data and perform independent best-effort cleanup of P2P requests and local service advertisements.
 - [ ] A lost P2P channel can be reinitialized on a later foreground availability refresh.
@@ -131,3 +132,6 @@ Keep `IN_PROGRESS` until every applicable criterion has reproducible evidence. U
 - Added on-screen diagnostics for actual framework discovery state and stop/successful-restart counts.
 - Added pure domain tests for the re-arm backoff policy.
 - This source update has not been compiled or run against physical phones in this environment; CP-002 remains `IN_PROGRESS`.
+- The browser radar is now driven by the actual platform scan state: confirmed RUNNING animates; STOPPED shows recovery; UNKNOWN remains non-animated. This avoids presenting a successful API request as proof that the radio is currently scanning.
+- The re-arm eligibility decision is centralized in an Android-free domain policy with unit coverage for role, foreground monitoring, cleanup, in-flight starts, accepted discovery requests and confirmed STOPPED state.
+- The restart counter is explicitly described as accepted re-arm API requests, not confirmed platform starts.

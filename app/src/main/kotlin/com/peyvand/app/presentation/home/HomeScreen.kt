@@ -226,8 +226,13 @@ fun DeviceDiscoveryScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 RadarScanner(
-                    isActive = state.status == DiscoveryStatus.ADVERTISING ||
-                        state.status == DiscoveryStatus.DISCOVERING,
+                    isActive = when (role) {
+                        DiscoveryRole.ADVERTISE_ONLY ->
+                            state.status == DiscoveryStatus.ADVERTISING
+                        DiscoveryRole.BROWSE_ONLY ->
+                            state.status == DiscoveryStatus.DISCOVERING &&
+                                state.platformDiscoveryState == PlatformDiscoveryState.RUNNING
+                    },
                 )
 
                 Text(
@@ -235,8 +240,20 @@ fun DeviceDiscoveryScreen(
                         DiscoveryStatus.IDLE -> stringResource(R.string.discovery_idle)
                         DiscoveryStatus.STARTING -> stringResource(R.string.discovery_starting)
                         DiscoveryStatus.ADVERTISING -> stringResource(R.string.discovery_advertising)
-                        DiscoveryStatus.DISCOVERING ->
-                            stringResource(R.string.discovery_scanning)
+                        DiscoveryStatus.DISCOVERING -> when (role) {
+                            DiscoveryRole.ADVERTISE_ONLY ->
+                                stringResource(R.string.discovery_scanning)
+                            DiscoveryRole.BROWSE_ONLY -> stringResource(
+                                when (state.platformDiscoveryState) {
+                                    PlatformDiscoveryState.UNKNOWN ->
+                                        R.string.discovery_scanning_state_unknown
+                                    PlatformDiscoveryState.RUNNING ->
+                                        R.string.discovery_scanning
+                                    PlatformDiscoveryState.STOPPED ->
+                                        R.string.discovery_scanning_rearming
+                                },
+                            )
+                        }
                         DiscoveryStatus.FAILED -> stringResource(R.string.discovery_failed)
                     },
                     style = MaterialTheme.typography.titleMedium,
