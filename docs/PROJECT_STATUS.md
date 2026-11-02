@@ -57,7 +57,7 @@
 - **Request overload clarification:** newInstance(SERVICE_TYPE) is the typed Bonjour PTR search and is retained for service discovery. It does not request TXT. TXT is optional in Android Wi-Fi Direct DNS-SD. The two-argument overload is for a known instance's TXT data and is not a substitute for the initial service-type query. Zero TXT callbacks alone are not proof that service discovery failed.
 - The phone with zero raw callbacks remains unlocalized. New diagnostics expose each registration/start action result and group service/TXT responses by scan-local pseudonymous source tokens. They still cannot prove the intended physical handset was the source without controlled one-advertiser/one-browser tests.
 - Cleanup now defers a new scan until the asynchronous request/local-service cleanup callbacks finish. This removes one identified clear/restart overlap, but no physical evidence yet proves it was the root cause of the second phone's zero callbacks.
-- Both send and receive routes still advertise and browse in the same operation. No role behavior was changed; test advertiser-only/browser-only direction separately before deciding whether to specialize those roles.
+- **Historical note superseded by current implementation:** the earlier revision advertised and browsed on both routes. The current source assigns `ADVERTISE_ONLY` to Receive and `BROWSE_ONLY` to Send. Preserve these directional roles in the next physical test; do not treat the historical behavior as current.
 - CI and physical testing of the latest source tree are pending. CP-002 remains IN_PROGRESS; no connection, pairing, TLS or transfer is implemented.
 
 ## Module boundaries
@@ -112,3 +112,8 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - The discovery screen exposes actual platform state and stop/restart counters. Pure unit coverage was added for the re-arm-delay policy.
 - CP-002 remains `IN_PROGRESS`. This connector-only source update has not been compiled or run on physical phones; CI was intentionally not awaited per product-owner instruction.
 - Follow-up audit tightened the scan-state presentation: the browser radar now animates only after the framework reports RUNNING; STOPPED and UNKNOWN have separate Persian status copy. The re-arm gate is a pure domain policy with negative-case unit coverage. The displayed restart counter counts framework-accepted re-arm requests, not measured radio-start confirmations.
+
+## Current sender/receiver role clarification (2026-11-02)
+
+- The active implementation has asymmetric roles: Receive registers only the local PEYVAND DNS-SD advertisement; Send registers only the PEYVAND service request and browses. Older text in this status document that described both routes advertising and browsing has been superseded.
+- The current lifecycle controller applies only to the browser role. No role change, fallback transport, connection, pairing, or file-transfer implementation is implied.
