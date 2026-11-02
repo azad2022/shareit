@@ -127,3 +127,11 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - The sender/receiver roles, local service advertisement, TXT-optional policy, lifecycle/retry behavior and cleanup ordering are unchanged.
 - This is not a confirmed root-cause fix. The purpose is to determine whether a device/firmware combination mishandles the narrower typed PTR request. A broader query may increase callback traffic.
 - ADR-0005 records the controlled two-device test and rollback criteria. CI and physical validation of the experiment are pending. CP-002 remains `IN_PROGRESS`.
+
+
+## 2026-11-02 — first-file transport production gate
+
+- Confirmed the current Android app configuration is `compileSdk=37`, `targetSdk=36`, `minSdk=26`; the Debug application ID remains provisional (`com.peyvand.app`).
+- Android's current Local Network Protection guidance states that Android 16 has an opt-in phase and Android 17 enforces runtime `ACCESS_LOCAL_NETWORK` for apps targeting SDK 37 or higher when performing direct local-network TCP/UDP operations. The future socket-transfer checkpoint must cover this permission, denial/revocation, and Android 16 opt-in tests before raising targetSdk to 37. Do not add that permission prematurely while still targeting SDK 36.
+- No connection, TLS, pairing, socket or file-transfer implementation is added by the current DNS-SD experiment. First-file work remains gated on stable two-device discovery and a reviewed secure-session ADR.
+- Architecture note: `docs/architecture/FOUNDATION.md` now reflects that a valid service response publishes an unverified candidate without waiting for optional TXT metadata.
