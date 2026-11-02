@@ -22,7 +22,7 @@ Use Android `WifiP2pManager` DNS-SD service discovery for CP-002:
 - TXT is optional metadata. Its absence must not suppress a service candidate. When a TXT callback arrives, parse its full domain strictly, correlate it by transient source-device address plus normalized service instance name, and validate app/schema values as a separate metadata status.
 - A candidate or compatible public TXT record is not authentication. UI must not imply trust; connection and transfer require a separate authenticated peer handshake and explicit consent.
 - Keep service/TXT association order-independent, bounded, generation-scoped and resilient to delayed, duplicated or absent callbacks.
-- Select the service-request factory overload intentionally. Android documents newInstance() as all Bonjour services, newInstance(serviceType) as services matching a type, and newInstance(instanceName, serviceType) as a TXT-data request for a specific instance. Do not assume the one-argument form requests TXT for every instance. The present implementation uses the one-argument service-type form; zero TXT callbacks are a plausible consequence and require a controlled device test.
+- Select the service-request factory overload intentionally. Android documents newInstance() as all Bonjour services, newInstance(serviceType) as the typed Bonjour service/PTR query, and newInstance(instanceName, serviceType) as a TXT-data query for one known instance. The current one-argument form is retained for initial typed service discovery; it does not request TXT. Do not treat a zero TXT callback count as proof that the typed service query failed. If TXT is required in a future change, issue a bounded per-instance TXT request only after learning the instance name and account for request removal, duplicate callbacks and limits.
 - The current sender and receiver UI flows both enter the same adapter method, which registers a local advertisement and a discovery request. Keep this bidirectional behavior only as a provisional implementation detail until one-way advertiser/browser role tests verify the intended product flow.
 - Bound pending peer records and visible peers. Pending records are process-local and transient.
 - A monotonically increasing scan generation invalidates callbacks after stop, availability loss, channel loss or failure.
@@ -72,12 +72,15 @@ Discovery is not trust. Any later connection or data exchange requires explicit 
 
 The original decision incorrectly made a matching TXT record a hard prerequisite for listing a service response. That is now superseded. Android's Wi-Fi Direct guide states that TXT may optionally be broadcast and demonstrates service discovery through separate service and TXT listeners. The API reference further distinguishes the three request factory overloads: all Bonjour services, services of a specified type, and TXT data for a specified instance.
 
-The current source has two related defects to resolve in the next implementation change:
+Implementation amendment (2026-11-02):
 
-1. publishPeerIfCompatible() currently requires both callback maps and compatible TXT metadata before publishing any peer. A service callback that passed the strict name/type filters is discarded from the visible peer list if TXT never arrives.
-2. The current serviceRequest uses newInstance(SERVICE_TYPE), which the API reference describes as a service-type search, not the per-instance TXT request. This is a credible explanation for the observed missing TXT callback, but must be confirmed with controlled testing rather than stated as certain.
+1. The TXT-gated publication defect is fixed. DiscoveryCandidateRegistry publishes a candidate immediately after strict service-name/type validation. A matching TXT callback received before or after the service callback only sets metadata status; an incompatible or missing TXT record does not suppress the candidate.
+2. The typed serviceRequest overload remains the correct initial PTR/service-type query. It does not ask for TXT. The absence of TXT callbacks is expected unless a separate per-instance TXT query is issued; TXT itself is optional, so no TXT request is required for candidate discovery.
+3. The adapter reports successful local-service registration, service-request registration and discoverServices() start independently. Callback counters are grouped by scan-local pseudonymous source tokens. The raw P2P address and user-chosen device name are not surfaced in these summaries.
+4. Cleanup of service requests and local advertisements is awaited before an explicit queued restart is allowed. Repeated cleanup requests trigger another pass to avoid overlapping clear/restart actions.
 
-Owner-reported diagnostic result on 2026-11-02: one test phone reported service=1, accepted service=1, TXT=0, valid TXT domain=0, compatible TXT=0, peers=0; the other reported all counters=0. Aggregate counters do not identify the callback's source phone. Keep CP-002 IN_PROGRESS.
+Owner-reported pre-fix diagnostic result on 2026-11-02: one test phone reported service=1, accepted service=1, TXT=0, valid TXT domain=0, compatible TXT=0, peers=0; the other reported all counters=0. This does not identify the second phone's root cause. Keep CP-002 IN_PROGRESS pending CI and physical retest.
+
 
 ### Required verification
 
