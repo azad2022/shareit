@@ -15,8 +15,15 @@ enum class WifiDirectAvailability {
 enum class DiscoveryStatus {
     IDLE,
     STARTING,
+    ADVERTISING,
     DISCOVERING,
     FAILED,
+}
+
+/** A scan has one explicit DNS-SD responsibility; send and receive are not symmetric. */
+enum class DiscoveryRole {
+    ADVERTISE_ONLY,
+    BROWSE_ONLY,
 }
 
 /** TXT describes public compatibility metadata; it is not peer authentication. */
@@ -94,7 +101,7 @@ interface DeviceDiscoveryRepository {
     fun stopMonitoring()
 
     fun refreshAvailability()
-    fun startDiscovery()
+    fun startDiscovery(role: DiscoveryRole)
     fun stopDiscovery()
 }
 
