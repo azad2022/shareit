@@ -23,6 +23,7 @@ import com.peyvand.core.domain.discovery.DiscoveryCandidateRegistry
 import com.peyvand.core.domain.discovery.DiscoverySourceDiagnostics
 import com.peyvand.core.domain.discovery.DeviceDiscoverySnapshot
 import com.peyvand.core.domain.discovery.DiscoveryOperation
+import com.peyvand.core.domain.discovery.DiscoveryRole
 import com.peyvand.core.domain.discovery.DiscoveryStatus
 import com.peyvand.core.domain.discovery.PeyvandDiscoveryAdvertisement
 import com.peyvand.core.domain.discovery.WifiDirectAvailability
@@ -33,8 +34,8 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Wi-Fi Direct DNS-SD adapter.
  *
- * It discovers PEYVAND service advertisements only. It does not connect to
- * peers, authenticate peers, open sockets, or transfer data.
+ * It advertises PEYVAND availability or browses for compatible services based
+ * on the active screen role. It does not connect, authenticate, or transfer.
  */
 class WifiDirectDeviceDiscoveryRepository(
     context: Context,
@@ -85,7 +86,8 @@ class WifiDirectDeviceDiscoveryRepository(
     // Do not overlap a new scan with asynchronous cleanup from the previous scan.
     private var cleanupInProgress = false
     private var cleanupRequested = false
-    private var restartAfterCleanup = false
+    private var activeRole: DiscoveryRole? = null
+    private var restartRoleAfterCleanup: DiscoveryRole? = null
     private var cleanupCallbacksRemaining = 0
     private var cleanupPassId = 0L
 
@@ -115,7 +117,8 @@ class WifiDirectDeviceDiscoveryRepository(
             cleanupPassId += 1L
             cleanupInProgress = false
             cleanupRequested = false
-            restartAfterCleanup = false
+            activeRole = null
+            restartRoleAfterCleanup = null
             cleanupCallbacksRemaining = 0
             channel = if (wasMonitoring) initializeChannel() else null
 
@@ -154,11 +157,15 @@ class WifiDirectDeviceDiscoveryRepository(
 
             if (p2pEnabled == false) {
                 val wasDiscovering = mutableSnapshot.value.status.let {
-                    it == DiscoveryStatus.STARTING || it == DiscoveryStatus.DISCOVERING
+                    it == DiscoveryStatus.STARTING ||
+                        it == DiscoveryStatus.ADVERTISING ||
+                        it == DiscoveryStatus.DISCOVERING
                 }
                 generation += 1
                 clearPendingPeers()
                 if (wasDiscovering) releaseDiscoveryRegistrations()
+                activeRole = null
+                restartRoleAfterCleanup = null
                 mutableSnapshot.value = mutableSnapshot.value.copy(
                     availability = WifiDirectAvailability.WIFI_P2P_DISABLED,
                     status = DiscoveryStatus.IDLE,
@@ -280,31 +287,37 @@ class WifiDirectDeviceDiscoveryRepository(
 
         if (availability != WifiDirectAvailability.READY) {
             val wasDiscovering = current.status.let {
-                it == DiscoveryStatus.STARTING || it == DiscoveryStatus.DISCOVERING
+                it == DiscoveryStatus.STARTING ||
+                    it == DiscoveryStatus.ADVERTISING ||
+                    it == DiscoveryStatus.DISCOVERING
             }
             generation += 1
             clearPendingPeers()
+            activeRole = null
+            restartRoleAfterCleanup = null
             if (wasDiscovering) releaseDiscoveryRegistrations()
         }
     }
 
     @SuppressLint("MissingPermission")
-    override fun startDiscovery() {
+    override fun startDiscovery(role: DiscoveryRole) {
         val currentStatus = mutableSnapshot.value.status
-        if (currentStatus == DiscoveryStatus.STARTING ||
+        val isActive = currentStatus == DiscoveryStatus.STARTING ||
+            currentStatus == DiscoveryStatus.ADVERTISING ||
             currentStatus == DiscoveryStatus.DISCOVERING
-        ) {
-            return
-        }
+
+        if (isActive && activeRole == role) return
+        if (isActive) stopDiscovery()
+
         if (cleanupInProgress || cleanupRequested) {
-            restartAfterCleanup = true
+            restartRoleAfterCleanup = role
             return
         }
 
         refreshAvailability()
         if (mutableSnapshot.value.availability != WifiDirectAvailability.READY) return
         if (cleanupInProgress || cleanupRequested) {
-            restartAfterCleanup = true
+            restartRoleAfterCleanup = role
             return
         }
 
@@ -320,6 +333,7 @@ class WifiDirectDeviceDiscoveryRepository(
         }
 
         val requestGeneration = ++generation
+        activeRole = role
         clearPendingPeers()
         sourceTokensByAddress.clear()
         sourceDiagnosticsByToken.clear()
@@ -344,154 +358,164 @@ class WifiDirectDeviceDiscoveryRepository(
         )
 
         try {
-            manager.setDnsSdResponseListeners(
-                activeChannel,
-                WifiP2pManager.DnsSdServiceResponseListener {
-                        instanceName,
-                        registrationType,
-                        device,
-                    ->
-                    if (isCurrent(requestGeneration)) {
-                        mutableSnapshot.value = mutableSnapshot.value.copy(
-                            serviceResponseCount = mutableSnapshot.value.serviceResponseCount + 1,
-                        )
-                        val sourceToken = sourceTokenFor(device.deviceAddress)
-                        sourceToken?.let { token ->
-                            updateSourceDiagnostics(token) { summary ->
-                                summary.copy(
-                                    serviceResponseCount = summary.serviceResponseCount + 1,
-                                )
-                            }
-                        }
-
-                        val compatible =
-                            PeyvandDiscoveryAdvertisement.isCompatibleInstanceName(instanceName) &&
-                                PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType(registrationType)
-                        if (compatible) {
+            if (role == DiscoveryRole.BROWSE_ONLY) {
+                manager.setDnsSdResponseListeners(
+                    activeChannel,
+                    WifiP2pManager.DnsSdServiceResponseListener {
+                            instanceName,
+                            registrationType,
+                            device,
+                        ->
+                        if (isCurrent(requestGeneration)) {
                             mutableSnapshot.value = mutableSnapshot.value.copy(
-                                acceptedServiceResponseCount =
-                                    mutableSnapshot.value.acceptedServiceResponseCount + 1,
+                                serviceResponseCount = mutableSnapshot.value.serviceResponseCount + 1,
                             )
+                            val sourceToken = sourceTokenFor(device.deviceAddress)
                             sourceToken?.let { token ->
                                 updateSourceDiagnostics(token) { summary ->
                                     summary.copy(
-                                        acceptedServiceResponseCount =
-                                            summary.acceptedServiceResponseCount + 1,
+                                        serviceResponseCount = summary.serviceResponseCount + 1,
                                     )
                                 }
                             }
 
-                            val candidate = candidateRegistry.recordServiceResponse(
-                                deviceAddress = device.deviceAddress,
-                                instanceName = instanceName,
-                                displayName = device.deviceName,
-                            )
-                            if (candidate != null) {
-                                publishCandidates(requestGeneration)
-                                sourceToken?.let { token ->
-                                    updateSourceDiagnostics(token) { summary ->
-                                        summary.copy(candidatePublished = true)
-                                    }
-                                }
-                            }
-                        } else {
-                            Log.d(
-                                LOG_TAG,
-                                "DNS-SD service response rejected by PEYVAND name/type validation",
-                            )
-                        }
-                    }
-                },
-                WifiP2pManager.DnsSdTxtRecordListener {
-                        fullDomain,
-                        record,
-                        device,
-                    ->
-                    if (isCurrent(requestGeneration)) {
-                        mutableSnapshot.value = mutableSnapshot.value.copy(
-                            txtRecordResponseCount = mutableSnapshot.value.txtRecordResponseCount + 1,
-                        )
-                        val sourceToken = sourceTokenFor(device.deviceAddress)
-                        sourceToken?.let { token ->
-                            updateSourceDiagnostics(token) { summary ->
-                                summary.copy(
-                                    txtRecordResponseCount = summary.txtRecordResponseCount + 1,
-                                )
-                            }
-                        }
-
-                        val instanceName =
-                            PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(fullDomain)
-                        if (instanceName != null) {
-                            mutableSnapshot.value = mutableSnapshot.value.copy(
-                                acceptedTxtDomainCount =
-                                    mutableSnapshot.value.acceptedTxtDomainCount + 1,
-                            )
-                            sourceToken?.let { token ->
-                                updateSourceDiagnostics(token) { summary ->
-                                    summary.copy(
-                                        acceptedTxtDomainCount =
-                                            summary.acceptedTxtDomainCount + 1,
-                                    )
-                                }
-                            }
-
-                            val recordMap = record.toMap()
-                            val metadataCompatible =
-                                PeyvandDiscoveryAdvertisement.isCompatible(recordMap)
-                            if (metadataCompatible) {
+                            val compatible =
+                                PeyvandDiscoveryAdvertisement.isCompatibleInstanceName(instanceName) &&
+                                    PeyvandDiscoveryAdvertisement.isCompatibleRegistrationType(registrationType)
+                            if (compatible) {
                                 mutableSnapshot.value = mutableSnapshot.value.copy(
-                                    compatibleTxtRecordCount =
-                                        mutableSnapshot.value.compatibleTxtRecordCount + 1,
+                                    acceptedServiceResponseCount =
+                                        mutableSnapshot.value.acceptedServiceResponseCount + 1,
                                 )
                                 sourceToken?.let { token ->
                                     updateSourceDiagnostics(token) { summary ->
                                         summary.copy(
-                                            compatibleTxtRecordCount =
-                                                summary.compatibleTxtRecordCount + 1,
+                                            acceptedServiceResponseCount =
+                                                summary.acceptedServiceResponseCount + 1,
                                         )
+                                    }
+                                }
+
+                                val candidate = candidateRegistry.recordServiceResponse(
+                                    deviceAddress = device.deviceAddress,
+                                    instanceName = instanceName,
+                                    displayName = device.deviceName,
+                                )
+                                if (candidate != null) {
+                                    publishCandidates(requestGeneration)
+                                    sourceToken?.let { token ->
+                                        updateSourceDiagnostics(token) { summary ->
+                                            summary.copy(candidatePublished = true)
+                                        }
                                     }
                                 }
                             } else {
                                 Log.d(
                                     LOG_TAG,
-                                    "DNS-SD TXT response has a valid PEYVAND domain but incompatible app/schema metadata",
+                                    "DNS-SD service response rejected by PEYVAND name/type validation",
                                 )
                             }
-
-                            val candidate = candidateRegistry.recordTxtResponse(
-                                deviceAddress = device.deviceAddress,
-                                instanceName = instanceName,
-                                isCompatible = metadataCompatible,
+                        }
+                    },
+                    WifiP2pManager.DnsSdTxtRecordListener {
+                            fullDomain,
+                            record,
+                            device,
+                        ->
+                        if (isCurrent(requestGeneration)) {
+                            mutableSnapshot.value = mutableSnapshot.value.copy(
+                                txtRecordResponseCount = mutableSnapshot.value.txtRecordResponseCount + 1,
                             )
-                            if (candidate != null) {
-                                publishCandidates(requestGeneration)
-                                sourceToken?.let { token ->
-                                    updateSourceDiagnostics(token) { summary ->
-                                        summary.copy(candidatePublished = true)
-                                    }
+                            val sourceToken = sourceTokenFor(device.deviceAddress)
+                            sourceToken?.let { token ->
+                                updateSourceDiagnostics(token) { summary ->
+                                    summary.copy(
+                                        txtRecordResponseCount = summary.txtRecordResponseCount + 1,
+                                    )
                                 }
                             }
-                        } else {
-                            Log.d(
-                                LOG_TAG,
-                                "DNS-SD TXT response rejected by PEYVAND domain validation",
-                            )
-                        }
-                    }
-                },
-            )
 
-            // Do not issue unconditional clear* calls before the first scan.
-            // Android's Wi-Fi P2P framework is asynchronous, and some OEM
-            // implementations reject redundant cleanup with BUSY even when this
-            // repository has not registered any service in the current process.
-            // A fresh scan follows the documented add-local -> add-request ->
-            // discover sequence; teardown cleans resources after an active scan.
-            manager.addLocalService(
-                activeChannel,
-                serviceInfo,
-                actionListener(requestGeneration, DiscoveryOperation.ADD_LOCAL_SERVICE) {
+                            val instanceName =
+                                PeyvandDiscoveryAdvertisement.instanceNameFromFullDomain(fullDomain)
+                            if (instanceName != null) {
+                                mutableSnapshot.value = mutableSnapshot.value.copy(
+                                    acceptedTxtDomainCount =
+                                        mutableSnapshot.value.acceptedTxtDomainCount + 1,
+                                )
+                                sourceToken?.let { token ->
+                                    updateSourceDiagnostics(token) { summary ->
+                                        summary.copy(
+                                            acceptedTxtDomainCount =
+                                                summary.acceptedTxtDomainCount + 1,
+                                        )
+                                    }
+                                }
+
+                                val recordMap = record.toMap()
+                                val metadataCompatible =
+                                    PeyvandDiscoveryAdvertisement.isCompatible(recordMap)
+                                if (metadataCompatible) {
+                                    mutableSnapshot.value = mutableSnapshot.value.copy(
+                                        compatibleTxtRecordCount =
+                                            mutableSnapshot.value.compatibleTxtRecordCount + 1,
+                                    )
+                                    sourceToken?.let { token ->
+                                        updateSourceDiagnostics(token) { summary ->
+                                            summary.copy(
+                                                compatibleTxtRecordCount =
+                                                    summary.compatibleTxtRecordCount + 1,
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Log.d(
+                                        LOG_TAG,
+                                        "DNS-SD TXT response has a valid PEYVAND domain but incompatible app/schema metadata",
+                                    )
+                                }
+
+                                val candidate = candidateRegistry.recordTxtResponse(
+                                    deviceAddress = device.deviceAddress,
+                                    instanceName = instanceName,
+                                    isCompatible = metadataCompatible,
+                                )
+                                if (candidate != null) {
+                                    publishCandidates(requestGeneration)
+                                    sourceToken?.let { token ->
+                                        updateSourceDiagnostics(token) { summary ->
+                                            summary.copy(candidatePublished = true)
+                                        }
+                                    }
+                                }
+                            } else {
+                                Log.d(
+                                    LOG_TAG,
+                                    "DNS-SD TXT response rejected by PEYVAND domain validation",
+                                )
+                            }
+                        }
+                    },
+                )
+            }
+
+            when (role) {
+                DiscoveryRole.ADVERTISE_ONLY -> {
+                    manager.addLocalService(
+                        activeChannel,
+                        serviceInfo,
+                        actionListener(
+                            requestGeneration,
+                            DiscoveryOperation.ADD_LOCAL_SERVICE,
+                        ) {
+                            mutableSnapshot.value = mutableSnapshot.value.copy(
+                                status = DiscoveryStatus.ADVERTISING,
+                                failure = null,
+                            )
+                        },
+                    )
+                }
+
+                DiscoveryRole.BROWSE_ONLY -> {
                     manager.addServiceRequest(
                         activeChannel,
                         serviceRequest,
@@ -505,17 +529,16 @@ class WifiDirectDeviceDiscoveryRepository(
                                     requestGeneration,
                                     DiscoveryOperation.DISCOVER_SERVICES,
                                 ) {
-                                    mutableSnapshot.value =
-                                        mutableSnapshot.value.copy(
-                                            status = DiscoveryStatus.DISCOVERING,
-                                            failure = null,
-                                        )
+                                    mutableSnapshot.value = mutableSnapshot.value.copy(
+                                        status = DiscoveryStatus.DISCOVERING,
+                                        failure = null,
+                                    )
                                 },
                             )
                         },
                     )
-                },
-            )
+                }
+            }
         } catch (_: SecurityException) {
             setPermissionRequired(requestGeneration)
         } catch (_: RuntimeException) {
@@ -525,9 +548,12 @@ class WifiDirectDeviceDiscoveryRepository(
 
     override fun stopDiscovery() {
         val wasActive = mutableSnapshot.value.status.let {
-            it == DiscoveryStatus.STARTING || it == DiscoveryStatus.DISCOVERING
+            it == DiscoveryStatus.STARTING ||
+                it == DiscoveryStatus.ADVERTISING ||
+                it == DiscoveryStatus.DISCOVERING
         }
-        restartAfterCleanup = false
+        restartRoleAfterCleanup = null
+        activeRole = null
         generation += 1
         clearPendingPeers()
         mutableSnapshot.value = mutableSnapshot.value.copy(
@@ -561,7 +587,7 @@ class WifiDirectDeviceDiscoveryRepository(
         if (manager == null || activeChannel == null) {
             cleanupInProgress = false
             cleanupRequested = false
-            restartAfterCleanup = false
+            restartRoleAfterCleanup = null
             return
         }
 
@@ -631,9 +657,10 @@ class WifiDirectDeviceDiscoveryRepository(
         }
 
         cleanupInProgress = false
-        if (restartAfterCleanup) {
-            restartAfterCleanup = false
-            if (monitoring) startDiscovery()
+        val roleToRestart = restartRoleAfterCleanup
+        restartRoleAfterCleanup = null
+        if (roleToRestart != null && monitoring) {
+            startDiscovery(roleToRestart)
         }
     }
 
@@ -862,6 +889,8 @@ class WifiDirectDeviceDiscoveryRepository(
         // Invalidate queued framework callbacks before requesting best-effort
         // teardown. A late DNS-SD response cannot repopulate a failed scan.
         generation += 1
+        activeRole = null
+        restartRoleAfterCleanup = null
         clearPendingPeers()
         releaseDiscoveryRegistrations()
 

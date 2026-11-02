@@ -42,6 +42,7 @@ import com.peyvand.app.presentation.home.DeviceDiscoveryScreen
 import com.peyvand.app.presentation.home.MainHomeScreen
 import com.peyvand.app.presentation.language.LanguageSelectionScreen
 import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
+import com.peyvand.core.domain.discovery.DiscoveryRole
 
 private enum class HomeDestination {
     HOME,
@@ -121,6 +122,7 @@ fun PeyvandApp(
                     networkEnvironmentViewModel = networkEnvironmentViewModel,
                     title = stringResource(R.string.receive_screen_title),
                     subtitle = stringResource(R.string.receive_screen_subtitle),
+                    role = DiscoveryRole.ADVERTISE_ONLY,
                     onBack = { destination = HomeDestination.HOME },
                 )
 
@@ -129,6 +131,7 @@ fun PeyvandApp(
                     networkEnvironmentViewModel = networkEnvironmentViewModel,
                     title = stringResource(R.string.send_discovery_title),
                     subtitle = stringResource(R.string.send_discovery_subtitle),
+                    role = DiscoveryRole.BROWSE_ONLY,
                     onBack = { destination = HomeDestination.SEND_SELECTION },
                 )
 

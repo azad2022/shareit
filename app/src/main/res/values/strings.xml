@@ -77,6 +77,7 @@
     <string name="discovery_subtitle">گوشی‌های دارای پیوند را در نزدیکی خود پیدا کنید.</string>
     <string name="discovery_idle">برای پیدا کردن دستگاه‌های پیوند، جست‌وجو را آغاز کنید.</string>
     <string name="discovery_starting">در حال آماده‌سازی جست‌وجو…</string>
+    <string name="discovery_advertising">دستگاه برای دریافت فایل آمادهٔ شناسایی است.</string>
     <string name="discovery_scanning">در حال جست‌وجوی دستگاه‌های دارای پیوند</string>
     <string name="discovery_failed">جست‌وجو با مشکل روبه‌رو شد.</string>
     <string name="discovery_start">جست‌وجوی دستگاه‌های نزدیک</string>

@@ -74,6 +74,7 @@ import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
 import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DiscoveryOperation
+import com.peyvand.core.domain.discovery.DiscoveryRole
 import com.peyvand.core.domain.discovery.DiscoveryMetadataStatus
 import com.peyvand.core.domain.discovery.DiscoveryStatus
 import com.peyvand.core.domain.discovery.NearbyPeer
@@ -88,6 +89,7 @@ fun DeviceDiscoveryScreen(
     networkEnvironmentViewModel: NetworkEnvironmentViewModel,
     title: String,
     subtitle: String,
+    role: DiscoveryRole,
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -128,14 +130,14 @@ fun DeviceDiscoveryScreen(
         approximatePermissionOnly = coarseGranted && !requiredGranted
         permissionWasDenied = !requiredGranted
         viewModel.refreshAvailability()
-        if (requiredGranted) viewModel.startDiscovery()
+        if (requiredGranted) viewModel.startDiscovery(role)
     }
 
     LaunchedEffect(Unit) {
         viewModel.refreshAvailability()
     }
 
-    DisposableEffect(viewModel) {
+    DisposableEffect(viewModel, role) {
         onDispose { viewModel.stopDiscovery() }
     }
 
@@ -149,6 +151,7 @@ fun DeviceDiscoveryScreen(
     val shouldOpenSettings = approximatePermissionOnly ||
         (permissionWasDenied && !shouldShowRationale)
     val isScanning = state.status == DiscoveryStatus.STARTING ||
+        state.status == DiscoveryStatus.ADVERTISING ||
         state.status == DiscoveryStatus.DISCOVERING
 
     Column(
@@ -212,12 +215,16 @@ fun DeviceDiscoveryScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                RadarScanner(isActive = state.status == DiscoveryStatus.DISCOVERING)
+                RadarScanner(
+                    isActive = state.status == DiscoveryStatus.ADVERTISING ||
+                        state.status == DiscoveryStatus.DISCOVERING,
+                )
 
                 Text(
                     text = when (state.status) {
                         DiscoveryStatus.IDLE -> stringResource(R.string.discovery_idle)
                         DiscoveryStatus.STARTING -> stringResource(R.string.discovery_starting)
+                        DiscoveryStatus.ADVERTISING -> stringResource(R.string.discovery_advertising)
                         DiscoveryStatus.DISCOVERING ->
                             stringResource(R.string.discovery_scanning)
                         DiscoveryStatus.FAILED -> stringResource(R.string.discovery_failed)
@@ -244,7 +251,7 @@ fun DeviceDiscoveryScreen(
                         } else if (hasPermission) {
                             permissionWasDenied = false
                             approximatePermissionOnly = false
-                            viewModel.startDiscovery()
+                            viewModel.startDiscovery(role)
                         } else {
                             permissionLauncher.launch(permissionsToRequest)
                         }
