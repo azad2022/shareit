@@ -230,6 +230,7 @@ class WifiDirectDeviceDiscoveryRepository(
             stickyIntent?.let { p2pStateReceiver.onReceive(appContext, it) }
         } catch (_: SecurityException) {
             p2pEnabled = null
+            p2pStateQueryFailed = true
             mutableSnapshot.value = mutableSnapshot.value.copy(
                 availability = WifiDirectAvailability.UNAVAILABLE,
                 status = DiscoveryStatus.FAILED,
@@ -1000,6 +1001,12 @@ class WifiDirectDeviceDiscoveryRepository(
             return WifiDirectAvailability.WIFI_P2P_DISABLED
         }
 
+        // The P2P state query requires a live framework channel. Do not show
+        // CHECKING forever when channel initialization itself failed.
+        if (channel == null) {
+            return WifiDirectAvailability.UNAVAILABLE
+        }
+
         if (p2pEnabled == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return if (p2pStateQueryFailed) {
                 WifiDirectAvailability.UNAVAILABLE
@@ -1011,10 +1018,6 @@ class WifiDirectDeviceDiscoveryRepository(
         // requestP2pState() is unavailable before API 29. If the initial
         // state broadcast was not returned, attempt the supported operation
         // and use its ActionListener result instead of waiting indefinitely.
-        if (channel == null) {
-            return WifiDirectAvailability.UNAVAILABLE
-        }
-
         return WifiDirectAvailability.READY
     }
 

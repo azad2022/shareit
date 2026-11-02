@@ -118,6 +118,6 @@ Keep `IN_PROGRESS` until every applicable criterion has reproducible evidence. U
 
 ## Final retry-path review (2026-11-02)
 
-- A review of the retry implementation found that an ENABLED P2P state broadcast was cancelling active BUSY retries even though the radio remained available. The correction limits discovery-retry cancellation to P2P DISABLED and explicit lifecycle/scan invalidation.
+- A review of the retry implementation found that an ENABLED P2P state broadcast was cancelling active BUSY retries even though the radio remained available. The correction limits discovery-retry cancellation to P2P DISABLED and explicit lifecycle/scan invalidation. The implementation is in commit `6b14c8b75942e43b4cbaebd33462bb508ad124e1`. A subsequent source review also ensures a missing P2P channel or receiver-registration failure does not leave availability at CHECKING.
 - Cleanup now submits `clearServiceRequests()` and only after its completion submits `clearLocalServices()`. This removes concurrent cleanup mutations as a source of avoidable framework contention. Each operation retains bounded BUSY retry.
 - These are source-level corrections only; physical discovery reliability remains unverified. CP-002 stays `IN_PROGRESS`.

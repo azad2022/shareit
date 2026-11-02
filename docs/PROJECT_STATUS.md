@@ -103,4 +103,4 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 
 - A final lifecycle review found that the first bounded-retry implementation cancelled pending discovery retries on every P2P state broadcast, including an ENABLED broadcast. Since ENABLED does not invalidate a scan, this could leave the operation in STARTING without its scheduled retry. Retry cancellation now occurs only when P2P becomes disabled or the scan/lifecycle generation is invalidated.
 - P2P cleanup now serializes `clearServiceRequests()` followed by `clearLocalServices()`, rather than submitting both framework mutations concurrently. BUSY remains bounded-retry with the same retry policy.
-- The source correction is in follow-up commit `78278c37e1fa17574b69f408a23a1bb0cc61ffaf` and is pending CI validation.
+- The retry cancellation and serialized cleanup correction is in commit `6b14c8b75942e43b4cbaebd33462bb508ad124e1` and is pending CI validation. A subsequent source review also makes missing P2P channel or receiver-registration failure resolve to UNAVAILABLE instead of CHECKING.
