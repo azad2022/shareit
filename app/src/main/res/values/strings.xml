@@ -112,8 +112,9 @@
     <string name="discovery_diagnostics_actions">ثبت سرویس محلی: %1$s | ثبت درخواست: %2$s | آغاز کشف: %3$s</string>
     <string name="discovery_diagnostics_done">موفق</string>
     <string name="discovery_diagnostics_not_done">انجام نشده</string>
-    <string name="discovery_diagnostics_source">منبع %1$s — سرویس: %2$d، پذیرفته: %3$d | TXT: %4$d، دامنه معتبر: %5$d، سازگار: %6$d | candidate: %7$s</string>
+    <string name="discovery_diagnostics_source">منبع %1$s — سرویس: %2$d، پذیرفته: %3$d | TXT: %4$d، دامنه معتبر: %5$d، سازگار: %6$d | نمایش دستگاه: %7$s</string>
     <string name="discovery_diagnostics_missing_source">%1$d پاسخ بدون نشانی منبع دریافت شد.</string>
+    <string name="discovery_diagnostics_untracked_sources">%1$d منبع بیشتر از سقف تشخیصی بود و فقط در شمارندهٔ کلی ثبت شد.</string>
     <string name="discovery_unknown_device">دستگاه بدون نام</string>
     <string name="discovery_peer_compatible">سرویس کشف پیوند پیدا شد؛ هویت دستگاه هنوز تأیید نشده است.</string>
     <string name="discovery_peer_metadata_missing">اطلاعات TXT دریافت نشده است؛ این دستگاه هنوز احراز هویت نشده است.</string>
