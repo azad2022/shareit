@@ -68,6 +68,14 @@ Discovery is not trust. Any later connection or data exchange requires explicit 
 - Transient P2P address and service instance name are used only to correlate callbacks within an active scan; neither is persisted or treated as identity.
 - Reciprocal discovery on two physical devices is mandatory before CP-002 can be marked PASSED.
 
+## 2026-11-02 amendment — initial P2P state and route activation
+
+- Do not rely exclusively on the optional sticky-intent return from receiver registration to learn the current Wi-Fi P2P enabled state.
+- On API 29+, obtain the current state with `WifiP2pManager.requestP2pState()`; retain `WIFI_P2P_STATE_CHANGED_ACTION` for subsequent changes. Reject stale query callbacks after receiver, channel, permission, or monitoring lifecycle changes.
+- After permissions, Location Mode, current P2P state and channel readiness are established, entering Send starts the browse-only role and entering Receive starts the advertise-only role.
+- A zero-peer result does not stop an active browse. Explicit user stop cancels the current route's operation and must not be immediately undone by automatic start behavior.
+- Galaxy A12 / Android 12 (API 31) supports `requestP2pState()`. Physical verification remains mandatory.
+
 ## 2026-11-02 amendment — TXT optionality and request semantics
 
 The original decision incorrectly made a matching TXT record a hard prerequisite for listing a service response. That is now superseded. Android's Wi-Fi Direct guide states that TXT may optionally be broadcast and demonstrates service discovery through separate service and TXT listeners. The API reference further distinguishes the three request factory overloads: all Bonjour services, services of a specified type, and TXT data for a specified instance.

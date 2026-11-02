@@ -108,9 +108,14 @@ fun DeviceDiscoveryScreen(
         }
     }
     val requiredPermission = permissionsToRequest.first()
+    val hasPermission = ContextCompat.checkSelfPermission(
+        context,
+        requiredPermission,
+    ) == PackageManager.PERMISSION_GRANTED
 
     var permissionWasDenied by rememberSaveable { mutableStateOf(false) }
     var approximatePermissionOnly by rememberSaveable { mutableStateOf(false) }
+    var automaticStartConsumed by remember(viewModel, role) { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -130,21 +135,25 @@ fun DeviceDiscoveryScreen(
         approximatePermissionOnly = coarseGranted && !requiredGranted
         permissionWasDenied = !requiredGranted
         viewModel.refreshAvailability()
-        if (requiredGranted) viewModel.startDiscovery(role)
     }
 
     LaunchedEffect(Unit) {
         viewModel.refreshAvailability()
     }
 
+    LaunchedEffect(hasPermission, state.availability, role) {
+        if (!automaticStartConsumed &&
+            hasPermission &&
+            state.availability == WifiDirectAvailability.READY
+        ) {
+            automaticStartConsumed = true
+            viewModel.startDiscovery(role)
+        }
+    }
+
     DisposableEffect(viewModel, role) {
         onDispose { viewModel.stopDiscovery() }
     }
-
-    val hasPermission = ContextCompat.checkSelfPermission(
-        context,
-        requiredPermission,
-    ) == PackageManager.PERMISSION_GRANTED
 
     val shouldShowRationale =
         activity?.shouldShowRequestPermissionRationale(requiredPermission) == true
@@ -251,7 +260,13 @@ fun DeviceDiscoveryScreen(
                         } else if (hasPermission) {
                             permissionWasDenied = false
                             approximatePermissionOnly = false
-                            viewModel.startDiscovery(role)
+                            if (state.availability == WifiDirectAvailability.READY) {
+                                automaticStartConsumed = true
+                                viewModel.startDiscovery(role)
+                            } else {
+                                automaticStartConsumed = false
+                                viewModel.refreshAvailability()
+                            }
                         } else {
                             permissionLauncher.launch(permissionsToRequest)
                         }

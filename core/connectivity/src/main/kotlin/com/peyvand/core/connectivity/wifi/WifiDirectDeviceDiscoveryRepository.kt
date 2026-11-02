@@ -191,8 +191,8 @@ class WifiDirectDeviceDiscoveryRepository(
     }
 
     /**
-     * Wi-Fi P2P state is exposed as a protected sticky system broadcast.
-     * Register only after the version-specific runtime permission is granted.
+     * Observe Wi-Fi P2P enabled-state changes only while foregrounded and
+     * after the version-specific runtime permission has been granted.
      */
     private fun registerP2pStateReceiverIfPermitted() {
         if (!monitoring || receiverRegistered || wifiP2pManager == null ||
@@ -696,10 +696,13 @@ class WifiDirectDeviceDiscoveryRepository(
             return WifiDirectAvailability.WIFI_P2P_DISABLED
         }
 
-        if (p2pEnabled == null) {
+        if (p2pEnabled == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return WifiDirectAvailability.CHECKING
         }
 
+        // requestP2pState() is unavailable before API 29. If the initial
+        // state broadcast was not returned, attempt the supported operation
+        // and use its ActionListener result instead of waiting indefinitely.
         if (channel == null) {
             return WifiDirectAvailability.UNAVAILABLE
         }

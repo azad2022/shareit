@@ -64,6 +64,14 @@ Implement a real nearby-device discovery path using Android Wi-Fi Direct DNS-SD.
 - The diagnostics APK does not add peer connection, sockets, TLS, pairing, receiver consent, file transfer, integrity verification, resume or APK handling. Those features remain unimplemented.
 - The latest physical discovery result remains failed. The new candidate/diagnostics build has not yet been tested on both physical phones. Emulator-only evidence cannot replace this requirement.
 
+## Owner installation report — P2P readiness deadlock (2026-11-02)
+
+- Owner installed the Debug APK built from `062116df0c763ac9b8a2a8d390aba33487f1f731`. The UI stayed at the Wi-Fi Direct availability-check message and did not visibly enter scan/advertise.
+- Source root cause: the adapter read initial P2P enabled state only from the optional sticky-intent return when registering the receiver. If no initial intent was returned, `p2pEnabled` remained null, availability stayed `CHECKING`, and role start returned before `addLocalService()` or `discoverServices()`.
+- API 29+ now resolves initial state with `WifiP2pManager.requestP2pState()`; the receiver remains active for subsequent changes. API 29+ is supported on Galaxy A12 / Android 12 (API 31).
+- Send/Receive routes automatically start their selected DNS-SD role after permission and P2P readiness. Empty browse results remain active; a user stop is not automatically undone.
+- CI and physical retest for this correction are pending. CP-002 remains `IN_PROGRESS`.
+
 ## Latest owner diagnostic evidence and source review
 
 - **Owner pre-fix diagnostic retest (2026-11-02):** one phone reported service responses 1, accepted service responses 1, TXT responses 0, accepted TXT domains 0, compatible TXT records 0, peers 0. The other phone reported all six counters as 0. No additional compatible test device is available. These observations do not establish a model/firmware cause.

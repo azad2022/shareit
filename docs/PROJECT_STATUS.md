@@ -42,6 +42,14 @@
 - The current implementation still contains no Wi-Fi P2P `connect()` flow, local socket transport, TLS peer authentication, recipient consent protocol, or file streaming. The diagnostics APK does not implement file transfer.
 - Reciprocal two-device physical discovery remains mandatory before CP-002 can be marked `PASSED`.
 
+## Owner installation report — P2P readiness (2026-11-02)
+
+- Owner installed Debug APK from commit `062116df0c763ac9b8a2a8d390aba33487f1f731` and reported that the discovery screen remained at "در حال بررسی پشتیبانی Wi-Fi Direct…" without entering active search.
+- Source inspection localized a readiness gap: the adapter depended on the optional sticky-intent result from receiver registration to initialize `p2pEnabled`. When no initial intent was returned, availability remained `CHECKING`; `startDiscovery(role)` returned before any DNS-SD operation.
+- Android's `WifiP2pManager.requestP2pState()` is available from API 29. Galaxy A12 / Android 12 is API 31. The adapter now queries current P2P state through this API and retains the broadcast receiver for later state changes.
+- The send/receive route now starts its directional DNS-SD role once permission and P2P readiness are established. Empty results do not terminate browsing; an explicit user stop is respected.
+- The code correction has not yet been tested on both physical phones. CP-002 remains `IN_PROGRESS`.
+
 ## Latest discovery review (2026-11-02)
 
 - Owner-reported pre-fix diagnostics: one phone received one service callback and one accepted service callback, but no TXT callback and no peer publication; the second phone received no service or TXT callbacks. The aggregate counters did not identify the callback source.
