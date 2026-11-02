@@ -23,7 +23,7 @@ Use Android `WifiP2pManager` DNS-SD service discovery for CP-002:
 - A candidate or compatible public TXT record is not authentication. UI must not imply trust; connection and transfer require a separate authenticated peer handshake and explicit consent.
 - Keep service/TXT association order-independent, bounded, generation-scoped and resilient to delayed, duplicated or absent callbacks.
 - Select the service-request factory overload intentionally. Android documents newInstance() as all Bonjour services, newInstance(serviceType) as the typed Bonjour service/PTR query, and newInstance(instanceName, serviceType) as a TXT-data query for one known instance. The current one-argument form is retained for initial typed service discovery; it does not request TXT. Do not treat a zero TXT callback count as proof that the typed service query failed. If TXT is required in a future change, issue a bounded per-instance TXT request only after learning the instance name and account for request removal, duplicate callbacks and limits.
-- The current sender and receiver UI flows both enter the same adapter method, which registers a local advertisement and a discovery request. Keep this bidirectional behavior only as a provisional implementation detail until one-way advertiser/browser role tests verify the intended product flow.
+- Use directional DNS-SD roles for the current product flow: the Receive screen registers a local PEYVAND advertisement only; the Send screen registers a typed service request and browses only. Do not make one device advertise and browse during the same directional scan. A device can take the opposite role in a later user action. This gives a controlled advertiser/browser test and avoids confusing a sender's own advertisement with the receiver's service.
 - Bound pending peer records and visible peers. Pending records are process-local and transient.
 - A monotonically increasing scan generation invalidates callbacks after stop, availability loss, channel loss or failure.
 
@@ -83,6 +83,8 @@ Owner-reported pre-fix diagnostic result on 2026-11-02: one test phone reported 
 
 
 ### Required verification
+- Test Galaxy A12 advertiser-only with ASUS browser-only; then reverse the roles. Confirm local-service registration occurs only on the advertiser and request/discovery callbacks only on the browser.
+- Verify a browser-only scan does not register a local PEYVAND service, and advertiser-only mode does not call addServiceRequest() or discoverServices().
 
 - Test the current service-type-only request against the official no-argument all-Bonjour request and/or an explicitly added bounded per-instance TXT request. Record exact request overload and per-action outcomes.
 - Verify that a valid service callback becomes a visible, explicitly unverified candidate even when no TXT arrives.
