@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.LocationManager
-import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pManager
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest
@@ -25,7 +24,6 @@ import com.peyvand.core.domain.discovery.DiscoverySourceDiagnostics
 import com.peyvand.core.domain.discovery.DeviceDiscoverySnapshot
 import com.peyvand.core.domain.discovery.DiscoveryOperation
 import com.peyvand.core.domain.discovery.DiscoveryStatus
-import com.peyvand.core.domain.discovery.NearbyPeer
 import com.peyvand.core.domain.discovery.PeyvandDiscoveryAdvertisement
 import com.peyvand.core.domain.discovery.WifiDirectAvailability
 import com.peyvand.core.domain.discovery.WifiDirectPermissionPolicy
@@ -819,6 +817,7 @@ class WifiDirectDeviceDiscoveryRepository(
 
     private fun clearPendingPeers() {
         candidateRegistry.clear()
+        sourceTokensByAddress.clear()
     }
 
     private fun isCurrent(expectedGeneration: Long): Boolean =
