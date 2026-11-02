@@ -5,7 +5,7 @@
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-002 — Wi-Fi Direct service discovery
 - **Current branch:** `feature/foundation-bootstrap`
-- **Last updated:** 2026-11-02 (owner diagnostics reviewed; DNS-SD candidate/TXT gating defects documented)
+- **Last updated:** 2026-11-02 (TXT-independent candidate publication, source-aware diagnostics and serialized cleanup implemented; CI/physical retest pending)
 
 ## Milestones
 
@@ -20,9 +20,10 @@
 - Kotlin/Compose foundation, version-aware runtime permission handling, Wi-Fi Direct capability checks, local DNS-SD advertisement and peer service discovery are implemented on `feature/foundation-bootstrap`.
 - The discovery adapter now records the exact asynchronous P2P operation that returns a framework failure; the discovery UI displays that stage. The screen now stops discovery and releases registrations when it is removed from the navigation composition.
 - Discovery advertises only the PEYVAND service/schema markers. These are public and spoofable compatibility metadata, not identity or authentication.
-- Service responses are accepted only for the exact PEYVAND Bonjour registration type (Android API example format: `_service._tcp.local.`) and a valid PEYVAND instance suffix.
-- TXT responses are accepted only when their full DNS-SD domain identifies a valid PEYVAND instance. The service and TXT callbacks are correlated using both the same transient P2P device address and the same normalized service instance name.
-- Callback generation is invalidated before failure cleanup. Pending peer records are cleared and P2P service requests/local advertisements are independently cleared on cancellation, active-scan availability loss, P2P disabled state, and failure paths.
+- Service responses are accepted only for the exact PEYVAND Bonjour registration type (Android API example format: `_service._tcp.local.`) and a valid PEYVAND instance suffix. A valid service response immediately creates an explicitly unverified discovery candidate; TXT is not a publication prerequisite.
+- TXT responses are accepted only when their full DNS-SD domain identifies a valid PEYVAND instance. The service and TXT callbacks are correlated in an Android-free, bounded registry using both the same transient P2P device address and the same normalized service instance name; either callback order is supported. TXT only sets metadata state (not received/compatible/incompatible).
+- Per-scan diagnostics expose the successful local-service registration, service-request registration and discovery-start actions plus callback totals grouped by pseudonymous source tokens (P1, P2...). Raw device addresses and device names are not included in diagnostic summaries.
+- Callback generation is invalidated before failure cleanup. Cleanup requests and local-service cleanup remain independent; a new scan is deferred until both asynchronous cleanup callbacks have completed. Pending correlation state and raw-address-to-token mappings are cleared on scan teardown.
 - A disconnected P2P channel can be reinitialized during a later foreground availability refresh; failure of the first immediate reinitialization no longer permanently blocks retry until process restart.
 - API 33+ uses `NEARBY_WIFI_DEVICES`; API 32 and earlier request FINE and COARSE together, but scanning proceeds only when FINE is granted. Location Mode, P2P enabled state, channel readiness and permission status are checked.
 - App-default VPN diagnostics are informational only. A VPN-backed route does not by itself prove that Wi-Fi Direct or local socket traffic is blocked. See ADR-0003.
@@ -43,9 +44,13 @@
 
 ## Latest discovery review (2026-11-02)
 
-- Owner-reported diagnostics: one phone received one service callback and one accepted service callback, but no TXT callback and no peer publication; the second phone received no service or TXT callbacks. The current implementation explains the first result because peer publication requires a matching compatible TXT record. The second result remains unlocalized.
-- Android API review found that TXT is optional in Wi-Fi Direct DNS-SD and that the current one-argument newInstance(SERVICE_TYPE) request is defined as service-type search, whereas the two-argument overload requests TXT for a particular instance. This is recorded as a plausible source of zero TXT callbacks requiring controlled physical verification.
-- ADR-0002 and CP-002 now distinguish service candidate discovery from optional TXT metadata and authenticated identity. CP-002 remains IN_PROGRESS; no peer connection, pairing, TLS or transfer is implemented.
+- Owner-reported pre-fix diagnostics: one phone received one service callback and one accepted service callback, but no TXT callback and no peer publication; the second phone received no service or TXT callbacks. The aggregate counters did not identify the callback source.
+- **Fixed source-level publication defect:** the old publishPeerIfCompatible() path required a matching compatible TXT record. It has been replaced with DiscoveryCandidateRegistry. A strictly validated service callback now publishes an unverified candidate immediately; a TXT callback before or after the service response updates metadata without changing candidate existence. Incompatible TXT metadata does not silently remove the candidate.
+- **Request overload clarification:** newInstance(SERVICE_TYPE) is the typed Bonjour PTR search and is retained for service discovery. It does not request TXT. TXT is optional in Android Wi-Fi Direct DNS-SD. The two-argument overload is for a known instance's TXT data and is not a substitute for the initial service-type query. Zero TXT callbacks alone are not proof that service discovery failed.
+- The phone with zero raw callbacks remains unlocalized. New diagnostics expose each registration/start action result and group service/TXT responses by scan-local pseudonymous source tokens. They still cannot prove the intended physical handset was the source without controlled one-advertiser/one-browser tests.
+- Cleanup now defers a new scan until the asynchronous request/local-service cleanup callbacks finish. This removes one identified clear/restart overlap, but no physical evidence yet proves it was the root cause of the second phone's zero callbacks.
+- Both send and receive routes still advertise and browse in the same operation. No role behavior was changed; test advertiser-only/browser-only direction separately before deciding whether to specialize those roles.
+- CI and physical testing of the latest source tree are pending. CP-002 remains IN_PROGRESS; no connection, pairing, TLS or transfer is implemented.
 
 ## Module boundaries
 
