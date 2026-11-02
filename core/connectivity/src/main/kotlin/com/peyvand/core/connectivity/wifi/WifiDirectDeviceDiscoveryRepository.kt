@@ -27,7 +27,6 @@ import com.peyvand.core.domain.discovery.DiscoveryOperation
 import com.peyvand.core.domain.discovery.DiscoveryRole
 import com.peyvand.core.domain.discovery.DiscoveryStatus
 import com.peyvand.core.domain.discovery.PlatformDiscoveryState
-import com.peyvand.core.domain.discovery.WifiDirectServiceDiscoveryRearmPolicy
 import com.peyvand.core.domain.discovery.PeyvandDiscoveryAdvertisement
 import com.peyvand.core.domain.discovery.WifiDirectAvailability
 import com.peyvand.core.domain.discovery.WifiDirectBusyRetryPolicy
@@ -66,14 +65,54 @@ class WifiDirectDeviceDiscoveryRepository(
     private var p2pStateQueryFailed = false
     private var p2pStateQueryGeneration = 0L
     private var p2pStateQueryTimeoutTask: Runnable? = null
-    private var discoveryStateQueryInFlight = false
-    private var discoveryStateQueryGeneration = 0L
-    private var discoveryStateQueryTimeoutTask: Runnable? = null
-    private var pendingServiceDiscoveryRearmTask: Runnable? = null
     private var serviceDiscoveryStartInFlight = false
-    private var consecutiveDiscoveryStops = 0
     private val pendingDiscoveryRetryTasks = linkedSetOf<Runnable>()
     private val pendingCleanupRetryTasks = linkedSetOf<Runnable>()
+
+    private val serviceDiscoveryLifecycle = WifiDirectServiceDiscoveryLifecycleController(
+        mainHandler = mainHandler,
+        managerProvider = { wifiP2pManager },
+        channelProvider = { channel },
+        activeScanGeneration = { generation },
+        isCurrentScan = ::isCurrent,
+        isMonitoring = { monitoring },
+        isReceiverRegistered = { receiverRegistered },
+        activeRoleProvider = { activeRole },
+        cleanupInProgress = { cleanupInProgress },
+        cleanupRequested = { cleanupRequested },
+        startInFlight = { serviceDiscoveryStartInFlight },
+        discoveryRequestAccepted = { mutableSnapshot.value.discoveryStarted },
+        hasRequiredPermission = ::hasRequiredRuntimePermission,
+        onSnapshotChanged = { platformState, stopCount, restartCount ->
+            mutableSnapshot.value = mutableSnapshot.value.copy(
+                platformDiscoveryState = platformState,
+                discoveryStopCount = stopCount,
+                discoveryRestartCount = restartCount,
+            )
+        },
+        startRearm = { expectedGeneration ->
+            if (currentAvailability() != WifiDirectAvailability.READY) {
+                refreshAvailability()
+            } else {
+                val manager = wifiP2pManager
+                val activeChannel = channel
+                when {
+                    manager == null -> setUnavailable()
+                    activeChannel == null -> setFailure(
+                        DeviceDiscoveryFailure.PLATFORM_ERROR,
+                        expectedGeneration,
+                        failureOperation = DiscoveryOperation.DISCOVER_SERVICES,
+                    )
+                    else -> startServiceDiscoveryWithRetry(
+                        manager,
+                        activeChannel,
+                        expectedGeneration,
+                        isRearm = true,
+                    )
+                }
+            }
+        },
+    )
 
     private val serviceInstanceName by lazy {
         PeyvandDiscoveryAdvertisement.INSTANCE_NAME_PREFIX +
@@ -87,7 +126,6 @@ class WifiDirectDeviceDiscoveryRepository(
         const val MAX_PENDING_PEERS = 128
         const val MAX_VISIBLE_PEERS = 64
         const val P2P_STATE_QUERY_TIMEOUT_MS = 5_000L
-        const val DISCOVERY_STATE_QUERY_TIMEOUT_MS = 5_000L
     }
 
     private val candidateRegistry = DiscoveryCandidateRegistry(
@@ -133,10 +171,8 @@ class WifiDirectDeviceDiscoveryRepository(
         override fun onChannelDisconnected() {
             val wasMonitoring = monitoring
             invalidateP2pStateQuery()
-            invalidateDiscoveryStateQuery()
-            cancelServiceDiscoveryRearm()
+            serviceDiscoveryLifecycle.cancelForChannelLoss()
             serviceDiscoveryStartInFlight = false
-            consecutiveDiscoveryStops = 0
             cancelDiscoveryRetryTasks()
             cancelCleanupRetryTasks()
             p2pEnabled = null
@@ -178,7 +214,7 @@ class WifiDirectDeviceDiscoveryRepository(
     private val p2pStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION) {
-                handleDiscoveryStateBroadcast(intent)
+                serviceDiscoveryLifecycle.onDiscoveryStateBroadcast(intent)
                 return
             }
             if (intent.action != WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION) return
@@ -190,10 +226,8 @@ class WifiDirectDeviceDiscoveryRepository(
             ) == WifiP2pManager.WIFI_P2P_STATE_ENABLED
 
             if (p2pEnabled == false) {
-                invalidateDiscoveryStateQuery()
-                cancelServiceDiscoveryRearm()
+                serviceDiscoveryLifecycle.cancelPendingWork()
                 serviceDiscoveryStartInFlight = false
-                consecutiveDiscoveryStops = 0
                 val wasDiscovering = mutableSnapshot.value.status.let {
                     it == DiscoveryStatus.STARTING ||
                         it == DiscoveryStatus.ADVERTISING ||
@@ -285,8 +319,7 @@ class WifiDirectDeviceDiscoveryRepository(
             // Safe during teardown if Android already removed the receiver.
         } finally {
             receiverRegistered = false
-            invalidateDiscoveryStateQuery()
-            cancelServiceDiscoveryRearm()
+            serviceDiscoveryLifecycle.cancelPendingWork()
         }
     }
 
@@ -344,10 +377,8 @@ class WifiDirectDeviceDiscoveryRepository(
 
         if (availability != WifiDirectAvailability.READY) {
             cancelDiscoveryRetryTasks()
-            invalidateDiscoveryStateQuery()
-            cancelServiceDiscoveryRearm()
+            serviceDiscoveryLifecycle.cancelPendingWork()
             serviceDiscoveryStartInFlight = false
-            consecutiveDiscoveryStops = 0
             val wasDiscovering = current.status.let {
                 it == DiscoveryStatus.STARTING ||
                     it == DiscoveryStatus.ADVERTISING ||
@@ -421,6 +452,7 @@ class WifiDirectDeviceDiscoveryRepository(
             missingSourceAddressCount = 0,
             untrackedSourceCount = 0,
         )
+        serviceDiscoveryLifecycle.beginScan()
 
         try {
             if (role == DiscoveryRole.BROWSE_ONLY) {
@@ -678,9 +710,7 @@ class WifiDirectDeviceDiscoveryRepository(
 
         serviceDiscoveryStartInFlight = true
         if (isRearm) {
-            mutableSnapshot.value = mutableSnapshot.value.copy(
-                platformDiscoveryState = PlatformDiscoveryState.UNKNOWN,
-            )
+            serviceDiscoveryLifecycle.onRearmRequested(expectedGeneration)
         }
 
         try {
@@ -702,29 +732,14 @@ class WifiDirectDeviceDiscoveryRepository(
                     },
                 ) {
                     serviceDiscoveryStartInFlight = false
-                    val current = mutableSnapshot.value
-                    mutableSnapshot.value = current.copy(
+                    mutableSnapshot.value = mutableSnapshot.value.copy(
                         status = DiscoveryStatus.DISCOVERING,
                         failure = null,
-                        discoveryRestartCount = current.discoveryRestartCount +
-                            if (isRearm) 1 else 0,
                     )
-
-                    when (mutableSnapshot.value.platformDiscoveryState) {
-                        PlatformDiscoveryState.STOPPED -> {
-                            scheduleServiceDiscoveryRearm(
-                                expectedGeneration,
-                                source = "state-already-stopped",
-                            )
-                        }
-                        PlatformDiscoveryState.UNKNOWN -> {
-                            requestDiscoveryStateIfSupported(
-                                expectedGeneration,
-                                activeChannel,
-                            )
-                        }
-                        PlatformDiscoveryState.RUNNING -> Unit
-                    }
+                    serviceDiscoveryLifecycle.onDiscoveryRequestAccepted(
+                        expectedGeneration = expectedGeneration,
+                        isRearm = isRearm,
+                    )
                 },
             )
         } catch (_: SecurityException) {
@@ -740,231 +755,10 @@ class WifiDirectDeviceDiscoveryRepository(
         }
     }
 
-    private fun handleDiscoveryStateBroadcast(intent: Intent) {
-        val state = intent.getIntExtra(
-            WifiP2pManager.EXTRA_DISCOVERY_STATE,
-            -1,
-        )
-        handlePlatformDiscoveryState(state, source = "broadcast")
-    }
-
-    private fun handlePlatformDiscoveryState(
-        state: Int,
-        source: String,
-    ) {
-        val expectedGeneration = generation
-        if (!isCurrent(expectedGeneration) || activeRole != DiscoveryRole.BROWSE_ONLY) return
-
-        when (state) {
-            WifiP2pManager.WIFI_P2P_DISCOVERY_STARTED -> {
-                invalidateDiscoveryStateQuery()
-                consecutiveDiscoveryStops = 0
-                cancelServiceDiscoveryRearm()
-                mutableSnapshot.value = mutableSnapshot.value.copy(
-                    platformDiscoveryState = PlatformDiscoveryState.RUNNING,
-                )
-                Log.i(LOG_TAG, "Wi-Fi P2P service discovery is running ($source)")
-            }
-
-            WifiP2pManager.WIFI_P2P_DISCOVERY_STOPPED -> {
-                invalidateDiscoveryStateQuery()
-                val current = mutableSnapshot.value
-                val isNewStopTransition =
-                    current.platformDiscoveryState != PlatformDiscoveryState.STOPPED
-                if (isNewStopTransition) consecutiveDiscoveryStops += 1
-                mutableSnapshot.value = current.copy(
-                    platformDiscoveryState = PlatformDiscoveryState.STOPPED,
-                    discoveryStopCount = current.discoveryStopCount +
-                        if (isNewStopTransition) 1 else 0,
-                )
-                Log.i(
-                    LOG_TAG,
-                    "Wi-Fi P2P service discovery stopped ($source); " +
-                        "consecutiveStops=$consecutiveDiscoveryStops",
-                )
-                if (mutableSnapshot.value.discoveryStarted && !serviceDiscoveryStartInFlight) {
-                    scheduleServiceDiscoveryRearm(
-                        expectedGeneration,
-                        source = source,
-                    )
-                }
-            }
-
-            else -> Log.w(LOG_TAG, "Ignoring unknown Wi-Fi P2P discovery state=$state ($source)")
-        }
-    }
-
-    private fun scheduleServiceDiscoveryRearm(
-        expectedGeneration: Long,
-        source: String,
-    ) {
-        if (!isCurrent(expectedGeneration) ||
-            !WifiDirectServiceDiscoveryRearmPolicy.shouldRearm(
-                activeRole = activeRole,
-                monitoring = monitoring,
-                cleanupInProgress = cleanupInProgress,
-                cleanupRequested = cleanupRequested,
-                startInFlight = serviceDiscoveryStartInFlight,
-                discoveryRequestAccepted = mutableSnapshot.value.discoveryStarted,
-                platformState = mutableSnapshot.value.platformDiscoveryState,
-            ) ||
-            pendingServiceDiscoveryRearmTask != null
-        ) {
-            return
-        }
-
-        val stopCount = consecutiveDiscoveryStops.coerceAtLeast(1)
-        val delayMillis = WifiDirectServiceDiscoveryRearmPolicy
-            .delayMillisForStopCount(stopCount)
-
-        lateinit var task: Runnable
-        task = Runnable {
-            if (pendingServiceDiscoveryRearmTask === task) {
-                pendingServiceDiscoveryRearmTask = null
-            }
-            if (!isCurrent(expectedGeneration) ||
-                !WifiDirectServiceDiscoveryRearmPolicy.shouldRearm(
-                    activeRole = activeRole,
-                    monitoring = monitoring,
-                    cleanupInProgress = cleanupInProgress,
-                    cleanupRequested = cleanupRequested,
-                    startInFlight = serviceDiscoveryStartInFlight,
-                    discoveryRequestAccepted = mutableSnapshot.value.discoveryStarted,
-                    platformState = mutableSnapshot.value.platformDiscoveryState,
-                )
-            ) {
-                return@Runnable
-            }
-
-            if (currentAvailability() != WifiDirectAvailability.READY) {
-                refreshAvailability()
-                return@Runnable
-            }
-
-            val manager = wifiP2pManager ?: run {
-                setUnavailable()
-                return@Runnable
-            }
-            val activeChannel = channel ?: run {
-                setFailure(
-                    DeviceDiscoveryFailure.PLATFORM_ERROR,
-                    expectedGeneration,
-                    failureOperation = DiscoveryOperation.DISCOVER_SERVICES,
-                )
-                return@Runnable
-            }
-
-            Log.i(
-                LOG_TAG,
-                "Re-arming Wi-Fi P2P service discovery after STOPPED ($source); " +
-                    "delayMs=$delayMillis, stopCount=$stopCount",
-            )
-            startServiceDiscoveryWithRetry(
-                manager,
-                activeChannel,
-                expectedGeneration,
-                isRearm = true,
-            )
-        }
-
-        pendingServiceDiscoveryRearmTask = task
-        mainHandler.postDelayed(task, delayMillis)
-    }
-
-    private fun cancelServiceDiscoveryRearm() {
-        pendingServiceDiscoveryRearmTask?.let(mainHandler::removeCallbacks)
-        pendingServiceDiscoveryRearmTask = null
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun requestDiscoveryStateIfSupported(
-        expectedGeneration: Long,
-        expectedChannel: WifiP2pManager.Channel,
-    ) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-            !isCurrent(expectedGeneration) ||
-            activeRole != DiscoveryRole.BROWSE_ONLY ||
-            discoveryStateQueryInFlight ||
-            !receiverRegistered
-        ) {
-            return
-        }
-
-        val manager = wifiP2pManager ?: return
-        val queryGeneration = ++discoveryStateQueryGeneration
-        discoveryStateQueryInFlight = true
-
-        val timeoutTask = Runnable {
-            if (isCurrentDiscoveryStateQuery(queryGeneration, expectedGeneration, expectedChannel)) {
-                discoveryStateQueryInFlight = false
-                discoveryStateQueryTimeoutTask = null
-                Log.w(LOG_TAG, "Wi-Fi P2P discovery-state query timed out; waiting for framework broadcast")
-            }
-        }
-        discoveryStateQueryTimeoutTask = timeoutTask
-        mainHandler.postDelayed(timeoutTask, DISCOVERY_STATE_QUERY_TIMEOUT_MS)
-
-        try {
-            manager.requestDiscoveryState(
-                expectedChannel,
-                object : WifiP2pManager.DiscoveryStateListener {
-                    override fun onDiscoveryStateAvailable(state: Int) {
-                        if (!isCurrentDiscoveryStateQuery(
-                                queryGeneration,
-                                expectedGeneration,
-                                expectedChannel,
-                            )
-                        ) {
-                            return
-                        }
-                        finishDiscoveryStateQuery(queryGeneration)
-                        handlePlatformDiscoveryState(state, source = "requestDiscoveryState")
-                    }
-                },
-            )
-        } catch (_: SecurityException) {
-            finishDiscoveryStateQuery(queryGeneration)
-            Log.w(LOG_TAG, "Wi-Fi P2P discovery-state query was denied")
-        } catch (_: RuntimeException) {
-            finishDiscoveryStateQuery(queryGeneration)
-            Log.w(LOG_TAG, "Wi-Fi P2P discovery-state query failed")
-        }
-    }
-
-    private fun isCurrentDiscoveryStateQuery(
-        expectedQueryGeneration: Long,
-        expectedScanGeneration: Long,
-        expectedChannel: WifiP2pManager.Channel,
-    ): Boolean =
-        monitoring &&
-            receiverRegistered &&
-            discoveryStateQueryInFlight &&
-            discoveryStateQueryGeneration == expectedQueryGeneration &&
-            generation == expectedScanGeneration &&
-            activeRole == DiscoveryRole.BROWSE_ONLY &&
-            channel === expectedChannel &&
-            hasRequiredRuntimePermission()
-
-    private fun finishDiscoveryStateQuery(expectedQueryGeneration: Long) {
-        if (discoveryStateQueryGeneration != expectedQueryGeneration) return
-        discoveryStateQueryInFlight = false
-        discoveryStateQueryTimeoutTask?.let(mainHandler::removeCallbacks)
-        discoveryStateQueryTimeoutTask = null
-    }
-
-    private fun invalidateDiscoveryStateQuery() {
-        discoveryStateQueryGeneration += 1
-        discoveryStateQueryInFlight = false
-        discoveryStateQueryTimeoutTask?.let(mainHandler::removeCallbacks)
-        discoveryStateQueryTimeoutTask = null
-    }
-
     override fun stopDiscovery() {
         cancelDiscoveryRetryTasks()
-        cancelServiceDiscoveryRearm()
-        invalidateDiscoveryStateQuery()
+        serviceDiscoveryLifecycle.cancelPendingWork()
         serviceDiscoveryStartInFlight = false
-        consecutiveDiscoveryStops = 0
         val wasActive = mutableSnapshot.value.status.let {
             it == DiscoveryStatus.STARTING ||
                 it == DiscoveryStatus.ADVERTISING ||
@@ -1557,10 +1351,8 @@ class WifiDirectDeviceDiscoveryRepository(
         // teardown. A late DNS-SD response cannot repopulate a failed scan.
         generation += 1
         cancelDiscoveryRetryTasks()
-        cancelServiceDiscoveryRearm()
-        invalidateDiscoveryStateQuery()
+        serviceDiscoveryLifecycle.cancelPendingWork()
         serviceDiscoveryStartInFlight = false
-        consecutiveDiscoveryStops = 0
         activeRole = null
         restartRoleAfterCleanup = null
         clearPendingPeers()

@@ -149,3 +149,6 @@ Android documents that discovery can stop during connection setup. A future conn
 - The discovery radar animation is active for the browser only when the framework state is confirmed as `RUNNING`. `STOPPED` displays a re-arm state; `UNKNOWN` does not animate as though the radio scan were active.
 - The restart counter represents `discoverServices()` re-arm requests accepted by the framework ActionListener, not proof that the radio scan entered `STARTED`. The separate platform-state field is the evidence for that transition.
 - Re-arm eligibility is expressed as a pure domain policy and covered by tests for advertiser role, monitoring, cleanup, in-flight start, accepted initial request, and platform STOPPED state.
+### Lifecycle ownership refactor
+
+The Android-specific discovery-state query, broadcast handling, bounded re-arm scheduling, and cancellation state are owned by `WifiDirectServiceDiscoveryLifecycleController` in the connectivity module. `WifiDirectDeviceDiscoveryRepository` retains role ownership, permission/readiness decisions, DNS-SD registration, error policy, and snapshot publication. This keeps the platform lifecycle mechanism independently auditable without changing domain contracts or UI ownership.

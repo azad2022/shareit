@@ -117,3 +117,4 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 
 - The active implementation has asymmetric roles: Receive registers only the local PEYVAND DNS-SD advertisement; Send registers only the PEYVAND service request and browses. Older text in this status document that described both routes advertising and browsing has been superseded.
 - The current lifecycle controller applies only to the browser role. No role change, fallback transport, connection, pairing, or file-transfer implementation is implied.
+- The scan-state controller has been extracted from the Wi-Fi Direct repository adapter into a focused connectivity class. The repository retains role ownership, platform permission checks, DNS-SD registration, error policy and snapshot publication; the lifecycle controller owns state queries, STARTED/STOPPED handling, bounded re-arm scheduling and cancellation.
