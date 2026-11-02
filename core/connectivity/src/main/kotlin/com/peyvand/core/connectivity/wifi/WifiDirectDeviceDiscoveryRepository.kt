@@ -133,6 +133,7 @@ class WifiDirectDeviceDiscoveryRepository(
                 peers = emptyList(),
                 sourceDiagnostics = emptyList(),
                 missingSourceAddressCount = 0,
+                untrackedSourceCount = 0,
                 failure = if (wasMonitoring) {
                     DeviceDiscoveryFailure.PLATFORM_ERROR
                 } else {
