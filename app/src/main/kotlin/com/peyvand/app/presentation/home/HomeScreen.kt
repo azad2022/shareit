@@ -436,6 +436,16 @@ fun DeviceDiscoveryScreen(
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
+                    if (state.untrackedSourceCount > 0) {
+                        Text(
+                            text = stringResource(
+                                R.string.discovery_diagnostics_untracked_sources,
+                                state.untrackedSourceCount,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
