@@ -15,7 +15,7 @@ Use Android `WifiP2pManager` DNS-SD service discovery for CP-002:
 - Each actively discoverable PEYVAND instance registers a `WifiP2pDnsSdServiceInfo`.
 - The instance name is `PEYVAND-` plus an eight-character random process-local hexadecimal suffix; service type is `_peyvand._tcp`.
 - Public TXT data contains only `app=peyvand` and `discovery=1`.
-- Each device registers a service request for the PEYVAND service type.
+- Only the active Send/browser role registers a typed service request for the PEYVAND service type. The Receive/advertiser role registers its local PEYVAND service and does not browse.
 - The service-response callback must have a valid PEYVAND instance name and the exact Bonjour registration type Android documents in the form `_service._tcp.local.`.
 - The TXT listener's full domain must parse as the exact same PEYVAND instance under `_peyvand._tcp.local.`; a substring match is insufficient.
 - Treat the service-response callback as the primary discovery signal: after strict PEYVAND instance-name and Bonjour registration-type validation, create an unverified discovery candidate without waiting for TXT.
@@ -62,7 +62,7 @@ Discovery is not trust. Any later connection or data exchange requires explicit 
 
 ## Consequences and limitations
 
-- Both devices must have PEYVAND open and actively advertising to appear in this version.
+- Both devices must have PEYVAND open in the foreground during discovery. The receiving device advertises its PEYVAND service; the sending device browses for that service. The roles can be reversed by starting the opposite user flow.
 - Device names and discovery behavior vary by vendor, Android version and Wi-Fi chipset.
 - The advertised app/schema fields are public compatibility markers, not secrets or credentials.
 - Transient P2P address and service instance name are used only to correlate callbacks within an active scan; neither is persisted or treated as identity.
