@@ -74,7 +74,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.peyvand.app.R
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
+import com.peyvand.app.presentation.connection.PeerConnectionViewModel
 import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
+import com.peyvand.core.domain.connection.PeerConnectionFailure
+import com.peyvand.core.domain.connection.PeerConnectionStatus
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DiscoveryOperation
 import com.peyvand.core.domain.discovery.DiscoveryRole
@@ -96,8 +99,10 @@ fun DeviceDiscoveryScreen(
     subtitle: String,
     role: DiscoveryRole,
     onBack: () -> Unit,
+    peerConnectionViewModel: PeerConnectionViewModel,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val connection by peerConnectionViewModel.state.collectAsStateWithLifecycle()
     val networkEnvironment by networkEnvironmentViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = context as? Activity
@@ -171,9 +176,13 @@ fun DeviceDiscoveryScreen(
         userStoppedDiscovery,
         state.availability,
         state.status,
+        connection.status,
         role,
     ) {
-        if (WifiDirectDiscoveryAutoStartPolicy.shouldAutoStart(
+        val connectionActive = connection.status == PeerConnectionStatus.CONNECTING ||
+            connection.status == PeerConnectionStatus.GROUP_FORMED ||
+            connection.status == PeerConnectionStatus.DISCONNECTING
+        if (!connectionActive && WifiDirectDiscoveryAutoStartPolicy.shouldAutoStart(
                 isResumed = isScreenResumed,
                 userStopped = userStoppedDiscovery,
                 hasPermission = hasPermission,
@@ -400,7 +409,16 @@ fun DeviceDiscoveryScreen(
                 )
 
                 state.peers.forEach { peer ->
-                    PeerCard(peer = peer)
+                    PeerCard(
+                        peer = peer,
+                        onConnect = if (role == DiscoveryRole.BROWSE_ONLY) {
+                            { peerConnectionViewModel.connectToPeer(peer.id) }
+                        } else {
+                            null
+                        },
+                        isConnectEnabled = connection.status == PeerConnectionStatus.IDLE ||
+                            connection.status == PeerConnectionStatus.FAILED,
+                    )
                 }
             }
         } else if (state.status == DiscoveryStatus.DISCOVERING) {
@@ -409,6 +427,69 @@ fun DeviceDiscoveryScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+
+        if (connection.status != PeerConnectionStatus.IDLE) {
+            val connectionMessage = when (connection.status) {
+                PeerConnectionStatus.IDLE -> R.string.connection_idle
+                PeerConnectionStatus.CONNECTING -> R.string.connection_connecting
+                PeerConnectionStatus.GROUP_FORMED -> R.string.connection_group_formed
+                PeerConnectionStatus.DISCONNECTING -> R.string.connection_disconnecting
+                PeerConnectionStatus.FAILED -> when (connection.failure) {
+                    PeerConnectionFailure.INVALID_DISCOVERY_CANDIDATE ->
+                        R.string.connection_error_stale_peer
+                    PeerConnectionFailure.PERMISSION_DENIED ->
+                        R.string.connection_error_permission
+                    PeerConnectionFailure.BUSY ->
+                        R.string.connection_error_busy
+                    PeerConnectionFailure.CONNECTION_TIMEOUT ->
+                        R.string.connection_error_timeout
+                    PeerConnectionFailure.UNSUPPORTED ->
+                        R.string.connection_error_unsupported
+                    PeerConnectionFailure.PLATFORM_ERROR,
+                    null,
+                    -> R.string.connection_error_generic
+                }
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = stringResource(connectionMessage),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (connection.status == PeerConnectionStatus.FAILED) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    if (connection.status == PeerConnectionStatus.GROUP_FORMED) {
+                        Text(
+                            text = stringResource(R.string.connection_group_security_notice),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (connection.status == PeerConnectionStatus.CONNECTING ||
+                        connection.status == PeerConnectionStatus.GROUP_FORMED ||
+                        connection.status == PeerConnectionStatus.FAILED
+                    ) {
+                        OutlinedButton(
+                            onClick = peerConnectionViewModel::disconnect,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.connection_cancel))
+                        }
+                    }
+                }
+            }
         }
 
         if (state.status != DiscoveryStatus.IDLE) {
@@ -712,6 +793,8 @@ private fun AvailabilityCard(
 @Composable
 private fun PeerCard(
     peer: NearbyPeer,
+    onConnect: (() -> Unit)?,
+    isConnectEnabled: Boolean,
 ) {
     val rawName = peer.displayName
         ?.takeIf { it.isNotBlank() }
@@ -774,6 +857,16 @@ private fun PeerCard(
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
+                if (onConnect != null) {
+                    Button(
+                        onClick = onConnect,
+                        enabled = isConnectEnabled &&
+                            peer.metadataStatus != DiscoveryMetadataStatus.INCOMPATIBLE,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.connection_connect))
+                    }
+                }
             }
         }
     }
