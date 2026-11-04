@@ -40,10 +40,16 @@ class PeerConnectionStatePolicyTest {
     }
 
     @Test
-    fun `empty owner address cannot represent a formed group`() {
-        assertTrue(PeerConnectionStatePolicy.isGroupFormed(true, "192.168.49.1"))
-        assertFalse(PeerConnectionStatePolicy.isGroupFormed(false, "192.168.49.1"))
-        assertFalse(PeerConnectionStatePolicy.isGroupFormed(true, null))
-        assertFalse(PeerConnectionStatePolicy.isGroupFormed(true, " "))
+    fun `group owner can form without a usable local owner address`() {
+        assertTrue(PeerConnectionStatePolicy.isGroupFormed(true, true, null))
+        assertFalse(PeerConnectionStatePolicy.isGroupFormed(false, true, null))
+    }
+
+    @Test
+    fun `group client requires a usable remote owner address`() {
+        assertTrue(PeerConnectionStatePolicy.isGroupFormed(true, false, "192.168.49.1"))
+        assertFalse(PeerConnectionStatePolicy.isGroupFormed(false, false, "192.168.49.1"))
+        assertFalse(PeerConnectionStatePolicy.isGroupFormed(true, false, null))
+        assertFalse(PeerConnectionStatePolicy.isGroupFormed(true, false, " "))
     }
 }

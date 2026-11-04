@@ -143,14 +143,22 @@ internal class WifiDirectPeerConnectionController(
                     if (!isCurrent(requestGeneration)) return@ConnectionInfoListener
 
                     val ownerAddress = info.groupOwnerAddress?.hostAddress
-                    if (PeerConnectionStatePolicy.isGroupFormed(info.groupFormed, ownerAddress)) {
+                    // Android may anonymize the local Group Owner address. Only the
+                    // Group Client needs this endpoint for its outbound TCP connection.
+                    val remoteGroupOwnerAddress = ownerAddress.takeUnless { info.isGroupOwner }
+                    if (PeerConnectionStatePolicy.isGroupFormed(
+                            groupFormed = info.groupFormed,
+                            isGroupOwner = info.isGroupOwner,
+                            groupOwnerAddress = remoteGroupOwnerAddress,
+                        )
+                    ) {
                         clearTimeout()
                         val previous = mutableConnection.value
                         mutableConnection.value = PeerConnectionSnapshot(
                             status = PeerConnectionStatus.GROUP_FORMED,
                             selectedPeerId = previous.selectedPeerId,
                             isGroupOwner = info.isGroupOwner,
-                            groupOwnerAddress = ownerAddress,
+                            groupOwnerAddress = remoteGroupOwnerAddress,
                             locallyInitiated = previous.locallyInitiated,
                         )
                         // Releasing DNS-SD registrations is safe only after Android

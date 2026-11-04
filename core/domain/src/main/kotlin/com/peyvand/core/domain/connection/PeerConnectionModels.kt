@@ -31,7 +31,10 @@ data class PeerConnectionSnapshot(
     val selectedPeerId: String? = null,
     /** True only after Android reports group formation through requestConnectionInfo. */
     val isGroupOwner: Boolean? = null,
-    /** Transient group-owner endpoint. Available only while the group is formed. */
+    /**
+     * Transient remote Group Owner endpoint when this device is the client.
+     * Null on the local Group Owner because Android may anonymize its own address.
+     */
     val groupOwnerAddress: String? = null,
     /** False for an incoming OS-level connection initiated by the other device. */
     val locallyInitiated: Boolean = false,
@@ -50,10 +53,15 @@ interface PeerConnectionRepository {
 
 /** Pure validation shared by the platform adapter and its tests. */
 object PeerConnectionStatePolicy {
+    /**
+     * Android may anonymize the local Group Owner address on the owner device.
+     * A Group Client must have a usable remote owner endpoint to open its TCP socket.
+     */
     fun isGroupFormed(
         groupFormed: Boolean,
+        isGroupOwner: Boolean,
         groupOwnerAddress: String?,
-    ): Boolean = groupFormed && !groupOwnerAddress.isNullOrBlank()
+    ): Boolean = groupFormed && (isGroupOwner || !groupOwnerAddress.isNullOrBlank())
 
     fun mayInitiate(
         peerId: String,
