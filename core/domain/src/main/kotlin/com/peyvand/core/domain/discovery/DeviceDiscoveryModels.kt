@@ -27,7 +27,7 @@ enum class PlatformDiscoveryState {
     STOPPED,
 }
 
-/** A scan has one explicit DNS-SD responsibility; send and receive are not symmetric. */
+/** User intent for the discovery screen. Both intents publish and browse PEYVAND DNS-SD. */
 enum class DiscoveryRole {
     ADVERTISE_ONLY,
     BROWSE_ONLY,
@@ -104,7 +104,7 @@ object WifiDirectServiceDiscoveryRearmPolicy {
         platformState: PlatformDiscoveryState,
     ): Boolean =
         monitoring &&
-            activeRole == DiscoveryRole.BROWSE_ONLY &&
+            activeRole != null &&
             !cleanupInProgress &&
             !cleanupRequested &&
             !startInFlight &&
@@ -161,6 +161,28 @@ interface DeviceDiscoveryRepository {
     fun refreshAvailability()
     fun startDiscovery(role: DiscoveryRole)
     fun stopDiscovery()
+}
+
+
+/**
+ * A foreground discovery screen may automatically start a fresh session only
+ * when the user has not explicitly stopped it and the platform is ready.
+ * This also restarts discovery after Activity.onStop() stopped the previous
+ * foreground session.
+ */
+object WifiDirectDiscoveryAutoStartPolicy {
+    fun shouldAutoStart(
+        isResumed: Boolean,
+        userStopped: Boolean,
+        hasPermission: Boolean,
+        availability: WifiDirectAvailability,
+        status: DiscoveryStatus,
+    ): Boolean =
+        isResumed &&
+            !userStopped &&
+            hasPermission &&
+            availability == WifiDirectAvailability.READY &&
+            status == DiscoveryStatus.IDLE
 }
 
 object WifiDirectPermissionPolicy {

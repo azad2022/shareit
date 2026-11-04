@@ -68,6 +68,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.text.BidiFormatter
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.peyvand.app.R
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
@@ -80,6 +83,7 @@ import com.peyvand.core.domain.discovery.DiscoveryStatus
 import com.peyvand.core.domain.discovery.PlatformDiscoveryState
 import com.peyvand.core.domain.discovery.NearbyPeer
 import com.peyvand.core.domain.discovery.WifiDirectAvailability
+import com.peyvand.core.domain.discovery.WifiDirectDiscoveryAutoStartPolicy
 import com.peyvand.core.domain.discovery.WifiDirectPermissionPolicy
 import com.peyvand.core.domain.network.VpnRouteStatus
 
@@ -116,7 +120,13 @@ fun DeviceDiscoveryScreen(
 
     var permissionWasDenied by rememberSaveable { mutableStateOf(false) }
     var approximatePermissionOnly by rememberSaveable { mutableStateOf(false) }
-    var automaticStartConsumed by remember(viewModel, role) { mutableStateOf(false) }
+    var userStoppedDiscovery by remember(viewModel, role) { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isScreenResumed by remember(lifecycleOwner) {
+        mutableStateOf(
+            lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
+        )
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
@@ -142,12 +152,35 @@ fun DeviceDiscoveryScreen(
         viewModel.refreshAvailability()
     }
 
-    LaunchedEffect(hasPermission, state.availability, role) {
-        if (!automaticStartConsumed &&
-            hasPermission &&
-            state.availability == WifiDirectAvailability.READY
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> isScreenResumed = true
+                Lifecycle.Event.ON_PAUSE,
+                Lifecycle.Event.ON_STOP -> isScreenResumed = false
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(
+        isScreenResumed,
+        hasPermission,
+        userStoppedDiscovery,
+        state.availability,
+        state.status,
+        role,
+    ) {
+        if (WifiDirectDiscoveryAutoStartPolicy.shouldAutoStart(
+                isResumed = isScreenResumed,
+                userStopped = userStoppedDiscovery,
+                hasPermission = hasPermission,
+                availability = state.availability,
+                status = state.status,
+            )
         ) {
-            automaticStartConsumed = true
             viewModel.startDiscovery(role)
         }
     }
@@ -226,13 +259,9 @@ fun DeviceDiscoveryScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 RadarScanner(
-                    isActive = when (role) {
-                        DiscoveryRole.ADVERTISE_ONLY ->
-                            state.status == DiscoveryStatus.ADVERTISING
-                        DiscoveryRole.BROWSE_ONLY ->
-                            state.status == DiscoveryStatus.DISCOVERING &&
-                                state.platformDiscoveryState == PlatformDiscoveryState.RUNNING
-                    },
+                    isActive = state.status == DiscoveryStatus.ADVERTISING ||
+                        (state.status == DiscoveryStatus.DISCOVERING &&
+                            state.platformDiscoveryState == PlatformDiscoveryState.RUNNING),
                 )
 
                 Text(
@@ -240,20 +269,16 @@ fun DeviceDiscoveryScreen(
                         DiscoveryStatus.IDLE -> stringResource(R.string.discovery_idle)
                         DiscoveryStatus.STARTING -> stringResource(R.string.discovery_starting)
                         DiscoveryStatus.ADVERTISING -> stringResource(R.string.discovery_advertising)
-                        DiscoveryStatus.DISCOVERING -> when (role) {
-                            DiscoveryRole.ADVERTISE_ONLY ->
-                                stringResource(R.string.discovery_scanning)
-                            DiscoveryRole.BROWSE_ONLY -> stringResource(
-                                when (state.platformDiscoveryState) {
-                                    PlatformDiscoveryState.UNKNOWN ->
-                                        R.string.discovery_scanning_state_unknown
-                                    PlatformDiscoveryState.RUNNING ->
-                                        R.string.discovery_scanning
-                                    PlatformDiscoveryState.STOPPED ->
-                                        R.string.discovery_scanning_rearming
-                                },
-                            )
-                        }
+                        DiscoveryStatus.DISCOVERING -> stringResource(
+                            when (state.platformDiscoveryState) {
+                                PlatformDiscoveryState.UNKNOWN ->
+                                    R.string.discovery_scanning_state_unknown
+                                PlatformDiscoveryState.RUNNING ->
+                                    R.string.discovery_scanning
+                                PlatformDiscoveryState.STOPPED ->
+                                    R.string.discovery_scanning_rearming
+                            },
+                        )
                         DiscoveryStatus.FAILED -> stringResource(R.string.discovery_failed)
                     },
                     style = MaterialTheme.typography.titleMedium,
@@ -274,15 +299,15 @@ fun DeviceDiscoveryScreen(
                         state.availability == WifiDirectAvailability.UNAVAILABLE,
                     onClick = {
                         if (isScanning) {
+                            userStoppedDiscovery = true
                             viewModel.stopDiscovery()
                         } else if (hasPermission) {
                             permissionWasDenied = false
                             approximatePermissionOnly = false
+                            userStoppedDiscovery = false
                             if (state.availability == WifiDirectAvailability.READY) {
-                                automaticStartConsumed = true
                                 viewModel.startDiscovery(role)
                             } else {
-                                automaticStartConsumed = false
                                 viewModel.refreshAvailability()
                             }
                         } else {
@@ -444,28 +469,26 @@ fun DeviceDiscoveryScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (role == DiscoveryRole.BROWSE_ONLY) {
-                        val platformStateLabel = stringResource(
-                            when (state.platformDiscoveryState) {
-                                PlatformDiscoveryState.UNKNOWN ->
-                                    R.string.discovery_diagnostics_platform_unknown
-                                PlatformDiscoveryState.RUNNING ->
-                                    R.string.discovery_diagnostics_platform_running
-                                PlatformDiscoveryState.STOPPED ->
-                                    R.string.discovery_diagnostics_platform_stopped
-                            },
-                        )
-                        Text(
-                            text = stringResource(
-                                R.string.discovery_diagnostics_platform_state,
-                                platformStateLabel,
-                                state.discoveryStopCount,
-                                state.discoveryRestartCount,
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    val platformStateLabel = stringResource(
+                        when (state.platformDiscoveryState) {
+                            PlatformDiscoveryState.UNKNOWN ->
+                                R.string.discovery_diagnostics_platform_unknown
+                            PlatformDiscoveryState.RUNNING ->
+                                R.string.discovery_diagnostics_platform_running
+                            PlatformDiscoveryState.STOPPED ->
+                                R.string.discovery_diagnostics_platform_stopped
+                        },
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.discovery_diagnostics_platform_state,
+                            platformStateLabel,
+                            state.discoveryStopCount,
+                            state.discoveryRestartCount,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     state.sourceDiagnostics.forEach { source ->
                         Text(
                             text = stringResource(

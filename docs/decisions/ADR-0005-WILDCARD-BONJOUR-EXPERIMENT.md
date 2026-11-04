@@ -1,6 +1,6 @@
 # ADR-0005 — Wildcard Bonjour query compatibility experiment
 
-- **Status:** Experimental, Debug-only; not accepted as the production discovery strategy.
+- **Status:** Superseded; wildcard query not accepted for production.
 - **Date:** 2026-11-02
 - **Branch:** `feature/dns-sd-wildcard-query-experiment`
 - **Base:** `feature/foundation-bootstrap` at `df7c595462ed445a721cc0ddb95bc754ae3b4ec8`
@@ -58,3 +58,8 @@ Repeat each order at least five times, keeping permissions, Location Mode, Wi-Fi
 - CP-002 remains `IN_PROGRESS` until physical interoperability acceptance criteria are met.
 - No production/release signing or release build is authorized by this ADR.
 
+
+
+## Outcome — 2026-11-04
+
+The product-owner retest of the Debug build based on this experiment still exhibited a discovery-order dependency and did not establish reliable repeat discovery. The wildcard query therefore did not demonstrate the required interoperability improvement. The implementation is reverted to the typed PEYVAND service request in the follow-up reliability change. This ADR remains as the record of the experiment; it is not evidence that wildcard discovery is a fix.

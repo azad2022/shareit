@@ -144,3 +144,15 @@ Keep `IN_PROGRESS` until every applicable criterion has reproducible evidence. U
 - This is a diagnostic compatibility experiment, not an accepted production change. It does not add peer discovery, a fallback transport, a socket or transfer behavior.
 - Required next evidence: exact-head CI plus repeated late-advertiser and late-browser tests on the Galaxy A12 / ASUS X017DA pair. Keep CP-002 `IN_PROGRESS` until repeatable physical discovery is demonstrated.
 - See `docs/decisions/ADR-0005-WILDCARD-BONJOUR-EXPERIMENT.md`.
+
+
+## Owner retest — order dependency and repeat-session failure (2026-11-04)
+
+- Owner observation: Receive must start before Send; simultaneous starts and a Receive session started after Send are not reliably discovered.
+- Owner observation: a later attempt may fail until both apps are exited and reopened.
+- File-selection hypothesis audited: the selection-clear action only empties the ShareSelectionViewModel's selectedItems map. No call path from clearSelection() reaches DeviceDiscoveryRepository; selection retention is not a discovery precondition.
+- Source-level cause addressed: the old role split made Receive advertise-only and Send browse-only. Both flows now register the PEYVAND service and browse for PEYVAND peers. Existing instance/type checks and TXT-optional semantics remain unchanged.
+- Source-level cause addressed: a one-shot Compose auto-start flag was not reset when the Activity lifecycle stopped discovery in the background. The new foreground-aware start policy restarts an IDLE ready session on resume unless the user explicitly stopped it.
+- The wildcard Bonjour experiment is rolled back to the typed PEYVAND service request because the owner's latest observation does not demonstrate that the wildcard query resolved discovery ordering.
+- Required physical acceptance remains: both timing orders and simultaneous start, at least five repetitions per mode, repeated stop/start without process restart, and foreground/background recovery on Galaxy A12 and ASUS X017DA.
+- CI can validate compilation and pure policy tests only; it cannot validate Wi-Fi P2P interoperability. Keep CP-002 `IN_PROGRESS`.

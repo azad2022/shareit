@@ -162,11 +162,9 @@ class WifiDirectDeviceDiscoveryRepository(
     }
 
     private val serviceRequest by lazy {
-        // Debug compatibility experiment: search all Bonjour services, then
-        // retain PEYVAND-only filtering in the DNS-SD callback. This isolates
-        // OEM behavior differences in typed PTR requests without broadening
-        // the set of peers that can be published by the application.
-        WifiP2pDnsSdServiceRequest.newInstance()
+        WifiP2pDnsSdServiceRequest.newInstance(
+            PeyvandDiscoveryAdvertisement.SERVICE_TYPE,
+        )
     }
 
     private val channelListener = object : WifiP2pManager.ChannelListener {
@@ -457,8 +455,7 @@ class WifiDirectDeviceDiscoveryRepository(
         serviceDiscoveryLifecycle.beginScan()
 
         try {
-            if (role == DiscoveryRole.BROWSE_ONLY) {
-                manager.setDnsSdResponseListeners(
+            manager.setDnsSdResponseListeners(
                     activeChannel,
                     WifiP2pManager.DnsSdServiceResponseListener {
                             instanceName,
@@ -595,16 +592,10 @@ class WifiDirectDeviceDiscoveryRepository(
                         }
                     },
                 )
-            }
 
-            when (role) {
-                DiscoveryRole.ADVERTISE_ONLY -> {
-                    registerLocalServiceWithRetry(manager, activeChannel, requestGeneration)
-                }
-                DiscoveryRole.BROWSE_ONLY -> {
-                    registerServiceRequestWithRetry(manager, activeChannel, requestGeneration)
-                }
-            }
+            // Sender and receiver screens share the same discovery contract:
+            // advertise PEYVAND presence, then browse for nearby PEYVAND peers.
+            registerLocalServiceWithRetry(manager, activeChannel, requestGeneration)
 
         } catch (_: SecurityException) {
             setPermissionRequired(requestGeneration)
@@ -639,6 +630,11 @@ class WifiDirectDeviceDiscoveryRepository(
                     mutableSnapshot.value = mutableSnapshot.value.copy(
                         status = DiscoveryStatus.ADVERTISING,
                         failure = null,
+                    )
+                    registerServiceRequestWithRetry(
+                        manager,
+                        activeChannel,
+                        expectedGeneration,
                     )
                 },
             )
@@ -702,7 +698,7 @@ class WifiDirectDeviceDiscoveryRepository(
         isRearm: Boolean = false,
     ) {
         if (!isCurrent(expectedGeneration) ||
-            activeRole != DiscoveryRole.BROWSE_ONLY ||
+            activeRole == null ||
             cleanupInProgress ||
             cleanupRequested ||
             serviceDiscoveryStartInFlight
