@@ -51,7 +51,7 @@ class StreamingTransferEngineTest {
     }
 
     @Test
-    fun `short source stream is rejected`() = runBlocking {
+    fun `short source stream is rejected`() {
         assertThrows(TransferSizeMismatchException::class.java) {
             runBlocking {
                 StreamingTransferEngine().copyAndDigest(
@@ -105,7 +105,6 @@ class StreamingTransferEngineTest {
             StreamingTransferEngine(bufferSizeBytes = StreamingTransferEngine.MAX_BUFFER_SIZE_BYTES + 1)
         }
     }
-
 
     @Test
     fun `unknown-length source is streamed and measured at EOF`() = runBlocking {
