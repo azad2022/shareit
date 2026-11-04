@@ -71,7 +71,7 @@ class WifiDirectDeviceDiscoveryRepository(
             isMonitoring = { monitoring },
             isReceiverRegistered = { receiverRegistered },
             hasRequiredRuntimePermission = ::hasRequiredRuntimePermission,
-            onConnectAccepted = ::stopDiscovery,
+            onGroupFormed = ::stopDiscovery,
         )
     }
 
