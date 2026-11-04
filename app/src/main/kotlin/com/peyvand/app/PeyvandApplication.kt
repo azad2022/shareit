@@ -6,14 +6,21 @@ import com.peyvand.core.connectivity.wifi.WifiDirectDeviceDiscoveryRepository
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
 import com.peyvand.core.domain.network.NetworkEnvironmentRepository
 import com.peyvand.core.domain.files.ShareCatalogRepository
+import com.peyvand.core.domain.connection.PeerConnectionRepository
 import com.peyvand.core.storage.AndroidShareCatalogRepository
 
 class PeyvandApplication : Application() {
-    val deviceDiscoveryRepository: DeviceDiscoveryRepository by lazy(
+    private val wifiDirectRepository by lazy(
         LazyThreadSafetyMode.SYNCHRONIZED,
     ) {
         WifiDirectDeviceDiscoveryRepository(applicationContext)
     }
+
+    val deviceDiscoveryRepository: DeviceDiscoveryRepository
+        get() = wifiDirectRepository
+
+    val peerConnectionRepository: PeerConnectionRepository
+        get() = wifiDirectRepository
 
     val networkEnvironmentRepository: NetworkEnvironmentRepository by lazy(
         LazyThreadSafetyMode.SYNCHRONIZED,
