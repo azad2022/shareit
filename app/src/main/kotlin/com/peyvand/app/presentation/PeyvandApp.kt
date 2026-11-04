@@ -68,6 +68,11 @@ fun PeyvandApp(
     BackHandler(
         enabled = uiState is MainUiState.Home && destination != HomeDestination.HOME,
     ) {
+        if (destination == HomeDestination.SEND_DISCOVERY ||
+            destination == HomeDestination.RECEIVE_DISCOVERY
+        ) {
+            peerConnectionViewModel.disconnect()
+        }
         destination = when (destination) {
             HomeDestination.SEND_DISCOVERY -> HomeDestination.SEND_SELECTION
             HomeDestination.SEND_SELECTION,
@@ -125,7 +130,10 @@ fun PeyvandApp(
                     title = stringResource(R.string.receive_screen_title),
                     subtitle = stringResource(R.string.receive_screen_subtitle),
                     role = DiscoveryRole.ADVERTISE_ONLY,
-                    onBack = { destination = HomeDestination.HOME },
+                    onBack = {
+                        peerConnectionViewModel.disconnect()
+                        destination = HomeDestination.HOME
+                    },
                     peerConnectionViewModel = peerConnectionViewModel,
                 )
 
@@ -135,7 +143,10 @@ fun PeyvandApp(
                     title = stringResource(R.string.send_discovery_title),
                     subtitle = stringResource(R.string.send_discovery_subtitle),
                     role = DiscoveryRole.BROWSE_ONLY,
-                    onBack = { destination = HomeDestination.SEND_SELECTION },
+                    onBack = {
+                        peerConnectionViewModel.disconnect()
+                        destination = HomeDestination.SEND_SELECTION
+                    },
                     peerConnectionViewModel = peerConnectionViewModel,
                 )
 
