@@ -1,7 +1,6 @@
 package com.peyvand.core.connectivity.wifi
 
 import android.content.Context
-import android.security.KeyPairGeneratorSpec
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
@@ -12,7 +11,6 @@ import com.peyvand.core.domain.connection.SecureSessionStatus
 import com.peyvand.core.transfer.protocol.TransferFrame
 import com.peyvand.core.transfer.protocol.TransferFrameCodec
 import com.peyvand.core.transfer.protocol.TransferFrameType
-import com.peyvand.core.transfer.protocol.TransferProtocolException
 import com.peyvand.core.transfer.security.PairingBootstrapCodec
 import com.peyvand.core.transfer.security.PairingBootstrapHello
 import com.peyvand.core.transfer.security.PairingEndpointMaterial
@@ -21,7 +19,6 @@ import com.peyvand.core.transfer.security.PairingShortAuthenticationString
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.net.Socket
-import java.nio.charset.StandardCharsets
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.MessageDigest
@@ -38,7 +35,6 @@ import java.util.UUID
 import javax.net.ssl.KeyManager
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
-import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509KeyManager
 import javax.net.ssl.X509TrustManager
@@ -49,7 +45,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -146,11 +141,15 @@ internal class WifiDirectSecureSessionController(
         var localSocket: Socket? = null
         var tlsSocket: SSLSocket? = null
         try {
-            val channel = withTimeout(TCP_READY_TIMEOUT_MILLIS) {
-                tcpChannelProvider().first { snapshot ->
-                    snapshot.status == com.peyvand.core.domain.connection.P2pTcpChannelStatus.CONNECTED ||
-                        snapshot.status == com.peyvand.core.domain.connection.P2pTcpChannelStatus.FAILED
+            val channel = try {
+                withTimeout(TCP_READY_TIMEOUT_MILLIS) {
+                    tcpChannelProvider().first { snapshot ->
+                        snapshot.status == com.peyvand.core.domain.connection.P2pTcpChannelStatus.CONNECTED ||
+                            snapshot.status == com.peyvand.core.domain.connection.P2pTcpChannelStatus.FAILED
+                    }
                 }
+            } catch (_: TimeoutCancellationException) {
+                throw SessionSetupException(SecureSessionFailure.BOOTSTRAP_TIMEOUT)
             }
             ensureCurrent(expectedGeneration)
             if (channel.status != com.peyvand.core.domain.connection.P2pTcpChannelStatus.CONNECTED) {
@@ -158,10 +157,11 @@ internal class WifiDirectSecureSessionController(
             }
             val groupOwner = channel.isGroupOwner
                 ?: throw SessionSetupException(SecureSessionFailure.IO_ERROR)
-            localSocket = rawSocketProvider()
+            val activeSocket = rawSocketProvider()
                 ?.takeIf { it.isConnected && !it.isClosed }
                 ?: throw SessionSetupException(SecureSessionFailure.IO_ERROR)
-            synchronized(lock) { rawSocket = localSocket }
+            localSocket = activeSocket
+            synchronized(lock) { rawSocket = activeSocket }
 
             val localRole = if (connection.locallyInitiated) {
                 PeerTransferRole.SENDER
@@ -175,9 +175,11 @@ internal class WifiDirectSecureSessionController(
 
             val sessionId: UUID
             val remoteHello: PairingBootstrapHello
-            alias = "peyvand_session_${UUID.randomUUID().toString().replace("-", "")}"
-            synchronized(lock) { activeKeyAlias = alias }
-            val identity = createEphemeralIdentity(alias)
+            val keyAlias = "peyvand_session_${UUID.randomUUID().toString().replace("-", "")}"
+            alias = keyAlias
+
+            synchronized(lock) { activeKeyAlias = keyAlias }
+            val identity = createEphemeralIdentity(keyAlias)
             val localNonce = ByteArray(PairingBootstrapHello.NONCE_BYTES).also {
                 SecureRandom().nextBytes(it)
             }
@@ -190,10 +192,10 @@ internal class WifiDirectSecureSessionController(
                     nonce = localNonce,
                     certificateDer = identity.certificate.encoded,
                 )
-                PairingBootstrapCodec.write(localHello, localSocket.getOutputStream())
-                remoteHello = PairingBootstrapCodec.read(localSocket.getInputStream())
+                PairingBootstrapCodec.write(localHello, activeSocket.getOutputStream())
+                remoteHello = PairingBootstrapCodec.read(activeSocket.getInputStream())
             } else {
-                remoteHello = PairingBootstrapCodec.read(localSocket.getInputStream())
+                remoteHello = PairingBootstrapCodec.read(activeSocket.getInputStream())
                 sessionId = remoteHello.sessionId
                 val localHello = PairingBootstrapHello(
                     sessionId = sessionId,
@@ -201,7 +203,7 @@ internal class WifiDirectSecureSessionController(
                     nonce = localNonce,
                     certificateDer = identity.certificate.encoded,
                 )
-                PairingBootstrapCodec.write(localHello, localSocket.getOutputStream())
+                PairingBootstrapCodec.write(localHello, activeSocket.getOutputStream())
             }
             ensureCurrent(expectedGeneration)
 
@@ -266,7 +268,7 @@ internal class WifiDirectSecureSessionController(
             mutableState.value = SecureSessionSnapshot(SecureSessionStatus.TLS_HANDSHAKING)
             tlsSocket = createPinnedTlsSocket(
                 raw = localSocket,
-                alias = alias,
+                alias = keyAlias,
                 identity = identity,
                 expectedPeerFingerprint = peerFingerprint,
                 isGroupOwner = groupOwner,
@@ -358,7 +360,8 @@ internal class WifiDirectSecureSessionController(
                 .build(),
         )
         generator.generateKeyPair()
-        val certificate = store.getCertificate(alias) as? X509Certificate
+        val refreshedStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        val certificate = refreshedStore.getCertificate(alias) as? X509Certificate
             ?: throw SessionSetupException(SecureSessionFailure.KEYSTORE_ERROR)
         certificate.checkValidity()
         certificate.verify(certificate.publicKey)
