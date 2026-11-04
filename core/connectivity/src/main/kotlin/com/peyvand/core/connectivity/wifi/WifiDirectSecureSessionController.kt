@@ -1,7 +1,5 @@
 package com.peyvand.core.connectivity.wifi
 
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
 import com.peyvand.core.domain.connection.PeerTransferRole
 import com.peyvand.core.domain.connection.SecureSessionFailure
@@ -18,25 +16,17 @@ import com.peyvand.core.transfer.security.PairingShortAuthenticationString
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.net.Socket
-import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.MessageDigest
-import java.security.Principal
-import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.security.interfaces.ECPublicKey
-import java.security.spec.ECGenParameterSpec
-import java.math.BigInteger
-import java.util.Date
 import java.util.UUID
 import javax.net.ssl.KeyManager
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManager
-import javax.net.ssl.X509KeyManager
-import javax.net.ssl.X509TrustManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -138,7 +128,11 @@ internal class WifiDirectSecureSessionController(
         var alias: String? = null
         var localSocket: Socket? = null
         var tlsSocket: SSLSocket? = null
+        val diagnostics = SecureTlsDiagnostics()
+        var currentStage = "TCP_CHANNEL_WAIT"
+        var tlsRoleForDiagnostics = "UNKNOWN"
         try {
+            diagnostics.event("SESSION_START")
             val channel = try {
                 withTimeout(TCP_READY_TIMEOUT_MILLIS) {
                     tcpChannelProvider().first { snapshot ->
@@ -150,16 +144,28 @@ internal class WifiDirectSecureSessionController(
                 throw SessionSetupException(SecureSessionFailure.BOOTSTRAP_TIMEOUT)
             }
             ensureCurrent(expectedGeneration)
+            diagnostics.event(
+                "TCP_CHANNEL_RESULT",
+                "status=§{channel.status} groupRole=§{channel.isGroupOwner ?: "unknown"}",
+            )
             if (channel.status != com.peyvand.core.domain.connection.P2pTcpChannelStatus.CONNECTED) {
                 throw SessionSetupException(SecureSessionFailure.IO_ERROR)
             }
             val groupOwner = channel.isGroupOwner
                 ?: throw SessionSetupException(SecureSessionFailure.IO_ERROR)
+            if (connection.isGroupOwner != groupOwner) {
+                diagnostics.event(
+                    "GROUP_ROLE_MISMATCH",
+                    "connectionGroupOwner=§{connection.isGroupOwner} tcpGroupOwner=$groupOwner",
+                )
+                throw SessionSetupException(SecureSessionFailure.IO_ERROR)
+            }
             val activeSocket = rawSocketProvider()
                 ?.takeIf { it.isConnected && !it.isClosed }
                 ?: throw SessionSetupException(SecureSessionFailure.IO_ERROR)
             localSocket = activeSocket
             synchronized(lock) { rawSocket = activeSocket }
+            currentStage = "TCP_CONNECTED"
 
             val localRole = if (connection.locallyInitiated) {
                 PeerTransferRole.SENDER
@@ -170,6 +176,15 @@ internal class WifiDirectSecureSessionController(
                 PeerTransferRole.SENDER -> PairingParticipantRole.SENDER
                 PeerTransferRole.RECEIVER -> PairingParticipantRole.RECEIVER
             }
+            diagnostics.deviceContext(
+                groupRole = if (groupOwner) "GROUP_OWNER" else "GROUP_CLIENT",
+                productRole = localRole.name,
+            )
+            diagnostics.event(
+                "TCP_CONNECTED",
+                "groupRole=§{if (groupOwner) "GROUP_OWNER" else "GROUP_CLIENT"} " +
+                    "productRole=§{localRole.name} connectionGroupOwner=§{connection.isGroupOwner}",
+            )
 
             val sessionId: UUID
             val remoteHello: PairingBootstrapHello
@@ -178,13 +193,27 @@ internal class WifiDirectSecureSessionController(
             alias = keyAlias
 
             synchronized(lock) { activeKeyAlias = keyAlias }
-            val identity = createEphemeralIdentity(keyAlias)
+            currentStage = "LOCAL_IDENTITY_CREATION"
+            val identity = try {
+                createEphemeralIdentity(keyAlias)
+            } catch (exception: Exception) {
+                diagnostics.failure("SESSION_FAILURE", currentStage, tlsRoleForDiagnostics, exception)
+                throw SessionSetupException(SecureSessionFailure.KEYSTORE_ERROR, exception)
+            }
+            val localFingerprintAtCreation = sha256(identity.certificate.encoded)
+            diagnostics.event(
+                "LOCAL_IDENTITY_CREATED",
+                "keyAlgorithm=EC curve=P-256 certificateValid=true selfSignatureValid=true " +
+                    "certificateFingerprintPrefix=§{SecureTlsDiagnostics.fingerprintPrefix(localFingerprintAtCreation)}",
+            )
             val localNonce = ByteArray(PairingBootstrapHello.NONCE_BYTES).also {
                 SecureRandom().nextBytes(it)
             }
 
+            currentStage = "BOOTSTRAP_EXCHANGE"
             if (groupOwner) {
                 sessionId = UUID.randomUUID()
+                diagnostics.bindSession(sessionId)
                 val localHello = PairingBootstrapHello(
                     sessionId = sessionId,
                     role = participantRole,
@@ -192,10 +221,23 @@ internal class WifiDirectSecureSessionController(
                     certificateDer = identity.certificate.encoded,
                 )
                 PairingBootstrapCodec.write(localHello, activeSocket.getOutputStream())
+                diagnostics.event(
+                    "LOCAL_BOOTSTRAP_SENT",
+                    "participantRole=§{participantRole.name} certificateBytes=§{identity.certificate.encoded.size}",
+                )
                 remoteHello = PairingBootstrapCodec.read(activeSocket.getInputStream())
+                diagnostics.event(
+                    "REMOTE_BOOTSTRAP_RECEIVED",
+                    "participantRole=§{remoteHello.role.name} certificateBytes=§{remoteHello.certificateBytes().size}",
+                )
             } else {
                 remoteHello = PairingBootstrapCodec.read(activeSocket.getInputStream())
                 sessionId = remoteHello.sessionId
+                diagnostics.bindSession(sessionId)
+                diagnostics.event(
+                    "REMOTE_BOOTSTRAP_RECEIVED",
+                    "participantRole=§{remoteHello.role.name} certificateBytes=§{remoteHello.certificateBytes().size}",
+                )
                 val localHello = PairingBootstrapHello(
                     sessionId = sessionId,
                     role = participantRole,
@@ -203,15 +245,25 @@ internal class WifiDirectSecureSessionController(
                     certificateDer = identity.certificate.encoded,
                 )
                 PairingBootstrapCodec.write(localHello, activeSocket.getOutputStream())
+                diagnostics.event(
+                    "LOCAL_BOOTSTRAP_SENT",
+                    "participantRole=§{participantRole.name} certificateBytes=§{identity.certificate.encoded.size}",
+                )
             }
             ensureCurrent(expectedGeneration)
 
             if (remoteHello.sessionId != sessionId || remoteHello.role == participantRole) {
                 throw SessionSetupException(SecureSessionFailure.PARTICIPANT_ROLE_MISMATCH)
             }
-            val peerCertificate = parseAndValidatePeerCertificate(remoteHello.certificateBytes())
+            currentStage = "REMOTE_CERTIFICATE_VALIDATION"
+            val peerCertificate = parseAndValidatePeerCertificate(remoteHello.certificateBytes(), diagnostics)
             val localFingerprint = sha256(identity.certificate.encoded)
             val peerFingerprint = sha256(peerCertificate.encoded)
+            diagnostics.event(
+                "REMOTE_CERTIFICATE_VALIDATED",
+                "validity=valid selfSignature=valid ecCurve=P-256 " +
+                    "fingerprintPrefix=§{SecureTlsDiagnostics.fingerprintPrefix(peerFingerprint)}",
+            )
             val localMaterial = PairingEndpointMaterial(
                 localFingerprint,
                 localNonce,
@@ -227,6 +279,10 @@ internal class WifiDirectSecureSessionController(
                 local = localMaterial,
                 remote = remoteMaterial,
                 protocolVersion = TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+            )
+            diagnostics.event(
+                "SAS_DERIVED",
+                "protocolVersion=§{TransferFrameCodec.CURRENT_PROTOCOL_VERSION} sasValueLogged=false",
             )
 
             val approvalSignal = CompletableDeferred<Boolean>()
@@ -246,9 +302,11 @@ internal class WifiDirectSecureSessionController(
             }
             ensureCurrent(expectedGeneration)
             if (!approved) {
+                diagnostics.event("LOCAL_APPROVAL_REJECTED")
                 notifySessionClose(activeSocket, sessionId)
                 throw PairingRejectedException()
             }
+            diagnostics.event("LOCAL_APPROVAL_GRANTED")
 
             val approvalFrame = TransferFrame(
                 protocolVersion = TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
@@ -270,8 +328,11 @@ internal class WifiDirectSecureSessionController(
             if (remoteApproval.type != TransferFrameType.PAIRING_APPROVED) {
                 throw SessionSetupException(SecureSessionFailure.PROTOCOL_ERROR)
             }
+            diagnostics.event("REMOTE_APPROVAL_RECEIVED")
 
             ensureCurrent(expectedGeneration)
+            currentStage = "TLS_HANDSHAKE"
+            tlsRoleForDiagnostics = if (groupOwner) "SERVER" else "CLIENT"
             mutableState.value = SecureSessionSnapshot(SecureSessionStatus.TLS_HANDSHAKING)
             tlsSocket = createPinnedTlsSocket(
                 raw = activeSocket,
@@ -279,6 +340,7 @@ internal class WifiDirectSecureSessionController(
                 identity = identity,
                 expectedPeerFingerprint = peerFingerprint,
                 isGroupOwner = groupOwner,
+                diagnostics = diagnostics,
             )
             ensureCurrent(expectedGeneration)
             synchronized(lock) {
@@ -287,18 +349,22 @@ internal class WifiDirectSecureSessionController(
                 rawSocket = null
                 approval = null
                 mutableState.value = SecureSessionSnapshot(SecureSessionStatus.AUTHENTICATED)
+                diagnostics.event("SECURE_SESSION_AUTHENTICATED")
             }
         } catch (exception: CancellationException) {
+            diagnostics.event("SESSION_CANCELLED", "stage=$currentStage")
             closeQuietly(tlsSocket)
             closeQuietly(localSocket)
             alias?.let(::deleteKeyAlias)
             throw exception
-        } catch (_: PairingRejectedException) {
+        } catch (exception: PairingRejectedException) {
+            diagnostics.event("SESSION_REJECTED", "stage=$currentStage")
             closeQuietly(tlsSocket)
             closeQuietly(localSocket)
             alias?.let(::deleteKeyAlias)
             publishIfCurrent(expectedGeneration, SecureSessionSnapshot(SecureSessionStatus.REJECTED))
         } catch (exception: SessionSetupException) {
+            diagnostics.failure("SESSION_FAILURE", currentStage, tlsRoleForDiagnostics, exception)
             closeQuietly(tlsSocket)
             closeQuietly(localSocket)
             alias?.let(::deleteKeyAlias)
@@ -309,7 +375,8 @@ internal class WifiDirectSecureSessionController(
                     failure = exception.failure,
                 ),
             )
-        } catch (_: java.security.GeneralSecurityException) {
+        } catch (exception: java.security.GeneralSecurityException) {
+            diagnostics.failure("SESSION_FAILURE", currentStage, tlsRoleForDiagnostics, exception)
             closeQuietly(tlsSocket)
             closeQuietly(localSocket)
             alias?.let(::deleteKeyAlias)
@@ -320,7 +387,8 @@ internal class WifiDirectSecureSessionController(
                     failure = SecureSessionFailure.KEYSTORE_ERROR,
                 ),
             )
-        } catch (_: IOException) {
+        } catch (exception: IOException) {
+            diagnostics.failure("SESSION_FAILURE", currentStage, tlsRoleForDiagnostics, exception)
             closeQuietly(tlsSocket)
             closeQuietly(localSocket)
             alias?.let(::deleteKeyAlias)
@@ -331,7 +399,8 @@ internal class WifiDirectSecureSessionController(
                     failure = SecureSessionFailure.IO_ERROR,
                 ),
             )
-        } catch (_: RuntimeException) {
+        } catch (exception: RuntimeException) {
+            diagnostics.failure("SESSION_FAILURE", currentStage, tlsRoleForDiagnostics, exception)
             closeQuietly(tlsSocket)
             closeQuietly(localSocket)
             alias?.let(::deleteKeyAlias)
@@ -345,58 +414,47 @@ internal class WifiDirectSecureSessionController(
         }
     }
 
-    private fun createEphemeralIdentity(alias: String): EphemeralIdentity {
-        val now = System.currentTimeMillis()
-        val store = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        if (store.containsAlias(alias)) store.deleteEntry(alias)
-        val generator = KeyPairGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_EC,
-            ANDROID_KEYSTORE,
-        )
-        generator.initialize(
-            KeyGenParameterSpec.Builder(
-                alias,
-                KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY,
-            )
-                .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-                .setDigests(KeyProperties.DIGEST_SHA256)
-                .setCertificateSubject(javax.security.auth.x500.X500Principal("CN=PEYVAND Session"))
-                .setCertificateSerialNumber(BigInteger(128, SecureRandom()).abs().max(BigInteger.ONE))
-                .setCertificateNotBefore(Date(now - CERTIFICATE_CLOCK_SKEW_MILLIS))
-                .setCertificateNotAfter(Date(now + CERTIFICATE_LIFETIME_MILLIS))
-                .build(),
-        )
-        generator.generateKeyPair()
-        val refreshedStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        val certificate = refreshedStore.getCertificate(alias) as? X509Certificate
-            ?: throw SessionSetupException(SecureSessionFailure.KEYSTORE_ERROR)
-        certificate.checkValidity()
-        certificate.verify(certificate.publicKey)
-        val privateKey = refreshedStore.getKey(alias, null) as? PrivateKey
-            ?: throw SessionSetupException(SecureSessionFailure.KEYSTORE_ERROR)
-        return EphemeralIdentity(privateKey, certificate)
-    }
+    private fun createEphemeralIdentity(alias: String): EphemeralTlsIdentity =
+        AndroidEphemeralTlsIdentityFactory.create(alias)
 
-    private fun parseAndValidatePeerCertificate(encoded: ByteArray): X509Certificate {
+    private fun parseAndValidatePeerCertificate(
+        encoded: ByteArray,
+        diagnostics: SecureTlsDiagnostics,
+    ): X509Certificate {
         if (encoded.size !in 1..PairingBootstrapHello.MAX_CERTIFICATE_BYTES) {
-            throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE)
+            val exception = IllegalArgumentException("Peer certificate length is outside the bootstrap limit")
+            diagnostics.failure("PEER_CERTIFICATE_VALIDATION_FAILURE", "CERTIFICATE_LENGTH", "unknown", exception)
+            throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE, exception)
         }
         val certificate = try {
             CertificateFactory.getInstance("X.509")
                 .generateCertificate(ByteArrayInputStream(encoded)) as X509Certificate
-        } catch (_: Exception) {
-            throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE)
+        } catch (exception: Exception) {
+            diagnostics.failure("PEER_CERTIFICATE_VALIDATION_FAILURE", "CERTIFICATE_PARSE", "unknown", exception)
+            throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE, exception)
         }
         try {
             certificate.checkValidity()
             certificate.verify(certificate.publicKey)
-        } catch (_: Exception) {
-            throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE)
+        } catch (exception: Exception) {
+            diagnostics.failure(
+                "PEER_CERTIFICATE_VALIDATION_FAILURE",
+                "CERTIFICATE_VALIDITY_OR_SIGNATURE",
+                "unknown",
+                exception,
+            )
+            throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE, exception)
         }
         val ecKey = certificate.publicKey as? ECPublicKey
-            ?: throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE)
+            ?: run {
+                val exception = IllegalArgumentException("Peer certificate key is not EC")
+                diagnostics.failure("PEER_CERTIFICATE_VALIDATION_FAILURE", "CERTIFICATE_KEY_TYPE", "unknown", exception)
+                throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE, exception)
+            }
         if (ecKey.params.curve.field.fieldSize != 256) {
-            throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE)
+            val exception = IllegalArgumentException("Peer EC key is not P-256")
+            diagnostics.failure("PEER_CERTIFICATE_VALIDATION_FAILURE", "CERTIFICATE_CURVE", "unknown", exception)
+            throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE, exception)
         }
         return certificate
     }
@@ -404,50 +462,136 @@ internal class WifiDirectSecureSessionController(
     private fun createPinnedTlsSocket(
         raw: Socket,
         alias: String,
-        identity: EphemeralIdentity,
+        identity: EphemeralTlsIdentity,
         expectedPeerFingerprint: ByteArray,
         isGroupOwner: Boolean,
+        diagnostics: SecureTlsDiagnostics,
     ): SSLSocket {
-        val keyManager = SingleAliasKeyManager(alias, identity.privateKey, identity.certificate)
-        val trustManager = PinnedSessionTrustManager(expectedPeerFingerprint)
-        val context = SSLContext.getInstance("TLS")
-        context.init(
-            arrayOf<KeyManager>(keyManager),
-            arrayOf<TrustManager>(trustManager),
-            SecureRandom(),
-        )
-        val socket = context.socketFactory.createSocket(
-            raw,
-            raw.inetAddress.hostAddress,
-            raw.port,
-            false,
-        ) as? SSLSocket ?: throw SessionSetupException(SecureSessionFailure.TLS_UNAVAILABLE)
-        val supported = socket.supportedProtocols.toSet()
-        val enabled = listOf("TLSv1.3", "TLSv1.2").filter(supported::contains)
-        if ("TLSv1.2" !in enabled) {
-            closeQuietly(socket)
-            throw SessionSetupException(SecureSessionFailure.TLS_UNAVAILABLE)
-        }
-        socket.enabledProtocols = enabled.toTypedArray()
-        socket.useClientMode = !isGroupOwner
-        if (isGroupOwner) socket.needClientAuth = true
-        socket.soTimeout = TLS_HANDSHAKE_TIMEOUT_MILLIS
+        val tlsRole = if (isGroupOwner) "SERVER" else "CLIENT"
+        var stage = "TLS_CONTEXT_INITIALIZATION"
+        var tlsSocket: SSLSocket? = null
+        var handshakeStartedNanos: Long? = null
         try {
-            socket.startHandshake()
-        } catch (exception: Exception) {
-            closeQuietly(socket)
-            throw SessionSetupException(SecureSessionFailure.TLS_HANDSHAKE_FAILED, exception)
-        }
-        val peer = socket.session.peerCertificates.firstOrNull() as? X509Certificate
-            ?: run {
-                closeQuietly(socket)
-                throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE)
+            val keyManager = SingleAliasKeyManager(
+                alias = alias,
+                privateKey = identity.privateKey,
+                certificate = identity.certificate,
+                diagnostics = diagnostics,
+            )
+            val trustManager = PinnedSessionTrustManager(expectedPeerFingerprint, diagnostics)
+            val context = SSLContext.getInstance("TLS")
+            context.init(
+                arrayOf<KeyManager>(keyManager),
+                arrayOf<TrustManager>(trustManager),
+                SecureRandom(),
+            )
+            diagnostics.event("TLS_CONTEXT_INITIALIZED", "provider=§{context.provider.name}")
+
+            stage = "TLS_SOCKET_CREATION"
+            val socket = context.socketFactory.createSocket(
+                raw,
+                raw.inetAddress.hostAddress,
+                raw.port,
+                false,
+            ) as? SSLSocket ?: throw SessionSetupException(SecureSessionFailure.TLS_UNAVAILABLE)
+            tlsSocket = socket
+            diagnostics.event("TLS_SOCKET_CREATED", "autoCloseUnderlyingSocket=false")
+
+            stage = "TLS_PROTOCOL_SELECTION"
+            val supportedProtocols = socket.supportedProtocols.toList()
+            val enabledProtocols = listOf("TLSv1.3", "TLSv1.2").filter(supportedProtocols::contains)
+            diagnostics.event(
+                "TLS_PROTOCOLS",
+                "supported=§{supportedProtocols.joinToString(",")} enabled=§{enabledProtocols.joinToString(",")}",
+            )
+            diagnostics.event(
+                "TLS_CIPHER_SUITES",
+                "supported=§{socket.supportedCipherSuites.joinToString(",")} " +
+                    "enabled=§{socket.enabledCipherSuites.joinToString(",")}",
+            )
+            if ("TLSv1.2" !in enabledProtocols) {
+                val exception = IllegalStateException("TLSv1.2 is not supported by the active provider")
+                diagnostics.failure("TLS_FAILURE", stage, tlsRole, exception)
+                throw SessionSetupException(SecureSessionFailure.TLS_UNAVAILABLE, exception)
             }
-        if (!MessageDigest.isEqual(sha256(peer.encoded), expectedPeerFingerprint)) {
-            closeQuietly(socket)
-            throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE)
+            socket.enabledProtocols = enabledProtocols.toTypedArray()
+
+            stage = "TLS_ROLE_CONFIGURATION"
+            socket.useClientMode = !isGroupOwner
+            if (isGroupOwner) socket.needClientAuth = true
+            socket.soTimeout = TLS_HANDSHAKE_TIMEOUT_MILLIS
+            val expectedClientMode = !isGroupOwner
+            val expectedClientAuth = isGroupOwner
+            diagnostics.event(
+                "TLS_ROLE_CONFIGURED",
+                "groupRole=§{if (isGroupOwner) "GROUP_OWNER" else "GROUP_CLIENT"} " +
+                    "tlsRole=$tlsRole useClientMode=§{socket.useClientMode} " +
+                    "needClientAuth=§{socket.needClientAuth} " +
+                    "roleConfigurationMatches=§{socket.useClientMode == expectedClientMode && socket.needClientAuth == expectedClientAuth}",
+            )
+            if (socket.useClientMode != expectedClientMode || socket.needClientAuth != expectedClientAuth) {
+                throw IllegalStateException("The TLS socket did not retain the required role configuration")
+            }
+
+            stage = "TLS_HANDSHAKE"
+            diagnostics.event("TLS_HANDSHAKE_STARTED", "tlsRole=$tlsRole")
+            handshakeStartedNanos = System.nanoTime()
+            try {
+                socket.startHandshake()
+            } catch (exception: Exception) {
+                val elapsedMillis = (System.nanoTime() - handshakeStartedNanos) / NANOS_PER_MILLI
+                diagnostics.failure("TLS_FAILURE", stage, tlsRole, exception, elapsedMillis)
+                throw SessionSetupException(SecureSessionFailure.TLS_HANDSHAKE_FAILED, exception)
+            }
+
+            val elapsedMillis = (System.nanoTime() - handshakeStartedNanos) / NANOS_PER_MILLI
+            val peer = socket.session.peerCertificates.firstOrNull() as? X509Certificate
+                ?: run {
+                    val exception = IllegalStateException("The peer did not present an X.509 certificate")
+                    diagnostics.failure("TLS_FAILURE", "TLS_PEER_CERTIFICATE", tlsRole, exception, elapsedMillis)
+                    throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE, exception)
+                }
+            val actualPeerFingerprint = sha256(peer.encoded)
+            val pinMatches = MessageDigest.isEqual(actualPeerFingerprint, expectedPeerFingerprint)
+            diagnostics.event(
+                "TLS_POST_HANDSHAKE_PIN",
+                "matched=$pinMatches peerFingerprintPrefix=§{SecureTlsDiagnostics.fingerprintPrefix(actualPeerFingerprint)}",
+            )
+            if (!pinMatches) {
+                val exception = java.security.cert.CertificateException("Post-handshake peer certificate pin mismatch")
+                diagnostics.failure("TLS_FAILURE", "TLS_POST_HANDSHAKE_PIN", tlsRole, exception, elapsedMillis)
+                throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE, exception)
+            }
+
+            diagnostics.event(
+                "TLS_HANDSHAKE_COMPLETED",
+                "tlsRole=$tlsRole provider=§{context.provider.name} " +
+                    "protocol=§{socket.session.protocol} cipherSuite=§{socket.session.cipherSuite} " +
+                    "peerCertificateCount=§{socket.session.peerCertificates.size} " +
+                    "durationMs=$elapsedMillis peerPinVerified=true",
+            )
+            return socket
+        } catch (exception: SessionSetupException) {
+            runCatching { tlsSocket?.close() }
+            throw exception
+        } catch (exception: Exception) {
+            val elapsedMillis = handshakeStartedNanos?.let {
+                (System.nanoTime() - it) / NANOS_PER_MILLI
+            }
+            diagnostics.failure("TLS_FAILURE", stage, tlsRole, exception, elapsedMillis)
+            runCatching { tlsSocket?.close() }
+            val failure = if (stage in setOf(
+                    "TLS_CONTEXT_INITIALIZATION",
+                    "TLS_SOCKET_CREATION",
+                    "TLS_PROTOCOL_SELECTION",
+                )
+            ) {
+                SecureSessionFailure.TLS_UNAVAILABLE
+            } else {
+                SecureSessionFailure.TLS_HANDSHAKE_FAILED
+            }
+            throw SessionSetupException(failure, exception)
         }
-        return socket
     }
 
     private fun notifySessionClose(socket: Socket, sessionId: UUID) {
@@ -517,79 +661,6 @@ internal class WifiDirectSecureSessionController(
         runCatching { closeable?.close() }
     }
 
-    private data class EphemeralIdentity(
-        val privateKey: PrivateKey,
-        val certificate: X509Certificate,
-    )
-
-    private class SingleAliasKeyManager(
-        private val alias: String,
-        private val privateKey: PrivateKey,
-        private val certificate: X509Certificate,
-    ) : X509KeyManager {
-        override fun getClientAliases(keyType: String?, issuers: Array<out Principal>?): Array<String>? =
-            if (supportsEc(keyType)) arrayOf(alias) else null
-
-        override fun chooseClientAlias(
-            keyType: Array<out String>?,
-            issuers: Array<out Principal>?,
-            socket: Socket?,
-        ): String? = keyType?.firstOrNull(::supportsEc)?.let { alias }
-
-        override fun getServerAliases(keyType: String?, issuers: Array<out Principal>?): Array<String>? =
-            if (supportsEc(keyType)) arrayOf(alias) else null
-
-        override fun chooseServerAlias(
-            keyType: String?,
-            issuers: Array<out Principal>?,
-            socket: Socket?,
-        ): String? = alias.takeIf { supportsEc(keyType) }
-
-        override fun getCertificateChain(alias: String?): Array<X509Certificate>? =
-            if (alias == this.alias) arrayOf(certificate) else null
-
-        override fun getPrivateKey(alias: String?): PrivateKey? =
-            if (alias == this.alias) privateKey else null
-
-        private fun supportsEc(value: String?): Boolean =
-            value.equals("EC", ignoreCase = true) ||
-                value.equals("ECDSA", ignoreCase = true)
-    }
-
-    private class PinnedSessionTrustManager(
-        expectedFingerprint: ByteArray,
-    ) : X509TrustManager {
-        private val pin = expectedFingerprint.copyOf()
-
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) =
-            verifyPeer(chain)
-
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) =
-            verifyPeer(chain)
-
-        override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
-
-        private fun verifyPeer(chain: Array<out X509Certificate>?) {
-            if (chain == null || chain.size != 1) {
-                throw java.security.cert.CertificateException("Unexpected peer certificate chain")
-            }
-            val certificate = chain[0]
-            try {
-                certificate.checkValidity()
-                certificate.verify(certificate.publicKey)
-            } catch (exception: Exception) {
-                throw java.security.cert.CertificateException("Invalid self-signed peer certificate", exception)
-            }
-            if (!MessageDigest.isEqual(
-                    MessageDigest.getInstance("SHA-256").digest(certificate.encoded),
-                    pin,
-                )
-            ) {
-                throw java.security.cert.CertificateException("Peer certificate pin mismatch")
-            }
-        }
-    }
-
     private class SessionSetupException(
         val failure: SecureSessionFailure,
         cause: Throwable? = null,
@@ -606,5 +677,6 @@ internal class WifiDirectSecureSessionController(
         const val CERTIFICATE_CLOCK_SKEW_MILLIS = 60_000L
         const val CERTIFICATE_LIFETIME_MILLIS = 10 * 60_000L
         const val TLS_HANDSHAKE_TIMEOUT_MILLIS = 15_000
+        const val NANOS_PER_MILLI = 1_000_000L
     }
 }
