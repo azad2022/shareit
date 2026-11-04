@@ -63,7 +63,9 @@ object PairingShortAuthenticationString {
             "Pairing endpoints must use distinct ephemeral certificates"
         }
 
-        val ordered = listOf(local, remote).sortedWith(::compareEndpoints)
+        val ordered = listOf(local, remote).sortedWith(Comparator { left, right ->
+            compareEndpoints(left, right)
+        })
         val digest = MessageDigest.getInstance("SHA-256")
         digest.update(domain)
         val header = ByteBuffer.allocate(4 + 16).order(ByteOrder.BIG_ENDIAN)
