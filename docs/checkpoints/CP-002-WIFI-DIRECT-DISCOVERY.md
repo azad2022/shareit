@@ -156,3 +156,11 @@ Keep `IN_PROGRESS` until every applicable criterion has reproducible evidence. U
 - The wildcard Bonjour experiment is rolled back to the typed PEYVAND service request because the owner's latest observation does not demonstrate that the wildcard query resolved discovery ordering.
 - Required physical acceptance remains: both timing orders and simultaneous start, at least five repetitions per mode, repeated stop/start without process restart, and foreground/background recovery on Galaxy A12 and ASUS X017DA.
 - CI can validate compilation and pure policy tests only; it cannot validate Wi-Fi P2P interoperability. Keep CP-002 `IN_PROGRESS`.
+
+## Owner validation update — discovery currently operational (2026-11-04)
+
+- **Product-owner confirmation:** after installing/testing the Debug build from source commit `690b932d4a6305fa04544ad0b93d2eb4fbe066b1`, the owner reports that the two devices now discover one another easily across several tested operating scenarios. The previous start-order and repeat-session discovery failures are considered **currently resolved in the owner's tested environment**.
+- This is a physical-test observation reported by the product owner, not a claim that every OEM/chipset/Android build is supported. The latest report does not restate exact device firmware/API details, trial counts, time-to-first-peer, or the full test matrix; those values remain unverified in this update.
+- The bidirectional advertiser/browser change and foreground-aware restart are the source-level corrections in ADR-0006. The owner report is consistent with the intended behavior, but it does not by itself close all CP-002 reliability criteria.
+- **Status remains `IN_PROGRESS`** until the repeatable matrix is documented: receiver-first, sender-first, simultaneous start, repeated stop/start without process restart, and foreground/background recovery, with at least five repetitions per mode on the Galaxy A12 (SM-A125F) and ASUS X017DA, plus exact APK SHA-256 and API/firmware details.
+- This update does not imply a peer connection, authentication, receiver consent, TCP/TLS transport, file streaming, integrity verification, resume, or APK installation. Those are separate milestones.
