@@ -490,7 +490,10 @@ internal class WifiDirectSecureSessionController(
                 arrayOf<TrustManager>(trustManager),
                 SecureRandom(),
             )
-            diagnostics.event("TLS_CONTEXT_INITIALIZED", "provider=${context.provider.name}")
+            diagnostics.event(
+                "TLS_CONTEXT_INITIALIZED",
+                "provider=${context.provider.name} providerClass=${context.provider.javaClass.name}",
+            )
 
             stage = "TLS_SOCKET_CREATION"
             val socket = context.socketFactory.createSocket(
@@ -577,6 +580,7 @@ internal class WifiDirectSecureSessionController(
                 "tlsRole=$tlsRole provider=${context.provider.name} " +
                     "protocol=${socket.session.protocol} cipherSuite=${socket.session.cipherSuite} " +
                     "peerCertificateCount=${socket.session.peerCertificates.size} " +
+                    "localCertificateCount=${socket.session.localCertificates?.size ?: 0} " +
                     "durationMs=$elapsedMillis peerPinVerified=true",
             )
             return socket
