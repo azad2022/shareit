@@ -35,13 +35,15 @@ class StreamingTransferEngine(
     suspend fun copyAndDigest(
         source: InputStream,
         destination: OutputStream,
-        expectedSizeBytes: Long,
+        expectedSizeBytes: Long?,
         maximumSizeBytes: Long,
         onProgress: (Long) -> Unit = {},
     ): TransferStreamResult {
-        require(expectedSizeBytes >= 0L) { "Expected size cannot be negative" }
+        require(expectedSizeBytes == null || expectedSizeBytes >= 0L) {
+            "Expected size must be non-negative or unknown"
+        }
         require(maximumSizeBytes >= 0L) { "Maximum size cannot be negative" }
-        if (expectedSizeBytes > maximumSizeBytes) {
+        if (expectedSizeBytes != null && expectedSizeBytes > maximumSizeBytes) {
             throw TransferSizeLimitException("Manifest size exceeds the receiver limit")
         }
 
@@ -63,7 +65,7 @@ class StreamingTransferEngine(
             context.ensureActive()
 
             val countLong = count.toLong()
-            if (countLong > expectedSizeBytes - totalBytes) {
+            if (expectedSizeBytes != null && countLong > expectedSizeBytes - totalBytes) {
                 throw TransferSizeMismatchException(
                     "Source stream is longer than the declared manifest size",
                 )
@@ -78,7 +80,7 @@ class StreamingTransferEngine(
             onProgress(totalBytes)
         }
 
-        if (totalBytes != expectedSizeBytes) {
+        if (expectedSizeBytes != null && totalBytes != expectedSizeBytes) {
             throw TransferSizeMismatchException(
                 "Received $totalBytes bytes; expected $expectedSizeBytes bytes",
             )
