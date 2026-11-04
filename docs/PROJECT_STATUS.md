@@ -4,8 +4,8 @@
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-002 — Wi-Fi Direct service discovery
-- **Current branch:** `feature/dns-sd-wildcard-query-experiment` (isolated Debug compatibility experiment; integration target: `feature/foundation-bootstrap`)
-- **Last updated:** 2026-11-02 (TXT-independent candidate publication, source-aware diagnostics and serialized cleanup implemented; CI/physical retest pending)
+- **Current branch:** `feature/reliable-bidirectional-discovery` (bidirectional DNS-SD and foreground-session recovery; draft PR #2 targets `feature/foundation-bootstrap`)
+- **Last updated:** 2026-11-04 (bidirectional DNS-SD and foreground-session recovery committed; exact-head CI and physical retest pending)
 
 ## Milestones
 
