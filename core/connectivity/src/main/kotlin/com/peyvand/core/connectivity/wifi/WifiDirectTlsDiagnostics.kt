@@ -160,13 +160,14 @@ internal class SingleAliasKeyManager(
     private val alias: String,
     private val privateKey: PrivateKey,
     private val certificate: X509Certificate,
+    private val tlsRole: String,
     private val diagnostics: SecureTlsDiagnostics,
 ) : X509KeyManager {
     override fun getClientAliases(keyType: String?, issuers: Array<out Principal>?): Array<String>? {
         val available = supportsEc(keyType)
         diagnostics.event(
             "KEY_MANAGER_ALIAS_QUERY",
-            "callback=getClientAliases keyTypes=${keyType ?: "null"} " +
+            "tlsRole=$tlsRole callback=getClientAliases keyTypes=${keyType ?: "null"} " +
                 "issuerCount=${issuers?.size ?: -1} aliasAvailable=$available",
         )
         return if (available) arrayOf(alias) else null
@@ -181,7 +182,7 @@ internal class SingleAliasKeyManager(
         val selectedAlias = alias.takeIf { selectedType != null }
         diagnostics.event(
             "KEY_MANAGER_ALIAS_SELECTED",
-            "callback=chooseClientAlias requestedKeyTypes=${keyType?.joinToString(",") ?: "null"} " +
+            "tlsRole=$tlsRole callback=chooseClientAlias requestedKeyTypes=${keyType?.joinToString(",") ?: "null"} " +
                 "issuerCount=${issuers?.size ?: -1} selectedKeyType=${selectedType ?: "none"} " +
                 "aliasSelected=${selectedAlias != null}",
         )
@@ -192,7 +193,7 @@ internal class SingleAliasKeyManager(
         val available = supportsEc(keyType)
         diagnostics.event(
             "KEY_MANAGER_ALIAS_QUERY",
-            "callback=getServerAliases keyTypes=${keyType ?: "null"} " +
+            "tlsRole=$tlsRole callback=getServerAliases keyTypes=${keyType ?: "null"} " +
                 "issuerCount=${issuers?.size ?: -1} aliasAvailable=$available",
         )
         return if (available) arrayOf(alias) else null
@@ -206,7 +207,7 @@ internal class SingleAliasKeyManager(
         val selectedAlias = alias.takeIf { supportsEc(keyType) }
         diagnostics.event(
             "KEY_MANAGER_ALIAS_SELECTED",
-            "callback=chooseServerAlias requestedKeyType=${keyType ?: "null"} " +
+            "tlsRole=$tlsRole callback=chooseServerAlias requestedKeyType=${keyType ?: "null"} " +
                 "issuerCount=${issuers?.size ?: -1} aliasSelected=${selectedAlias != null}",
         )
         return selectedAlias
@@ -216,7 +217,7 @@ internal class SingleAliasKeyManager(
         val matches = alias == this.alias
         diagnostics.event(
             "KEY_MANAGER_MATERIAL",
-            "material=certificateChain aliasMatched=$matches chainCount=${if (matches) 1 else 0}",
+            "tlsRole=$tlsRole material=certificateChain aliasMatched=$matches chainCount=${if (matches) 1 else 0}",
         )
         return if (matches) arrayOf(certificate) else null
     }
@@ -225,7 +226,7 @@ internal class SingleAliasKeyManager(
         val matches = alias == this.alias
         diagnostics.event(
             "KEY_MANAGER_MATERIAL",
-            "material=privateKey aliasMatched=$matches keyAvailable=$matches",
+            "tlsRole=$tlsRole material=privateKey aliasMatched=$matches keyAvailable=$matches",
         )
         return if (matches) privateKey else null
     }
@@ -237,6 +238,7 @@ internal class SingleAliasKeyManager(
 
 internal class PinnedSessionTrustManager(
     expectedFingerprint: ByteArray,
+    private val tlsRole: String,
     private val diagnostics: SecureTlsDiagnostics,
 ) : X509TrustManager {
     private val pin = expectedFingerprint.copyOf()
@@ -252,7 +254,7 @@ internal class PinnedSessionTrustManager(
         verifyPeer("checkServerTrusted", chain, authType)
 
     override fun getAcceptedIssuers(): Array<X509Certificate> {
-        diagnostics.event("TRUST_MANAGER_ACCEPTED_ISSUERS", "issuerCount=0")
+        diagnostics.event("TRUST_MANAGER_ACCEPTED_ISSUERS", "tlsRole=$tlsRole issuerCount=0")
         return emptyArray()
     }
 
@@ -263,29 +265,29 @@ internal class PinnedSessionTrustManager(
     ) {
         diagnostics.event(
             "TRUST_MANAGER_VALIDATION",
-            "callback=$callback outcome=started authType=${authType ?: "null"} " +
+            "tlsRole=$tlsRole callback=$callback outcome=started authType=${authType ?: "null"} " +
                 "chainCount=${chain?.size ?: -1}",
         )
         if (chain == null || chain.size != 1) {
             val exception = CertificateException("Unexpected peer certificate chain")
-            diagnostics.failure("TRUST_MANAGER_FAILURE", callback, "unknown", exception)
+            diagnostics.failure("TRUST_MANAGER_FAILURE", callback, tlsRole, exception)
             throw exception
         }
 
         val certificate = chain[0]
         try {
             certificate.checkValidity()
-            diagnostics.event("TRUST_MANAGER_CERT_VALIDITY", "callback=$callback result=valid")
+            diagnostics.event("TRUST_MANAGER_CERT_VALIDITY", "tlsRole=$tlsRole callback=$callback result=valid")
         } catch (exception: Exception) {
-            diagnostics.failure("TRUST_MANAGER_FAILURE", "$callback/certificateValidity", "unknown", exception)
+            diagnostics.failure("TRUST_MANAGER_FAILURE", "$callback/certificateValidity", tlsRole, exception)
             throw CertificateException("Invalid peer certificate validity", exception)
         }
 
         try {
             certificate.verify(certificate.publicKey)
-            diagnostics.event("TRUST_MANAGER_SELF_SIGNATURE", "callback=$callback result=valid")
+            diagnostics.event("TRUST_MANAGER_SELF_SIGNATURE", "tlsRole=$tlsRole callback=$callback result=valid")
         } catch (exception: Exception) {
-            diagnostics.failure("TRUST_MANAGER_FAILURE", "$callback/selfSignature", "unknown", exception)
+            diagnostics.failure("TRUST_MANAGER_FAILURE", "$callback/selfSignature", tlsRole, exception)
             throw CertificateException("Invalid self-signed peer certificate", exception)
         }
 
@@ -293,15 +295,15 @@ internal class PinnedSessionTrustManager(
         val pinMatches = MessageDigest.isEqual(actualFingerprint, pin)
         diagnostics.event(
             "TRUST_MANAGER_PIN",
-            "callback=$callback matched=$pinMatches " +
+            "tlsRole=$tlsRole callback=$callback matched=$pinMatches " +
                 "expectedPrefix=${SecureTlsDiagnostics.fingerprintPrefix(pin)} " +
                 "actualPrefix=${SecureTlsDiagnostics.fingerprintPrefix(actualFingerprint)}",
         )
         if (!pinMatches) {
             val exception = CertificateException("Peer certificate pin mismatch")
-            diagnostics.failure("TRUST_MANAGER_FAILURE", "$callback/pin", "unknown", exception)
+            diagnostics.failure("TRUST_MANAGER_FAILURE", "$callback/pin", tlsRole, exception)
             throw exception
         }
-        diagnostics.event("TRUST_MANAGER_VALIDATION", "callback=$callback outcome=accepted")
+        diagnostics.event("TRUST_MANAGER_VALIDATION", "tlsRole=$tlsRole callback=$callback outcome=accepted")
     }
 }

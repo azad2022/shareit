@@ -11,6 +11,7 @@ import java.security.cert.CertificateException
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import org.junit.Assert.assertArrayEquals
@@ -40,7 +41,7 @@ class WifiDirectTlsLoopbackInstrumentedTest {
         val diagnostics = SecureTlsDiagnostics()
         try {
             val identity = AndroidEphemeralTlsIdentityFactory.create(alias)
-            val trustManager = PinnedSessionTrustManager(ByteArray(32) { 0x5a.toByte() }, diagnostics)
+            val trustManager = PinnedSessionTrustManager(ByteArray(32) { 0x5a.toByte() }, "CLIENT", diagnostics)
             try {
                 trustManager.checkServerTrusted(arrayOf(identity.certificate), "EC")
                 fail("A mismatched certificate fingerprint must be rejected")
@@ -65,15 +66,30 @@ class WifiDirectTlsLoopbackInstrumentedTest {
         try {
             val serverIdentity = AndroidEphemeralTlsIdentityFactory.create(serverAlias)
             val clientIdentity = AndroidEphemeralTlsIdentityFactory.create(clientAlias)
-            val serverContext = createContext(serverAlias, serverIdentity, clientIdentity.certificate, trace)
-            val clientContext = createContext(clientAlias, clientIdentity, serverIdentity.certificate, trace)
+            val serverContext = createContext(
+                serverAlias,
+                serverIdentity,
+                clientIdentity.certificate,
+                "SERVER",
+                trace,
+            )
+            val clientContext = createContext(
+                clientAlias,
+                clientIdentity,
+                serverIdentity.certificate,
+                "CLIENT",
+                trace,
+            )
             val loopback = InetAddress.getByName(LOOPBACK_ADDRESS)
             val activeListener = ServerSocket(0, 1, loopback)
+            val serverRawSocket = AtomicReference<Socket?>()
+            val serverTlsSocket = AtomicReference<SSLSocket?>()
             listener = activeListener
             activeListener.soTimeout = HANDSHAKE_TIMEOUT_MILLIS
 
             val serverFuture = executor.submit<HandshakeSummary> {
                 val accepted = activeListener.accept()
+                serverRawSocket.set(accepted)
                 accepted.soTimeout = HANDSHAKE_TIMEOUT_MILLIS
                 val secure = activeServerSocket(
                     serverContext,
@@ -81,6 +97,7 @@ class WifiDirectTlsLoopbackInstrumentedTest {
                     activeListener.localPort,
                     protocol,
                 )
+                serverTlsSocket.set(secure)
                 try {
                     secure.startHandshake()
                     val session = secure.session
@@ -128,6 +145,8 @@ class WifiDirectTlsLoopbackInstrumentedTest {
         } finally {
             runCatching { clientTls?.close() }
             runCatching { clientRaw?.close() }
+            runCatching { serverTlsSocket.getAndSet(null)?.close() }
+            runCatching { serverRawSocket.getAndSet(null)?.close() }
             runCatching { listener?.close() }
             executor.shutdownNow()
             executor.awaitTermination(5, TimeUnit.SECONDS)
@@ -154,12 +173,21 @@ class WifiDirectTlsLoopbackInstrumentedTest {
         alias: String,
         identity: EphemeralTlsIdentity,
         expectedPeer: java.security.cert.X509Certificate,
+        tlsRole: String,
         diagnostics: SecureTlsDiagnostics,
     ): SSLContext =
         SSLContext.getInstance("TLS").apply {
             init(
-                arrayOf(SingleAliasKeyManager(alias, identity.privateKey, identity.certificate, diagnostics)),
-                arrayOf(PinnedSessionTrustManager(sha256(expectedPeer.encoded), diagnostics)),
+                arrayOf(
+                    SingleAliasKeyManager(
+                        alias,
+                        identity.privateKey,
+                        identity.certificate,
+                        tlsRole,
+                        diagnostics,
+                    ),
+                ),
+                arrayOf(PinnedSessionTrustManager(sha256(expectedPeer.encoded), tlsRole, diagnostics)),
                 SecureRandom(),
             )
         }

@@ -274,6 +274,7 @@ internal class WifiDirectSecureSessionController(
                 remoteHello.nonceBytes(),
                 remoteHello.role,
             )
+            currentStage = "SAS_DERIVATION"
             val sas = PairingShortAuthenticationString.derive(
                 sessionId = sessionId,
                 local = localMaterial,
@@ -285,6 +286,7 @@ internal class WifiDirectSecureSessionController(
                 "protocolVersion=${TransferFrameCodec.CURRENT_PROTOCOL_VERSION} sasValueLogged=false",
             )
 
+            currentStage = "LOCAL_APPROVAL_WAIT"
             val approvalSignal = CompletableDeferred<Boolean>()
             synchronized(lock) {
                 if (generation != expectedGeneration) throw CancellationException()
@@ -308,6 +310,7 @@ internal class WifiDirectSecureSessionController(
             }
             diagnostics.event("LOCAL_APPROVAL_GRANTED")
 
+            currentStage = "APPROVAL_FRAME_EXCHANGE"
             val approvalFrame = TransferFrame(
                 protocolVersion = TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
                 type = TransferFrameType.PAIRING_APPROVED,
@@ -323,6 +326,7 @@ internal class WifiDirectSecureSessionController(
                 throw SessionSetupException(SecureSessionFailure.PROTOCOL_ERROR)
             }
             if (remoteApproval.type == TransferFrameType.SESSION_CLOSE) {
+                diagnostics.event("REMOTE_APPROVAL_REJECTED")
                 throw PairingRejectedException()
             }
             if (remoteApproval.type != TransferFrameType.PAIRING_APPROVED) {
@@ -476,9 +480,10 @@ internal class WifiDirectSecureSessionController(
                 alias = alias,
                 privateKey = identity.privateKey,
                 certificate = identity.certificate,
+                tlsRole = tlsRole,
                 diagnostics = diagnostics,
             )
-            val trustManager = PinnedSessionTrustManager(expectedPeerFingerprint, diagnostics)
+            val trustManager = PinnedSessionTrustManager(expectedPeerFingerprint, tlsRole, diagnostics)
             val context = SSLContext.getInstance("TLS")
             context.init(
                 arrayOf<KeyManager>(keyManager),
@@ -515,6 +520,10 @@ internal class WifiDirectSecureSessionController(
                 throw SessionSetupException(SecureSessionFailure.TLS_UNAVAILABLE, exception)
             }
             socket.enabledProtocols = enabledProtocols.toTypedArray()
+            diagnostics.event(
+                "TLS_ACTIVE_CIPHER_SUITES",
+                "enabled=${socket.enabledCipherSuites.joinToString(",")}",
+            )
 
             stage = "TLS_ROLE_CONFIGURATION"
             socket.useClientMode = !isGroupOwner
