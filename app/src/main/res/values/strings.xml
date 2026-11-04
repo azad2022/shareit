@@ -136,4 +136,18 @@
         <item quantity="one">%d دستگاه پیوند پیدا شد</item>
         <item quantity="other">%d دستگاه پیوند پیدا شد</item>
     </plurals>
+
+    <string name="connection_connect">اتصال به این دستگاه</string>
+    <string name="connection_idle">اتصالی برقرار نیست.</string>
+    <string name="connection_connecting">درخواست اتصال به Wi-Fi Direct ارسال شد؛ در انتظار تشکیل گروه دو دستگاه…</string>
+    <string name="connection_group_formed">گروه Wi-Fi Direct تشکیل شد.</string>
+    <string name="connection_disconnecting">در حال قطع اتصال دستگاه‌ها…</string>
+    <string name="connection_group_security_notice">این فقط اتصال شبکهٔ محلی است؛ هنوز هویت همتا تأیید نشده و هیچ فایلی ارسال نشده است.</string>
+    <string name="connection_cancel">قطع اتصال</string>
+    <string name="connection_error_stale_peer">این دستگاه دیگر در فهرست جست‌وجوی فعال نیست. دوباره جست‌وجو کنید.</string>
+    <string name="connection_error_permission">مجوز لازم برای اتصال Wi-Fi Direct در دسترس نیست.</string>
+    <string name="connection_error_busy">سرویس Wi-Fi Direct مشغول است. کمی بعد دوباره تلاش کنید.</string>
+    <string name="connection_error_timeout">در مهلت تعیین‌شده گروه Wi-Fi Direct تشکیل نشد.</string>
+    <string name="connection_error_unsupported">اتصال Wi-Fi Direct در این دستگاه پشتیبانی نمی‌شود.</string>
+    <string name="connection_error_generic">اتصال Wi-Fi Direct با خطای سیستم مواجه شد.</string>
 </resources>
