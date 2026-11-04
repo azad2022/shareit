@@ -27,7 +27,7 @@
 4. Both devices derive and display the same session SAS; no file metadata or data is transmitted before both approvals and mutual TLS authentication.
 5. Receiver rejection, timeout, or lack of consent results in zero file bytes transmitted.
 6. Images, video, audio, PDF, archives, extensionless, and unknown-MIME documents transfer byte-for-byte without format-specific parsing.
-7. Sender and receiver verify exact byte length and SHA-256. Success is shown only after destination publication and required verification succeed.
+7. Sender and receiver compute SHA-256 in the streaming path. The final sender record carries actual byte count and digest; receiver checks both against its own result and the optional declared size, publishes only after verification, and returns an authenticated receipt. Success is shown only after that receipt.
 8. Memory remains bounded independent of file size; neither side materializes the complete file in RAM.
 9. Malformed frames, SAS/pin mismatch, short reads/writes, source changes, low storage, destination failures, disconnect, and cancellation fail safely and do not leave a published partial file.
 10. No public internet, backend, account, cloud, relay, fallback transport, or broad storage access is introduced.
