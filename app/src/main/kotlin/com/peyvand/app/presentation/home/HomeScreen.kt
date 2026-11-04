@@ -478,7 +478,9 @@ fun DeviceDiscoveryScreen(
                             MaterialTheme.colorScheme.onSurface
                         },
                     )
-                    if (connection.status == PeerConnectionStatus.GROUP_FORMED) {
+                    if (connection.status == PeerConnectionStatus.GROUP_FORMED &&
+                        secureSession.status != SecureSessionStatus.AUTHENTICATED
+                    ) {
                         Text(
                             text = stringResource(R.string.connection_group_security_notice),
                             style = MaterialTheme.typography.bodySmall,
@@ -640,7 +642,9 @@ fun DeviceDiscoveryScreen(
                             MaterialTheme.colorScheme.onSurface
                         },
                     )
-                    if (tcpChannel.status == P2pTcpChannelStatus.CONNECTED) {
+                    if (tcpChannel.status == P2pTcpChannelStatus.CONNECTED &&
+                        secureSession.status != SecureSessionStatus.AUTHENTICATED
+                    ) {
                         Text(
                             text = stringResource(R.string.tcp_channel_security_notice),
                             style = MaterialTheme.typography.bodySmall,
