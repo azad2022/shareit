@@ -106,6 +106,24 @@ class StreamingTransferEngineTest {
         }
     }
 
+
+    @Test
+    fun `unknown-length source is streamed and measured at EOF`() = runBlocking {
+        val source = byteArrayOf(5, 4, 3, 2, 1)
+        val output = ByteArrayOutputStream()
+
+        val result = StreamingTransferEngine(bufferSizeBytes = 2).copyAndDigest(
+            source = ByteArrayInputStream(source),
+            destination = output,
+            expectedSizeBytes = null,
+            maximumSizeBytes = 10L,
+        )
+
+        assertEquals(5L, result.bytesTransferred)
+        assertTrue(source.contentEquals(output.toByteArray()))
+        assertEquals(sha256(source), result.sha256Hex)
+    }
+
     private fun sha256(bytes: ByteArray): String {
         val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
         return digest.joinToString("") { "%02x".format(it.toInt() and 0xff) }
