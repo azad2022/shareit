@@ -3,6 +3,7 @@ package com.peyvand.core.transfer.manifest
 import com.peyvand.core.transfer.protocol.TransferProtocolException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,16 +11,13 @@ import java.nio.ByteBuffer
 import java.util.UUID
 
 class TransferManifestCodecTest {
-    private val digest = "ab".repeat(32)
-
     @Test
-    fun `manifest round trips arbitrary filename mime size and digest`() {
+    fun `manifest round trips unicode name mime and declared size`() {
         val manifest = TransferManifestItem(
             itemId = UUID.fromString("1db050d1-e850-44d5-9e3a-cc81c246c67f"),
             displayName = "گزارش پروژه 2026.pdf",
             mimeType = "application/pdf",
             sizeBytes = 12_345L,
-            sha256Hex = digest,
         )
 
         val restored = TransferManifestCodec.decode(TransferManifestCodec.encode(manifest))
@@ -28,15 +26,25 @@ class TransferManifestCodecTest {
         assertEquals(manifest.displayName, restored.displayName)
         assertEquals(manifest.mimeType, restored.mimeType)
         assertEquals(manifest.sizeBytes, restored.sizeBytes)
-        assertEquals(digest, restored.sha256Hex)
     }
 
     @Test
-    fun `unknown mime type is retained as generic binary rather than rejected`() {
-        val manifest = TransferManifestItem(
-            UUID.randomUUID(), "unknown.bin", "not a valid mime", 4L, digest,
+    fun `unknown size is represented explicitly and survives round trip`() {
+        val item = TransferManifestItem(
+            UUID.randomUUID(), "stream.bin", "application/octet-stream", null,
         )
-        val restored = TransferManifestCodec.decode(TransferManifestCodec.encode(manifest))
+
+        val restored = TransferManifestCodec.decode(TransferManifestCodec.encode(item))
+
+        assertNull(restored.sizeBytes)
+    }
+
+    @Test
+    fun `unknown mime type is normalized to generic binary rather than rejected`() {
+        val item = TransferManifestItem(
+            UUID.randomUUID(), "unknown.bin", "not a valid mime", 4L,
+        )
+        val restored = TransferManifestCodec.decode(TransferManifestCodec.encode(item))
 
         assertEquals("application/octet-stream", restored.mimeType)
     }
@@ -52,7 +60,7 @@ class TransferManifestCodecTest {
         assertFalse(safeName.contains('\u202E'))
         assertEquals(safeName, TransferManifestCodec.decode(
             TransferManifestCodec.encode(
-                TransferManifestItem(UUID.randomUUID(), unsafeName, "application/pdf", 1L, digest),
+                TransferManifestItem(UUID.randomUUID(), unsafeName, "application/pdf", 1L),
             ),
         ).displayName)
     }
@@ -64,25 +72,16 @@ class TransferManifestCodecTest {
     }
 
     @Test
-    fun `empty and traversal-only names receive a safe fallback`() {
-        assertEquals("received-file", SafeTransferFileName.sanitize("../.."))
+    fun `empty and dot-only names receive a safe fallback`() {
+        assertEquals("received-file", SafeTransferFileName.sanitize(".."))
         assertEquals("received-file", SafeTransferFileName.sanitize("   "))
     }
 
     @Test
-    fun `negative file size is rejected by encoder`() {
+    fun `negative size other than unknown sentinel is rejected by encoder`() {
         assertThrows(IllegalArgumentException::class.java) {
             TransferManifestCodec.encode(
-                TransferManifestItem(UUID.randomUUID(), "x", "application/octet-stream", -1L, digest),
-            )
-        }
-    }
-
-    @Test
-    fun `malformed sha256 is rejected by encoder`() {
-        assertThrows(IllegalArgumentException::class.java) {
-            TransferManifestCodec.encode(
-                TransferManifestItem(UUID.randomUUID(), "x", "application/octet-stream", 1L, "1234"),
+                TransferManifestItem(UUID.randomUUID(), "x", "application/octet-stream", -2L),
             )
         }
     }
@@ -90,7 +89,7 @@ class TransferManifestCodecTest {
     @Test
     fun `manifest decoder rejects trailing bytes`() {
         val valid = TransferManifestCodec.encode(
-            TransferManifestItem(UUID.randomUUID(), "x.bin", "application/octet-stream", 0L, digest),
+            TransferManifestItem(UUID.randomUUID(), "x.bin", "application/octet-stream", 0L),
         )
         val invalid = valid + byteArrayOf(1)
         assertThrows(TransferProtocolException::class.java) {
@@ -99,12 +98,11 @@ class TransferManifestCodecTest {
     }
 
     @Test
-    fun `manifest decoder rejects negative length field`() {
+    fun `manifest decoder rejects invalid negative declared size`() {
         val encoded = TransferManifestCodec.encode(
-            TransferManifestItem(UUID.randomUUID(), "x.bin", "application/octet-stream", 0L, digest),
+            TransferManifestItem(UUID.randomUUID(), "x.bin", "application/octet-stream", 0L),
         )
-        // The manifest's size is the eight bytes immediately before the SHA-256 digest.
-        ByteBuffer.wrap(encoded).putLong(encoded.size - 40, -1L)
+        ByteBuffer.wrap(encoded).putLong(encoded.size - 8, -2L)
 
         assertThrows(TransferProtocolException::class.java) {
             TransferManifestCodec.decode(encoded)
