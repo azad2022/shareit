@@ -25,7 +25,8 @@ enum class TransferFrameType(
     ITEM_COMPLETE(6, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
     ITEM_VERIFIED(7, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
     ERROR(8, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
-    SESSION_CLOSE(9, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES);
+    SESSION_CLOSE(9, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
+    CHUNK_ACK(10, TransferFrameCodec.CHUNK_ACK_PAYLOAD_BYTES, TransferFrameCodec.CHUNK_ACK_PAYLOAD_BYTES);
 
     companion object {
         internal fun fromWireCode(code: Int): TransferFrameType =
@@ -76,6 +77,7 @@ object TransferFrameCodec {
     const val MAX_CONTROL_PAYLOAD_BYTES = 16 * 1024
     const val MAX_DATA_CHUNK_BYTES = 64 * 1024
     const val CHUNK_METADATA_BYTES = 24
+    const val CHUNK_ACK_PAYLOAD_BYTES = 24
 
     private const val MAGIC = 0x50595644 // ASCII: PYVD
 
