@@ -144,6 +144,8 @@ internal class WifiDirectTcpChannelController(
         requestGeneration: Long,
     ) {
         try {
+            val isGroupOwner = connection.isGroupOwner
+                ?: throw ChannelSetupException(P2pTcpChannelFailure.GROUP_INFO_UNAVAILABLE)
             ensureCurrent(requestGeneration)
             if (!hasRequiredRuntimePermission()) {
                 throw ChannelSetupException(P2pTcpChannelFailure.PERMISSION_DENIED)
@@ -163,7 +165,7 @@ internal class WifiDirectTcpChannelController(
             }
 
             ensureCurrent(requestGeneration)
-            if (groupInfo.isGroupOwner != connection.isGroupOwner) {
+            if (groupInfo.isGroupOwner != isGroupOwner) {
                 throw ChannelSetupException(P2pTcpChannelFailure.GROUP_ROLE_MISMATCH)
             }
 
@@ -190,7 +192,7 @@ internal class WifiDirectTcpChannelController(
                 ?: throw ChannelSetupException(P2pTcpChannelFailure.LOCAL_IPV4_UNAVAILABLE)
 
             ensureCurrent(requestGeneration)
-            if (connection.isGroupOwner) {
+            if (isGroupOwner) {
                 acceptGroupClient(localAddress, requestGeneration)
             } else {
                 connectToGroupOwner(
