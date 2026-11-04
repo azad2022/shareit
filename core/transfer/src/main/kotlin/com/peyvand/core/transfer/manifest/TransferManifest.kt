@@ -147,7 +147,9 @@ object SafeTransferFileName {
             val codePoint = normalized.codePointAt(offset)
             val safeCodePoint = when {
                 codePoint == '/'.code || codePoint == '\\'.code || codePoint == ':'.code -> '_'.code
-                Character.isISOControl(codePoint) || isBidiOverride(codePoint) -> '_'.code
+                Character.isISOControl(codePoint) ||
+                    Character.getType(codePoint) == Character.SURROGATE ||
+                    isBidiOverride(codePoint) -> '_'.code
                 else -> codePoint
             }
             val fragment = String(Character.toChars(safeCodePoint))
