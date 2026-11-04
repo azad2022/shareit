@@ -35,10 +35,10 @@ CP-003 must establish a secure, complete one-to-one transfer before adding group
 
 1. The protocol is versioned and transport-independent at its domain boundary. Control messages and binary file data are separate frame types.
 2. Use bounded length-prefixed frames with explicit version, type, and session/item identifiers. Validate lengths before allocation, reject oversized or truncated frames, reject unsupported versions/types, and validate legal state transitions. Do not deserialize untrusted content into unrestricted polymorphic object graphs.
-3. The first manifest carries one random item ID, display name, MIME metadata, exact byte length, and a 32-byte SHA-256 digest. It never contains a sender filesystem path.
+3. The first manifest carries one random item ID, display name, MIME metadata, and an optional declared byte length. Unknown size is represented explicitly; it is not a protocol error. It never contains a sender filesystem path or a precomputed digest.
 4. The authenticated receiver explicitly accepts or rejects the incoming item before the sender transmits file bytes.
-5. The data plane streams bounded chunks with an explicit item ID and offset. One item and a bounded in-flight window are used initially. A 64 KiB chunk may be used as an initial measurement point, not as a universal optimum; tune only from reproducible device measurements.
-6. Progress is based on bytes actually written and acknowledged. Sender completion requires an authenticated receiver acknowledgement after verification and successful publication; a successful socket write is not completion.
+5. The data plane streams bounded chunks with an explicit item ID and offset. Sender and receiver calculate SHA-256 incrementally while the same bytes are read/written; the sender sends a final authenticated completion record containing the actual byte count and digest. The receiver compares that record with its own digest and any declared manifest size before publication. This avoids a costly full-file pre-read and supports ContentProvider URIs whose size metadata is unavailable. One item and a bounded in-flight window are used initially. A 64 KiB chunk is only an initial measurement point, not a universal optimum.
+6. Progress is based on bytes actually written and acknowledged. After matching byte count and digest, the receiver publishes the staged item and sends an authenticated receipt containing the verified byte count and digest. Sender completion requires this receipt; a successful socket write or sender-side EOF alone is not completion.
 7. Cancellation closes the active stream/socket, releases file descriptors and session keys, removes uncommitted temporary data, and never publishes a partial artifact.
 
 ### 4. Arbitrary file formats and Android storage
@@ -72,7 +72,7 @@ These remain separate follow-on checkpoints. The CP-003 contracts must not preve
 - Discovery is never authentication.
 - No file metadata or content is sent before both SAS approvals and successful mutually authenticated TLS.
 - No incoming bytes are written to a user-visible destination before consent and integrity verification.
-- A file is complete only after exact byte-count and SHA-256 verification and successful destination publication/read-back verification where supported.
+- A file is complete only after exact byte-count and SHA-256 verification, successful destination publication/read-back verification where supported, and an authenticated receipt.
 - Malformed frames, oversized lengths, invalid transitions, certificate/pin mismatch, wrong SAS, storage exhaustion, short reads/writes, timeouts, disconnect, source mutation, and cancellation fail closed.
 - Untrusted peer data never becomes a trusted filesystem path, package command, or executable action.
 - No received file or APK is opened, installed, or executed automatically.
