@@ -253,9 +253,9 @@ internal class WifiDirectSecureSessionController(
                 sessionId = sessionId,
                 payload = byteArrayOf(),
             )
-            TransferFrameCodec.write(approvalFrame, localSocket.getOutputStream())
-            localSocket.getOutputStream().flush()
-            val remoteApproval = TransferFrameCodec.read(localSocket.getInputStream())
+            TransferFrameCodec.write(approvalFrame, activeSocket.getOutputStream())
+            activeSocket.getOutputStream().flush()
+            val remoteApproval = TransferFrameCodec.read(activeSocket.getInputStream())
                 ?: throw SessionSetupException(SecureSessionFailure.PROTOCOL_ERROR)
             if (remoteApproval.type != TransferFrameType.PAIRING_APPROVED ||
                 remoteApproval.sessionId != sessionId ||
@@ -267,7 +267,7 @@ internal class WifiDirectSecureSessionController(
             ensureCurrent(expectedGeneration)
             mutableState.value = SecureSessionSnapshot(SecureSessionStatus.TLS_HANDSHAKING)
             tlsSocket = createPinnedTlsSocket(
-                raw = localSocket,
+                raw = activeSocket,
                 alias = keyAlias,
                 identity = identity,
                 expectedPeerFingerprint = peerFingerprint,
