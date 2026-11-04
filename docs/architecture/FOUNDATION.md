@@ -8,7 +8,7 @@ The repository contains the native Android foundation and the first connectivity
 - CP-002: Wi-Fi Direct runtime capability checks, version-aware permissions and PEYVAND Bonjour/DNS-SD service discovery.
 - App-default network diagnostics: observes whether the network Android selects for the PEYVAND app UID is VPN-backed and shows a non-blocking warning. This diagnostic is not a local peer reachability test.
 
-CP-002 discovers PEYVAND service advertisements. It does **not** connect peers, authenticate peers, create sockets or transfer files. A discovery advertisement is untrusted input and is not proof of identity.
+CP-002 discovery itself only finds PEYVAND service advertisements. CP-003B now contains an initial selected-peer Wi-Fi Direct group-connection implementation, but it has not yet been validated on physical devices. Neither discovery nor a formed P2P group authenticates the peer, creates a secure session, or transfers files.
 
 ## Project modules
 
@@ -21,9 +21,9 @@ CP-002 discovers PEYVAND service advertisements. It does **not** connect peers, 
 ```
 
 - `:app`: Android entry point, Compose presentation, lifecycle ownership and explicit composition.
-- `:core:domain`: Android-free language, discovery and network-diagnostic models/policies. It exposes `StateFlow` in repository contracts and must not import Android or Compose APIs.
+- `:core:domain`: Android-free language, discovery, peer-connection and network-diagnostic models/policies. It exposes `StateFlow` in repository contracts and must not import Android or Compose APIs.
 - `:core:data`: Preferences DataStore and AppCompat per-app locale adapter.
-- `:core:connectivity`: Android `WifiP2pManager` adapter, P2P state receiver, DNS-SD advertisement/discovery, runtime capability reporting and app-default network diagnostics through `ConnectivityManager`. It does not depend on app presentation.
+- `:core:connectivity`: Android `WifiP2pManager` adapter, one shared P2P channel/receiver, DNS-SD advertisement/discovery, `WifiDirectPeerConnectionController`, runtime capability reporting and app-default network diagnostics through `ConnectivityManager`. It does not depend on app presentation.
 - `:core:designsystem`: PEYVAND semantic colors and Compose theme.
 - `:core:transfer`: transport-independent, bounded transfer frames, manifest validation, pairing transcript/SAS derivation, lifecycle policy, and streaming/hash primitives. It must not import Android UI or Wi-Fi P2P framework types.
 
@@ -64,7 +64,7 @@ The app observes its own default network and checks whether it carries `TRANSPOR
 
 ## Deferred responsibilities
 
-No peer connection, pairing, TLS, local socket, transfer protocol, file selection, streaming, integrity verification, resume, APK extraction, PackageInstaller or background transfer is implemented in CP-002. These responsibilities require later ADRs, threat review and physical-device interoperability tests.
+CP-002 discovery does not own peer connection, pairing, TLS, local sockets, transfer protocol, streaming, integrity verification, resume, APK extraction, PackageInstaller or background transfer. The initial CP-003B group-connection slice is implemented in a separate controller but remains unvalidated on physical devices. Pairing, TLS, sockets, receiver consent and file transfer still require later implementation, threat review and physical-device interoperability tests.
 
 ## CP-003 transfer boundary
 
@@ -74,6 +74,17 @@ No peer connection, pairing, TLS, local socket, transfer protocol, file selectio
 - `:app` composes repositories/use cases and renders observable transfer state. It does not own network streams, file descriptors, TLS trust policy, or transfer state transitions.
 - Session authentication and TLS credentials are a separate security responsibility to be implemented and reviewed before any file bytes are sent. DNS-SD markers and transient P2P addresses are never trusted identities.
 - The first vertical slice is one-to-one and one arbitrary byte stream. Group transfer, resume, APK sets, background execution and final product-wide visual design remain separate checkpoints.
+
+## CP-003B — selected-peer P2P group connection (implementation in progress)
+
+- `:core:domain` defines `PeerConnectionRepository`, immutable connection state and pure candidate/group-state policies.
+- `:core:connectivity` uses `WifiDirectPeerConnectionController` to request connection to a currently discovered candidate and confirm formation only after `WIFI_P2P_CONNECTION_CHANGED_ACTION` plus `requestConnectionInfo()`.
+- The controller receives the existing manager/channel from the discovery repository. It does not initialize another channel or register a competing receiver.
+- A formed group exposes only ephemeral owner/client role and group-owner address for the current session. This state must not be treated as peer identity or authentication.
+- A 30-second formation timeout and group cleanup on user disconnect, Activity foreground teardown, permission loss, P2P disable and channel loss are implemented. Physical callback ordering and OEM behavior remain to be tested.
+- The Compose discovery flow exposes sender-side candidate selection and displays connection status. Group formation is explicitly labelled as unauthenticated; no file metadata or bytes are sent at this stage.
+- Not implemented: TCP listener/client, local interface/socket binding, ephemeral Keystore certificate, SAS exchange and confirmation, pinned mutual TLS, receiver consent, storage streaming/staging/publication or physical file transfer.
+- Checkpoint and validation evidence: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`.
 
 ## Transfer permission gate
 
