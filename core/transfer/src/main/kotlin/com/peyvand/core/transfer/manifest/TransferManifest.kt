@@ -16,27 +16,27 @@ data class TransferManifestItem(
     val itemId: UUID,
     val displayName: String,
     val mimeType: String,
-    val sizeBytes: Long,
-    val sha256Hex: String,
+    /** Null means the source provider does not expose a reliable byte length. */
+    val sizeBytes: Long?,
 )
 
 object TransferManifestCodec {
     const val MAX_NAME_BYTES = 255
     const val MAX_MIME_BYTES = 127
-    const val SHA256_BYTES = 32
-    private const val FIXED_BYTES = 16 + 2 + 2 + 8 + SHA256_BYTES
+    private const val FIXED_BYTES = 16 + 2 + 2 + 8
 
     private val mimeTypePattern = Regex(
         "^[a-z0-9!#$&^_.+-]{1,64}/(?:[a-z0-9!#$&^_.+-]{1,64}|\\*)$",
     )
 
     fun encode(item: TransferManifestItem): ByteArray {
-        require(item.sizeBytes >= 0L) { "File size cannot be negative" }
+        require(item.sizeBytes == null || item.sizeBytes >= 0L) {
+            "File size must be non-negative or unknown"
+        }
         val name = SafeTransferFileName.sanitize(item.displayName)
         val nameBytes = name.toByteArray(StandardCharsets.UTF_8)
         val mimeType = normalizeMimeType(item.mimeType)
         val mimeBytes = mimeType.toByteArray(StandardCharsets.UTF_8)
-        val digest = decodeSha256(item.sha256Hex)
         require(nameBytes.size in 1..MAX_NAME_BYTES)
         require(mimeBytes.size in 1..MAX_MIME_BYTES)
 
@@ -48,8 +48,7 @@ object TransferManifestCodec {
             data.write(nameBytes)
             data.writeShort(mimeBytes.size)
             data.write(mimeBytes)
-            data.writeLong(item.sizeBytes)
-            data.write(digest)
+            data.writeLong(item.sizeBytes ?: UNKNOWN_SIZE_SENTINEL)
         }
         return output.toByteArray()
     }
@@ -75,21 +74,19 @@ object TransferManifestCodec {
             throw TransferProtocolException("Truncated manifest MIME length")
         }
         val mimeLength = buffer.short.toInt() and 0xffff
-        if (mimeLength !in 1..MAX_MIME_BYTES || mimeLength > buffer.remaining() - 8 - SHA256_BYTES) {
+        if (mimeLength !in 1..MAX_MIME_BYTES || mimeLength > buffer.remaining() - 8) {
             throw TransferProtocolException("Invalid manifest MIME length")
         }
         val mimeBytes = ByteArray(mimeLength)
         buffer.get(mimeBytes)
 
-        if (buffer.remaining() != 8 + SHA256_BYTES) {
+        if (buffer.remaining() != 8) {
             throw TransferProtocolException("Invalid manifest field layout")
         }
-        val sizeBytes = buffer.long
-        if (sizeBytes < 0L) {
-            throw TransferProtocolException("Negative manifest file size")
+        val declaredSize = buffer.long
+        if (declaredSize < UNKNOWN_SIZE_SENTINEL) {
+            throw TransferProtocolException("Invalid manifest file size")
         }
-        val digest = ByteArray(SHA256_BYTES)
-        buffer.get(digest)
 
         val rawName = decodeUtf8(nameBytes, "file name")
         val rawMimeType = decodeUtf8(mimeBytes, "MIME type")
@@ -97,8 +94,7 @@ object TransferManifestCodec {
             itemId = itemId,
             displayName = SafeTransferFileName.sanitize(rawName),
             mimeType = normalizeMimeType(rawMimeType),
-            sizeBytes = sizeBytes,
-            sha256Hex = digest.toLowerHex(),
+            sizeBytes = declaredSize.takeIf { it != UNKNOWN_SIZE_SENTINEL },
         )
     }
 
@@ -106,20 +102,6 @@ object TransferManifestCodec {
         val normalized = value.trim().lowercase(Locale.ROOT)
         return normalized.takeIf(mimeTypePattern::matches) ?: "application/octet-stream"
     }
-
-    private fun decodeSha256(value: String): ByteArray {
-        require(value.length == SHA256_BYTES * 2 && value.all(::isHexDigit)) {
-            "SHA-256 must be exactly 64 hexadecimal characters"
-        }
-        return ByteArray(SHA256_BYTES) { index ->
-            val high = value[index * 2].digitToInt(16)
-            val low = value[index * 2 + 1].digitToInt(16)
-            ((high shl 4) or low).toByte()
-        }
-    }
-
-    private fun isHexDigit(character: Char): Boolean =
-        character in '0'..'9' || character in 'a'..'f' || character in 'A'..'F'
 
     private fun decodeUtf8(bytes: ByteArray, fieldName: String): String = try {
         StandardCharsets.UTF_8.newDecoder()
@@ -130,6 +112,8 @@ object TransferManifestCodec {
     } catch (exception: CharacterCodingException) {
         throw TransferProtocolException("Malformed UTF-8 in manifest $fieldName", exception)
     }
+
+    private const val UNKNOWN_SIZE_SENTINEL = -1L
 }
 
 object SafeTransferFileName {
@@ -167,15 +151,4 @@ object SafeTransferFileName {
 
     private fun isBidiOverride(codePoint: Int): Boolean =
         codePoint in 0x202A..0x202E || codePoint in 0x2066..0x2069
-}
-
-private fun ByteArray.toLowerHex(): String {
-    val alphabet = "0123456789abcdef"
-    val chars = CharArray(size * 2)
-    for (index in indices) {
-        val value = this[index].toInt() and 0xff
-        chars[index * 2] = alphabet[value ushr 4]
-        chars[index * 2 + 1] = alphabet[value and 0x0f]
-    }
-    return String(chars)
 }
