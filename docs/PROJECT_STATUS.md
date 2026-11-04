@@ -186,5 +186,8 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - Active branch: `feature/secure-file-transfer`; draft PR #3 remains open and unmerged.
 - Source commit: `848fb054d3e55de7fc797db5dcf318c9a32f29a5` (session pairing, Android Keystore ephemeral identity, SAS approval, pinned mutual TLS, UI state and bounded stale-key cleanup).
 - The current implementation is a security-session substage, not a completed file-transfer feature. It does not yet exchange a file manifest, obtain per-file receiver consent, read a selected ContentResolver URI, stream bytes, stage/publish a destination, or return a verified completion receipt.
-- CI for the exact source head had not completed at the time of this status entry. Do not infer a successful build or tests from the earlier validated TCP-only commit `fbc0a6027dd6ed2ef7182b5f2f3df590001bd074`.
+- GitHub Actions run `41896531270` completed successfully on exact branch-head `d25028b4a21e0f06f91bd02d1c9b56935d03e07c`: 98 JVM unit tests passed (0 failures/errors/skips), configured lint completed with 10 warnings and 0 errors, and `:app:assembleDebug` succeeded.
+- Debug APK artifact `13355498653` is 14,109,243 bytes; extracted APK SHA-256 is `c2ab089c117d00fd80c5261783718ca62217dfb883d72ae7d07389730cddfd93`.
+- The lint report includes a `CustomX509TrustManager` warning in `:core:connectivity`; complete a focused trust-manager security review and physical Keystore/SAS/TLS tests before treating session authentication as accepted. CI did not run Android instrumentation or physical-device tests.
+- Successful build/test results do not imply end-to-end transfer. Receiver consent, socket manifest exchange, streaming, staging, SAF publication and authenticated integrity receipt remain unimplemented.
 - No physical pairing or TLS interoperability evidence is recorded yet. CP-003 remains `IN_PROGRESS`.
