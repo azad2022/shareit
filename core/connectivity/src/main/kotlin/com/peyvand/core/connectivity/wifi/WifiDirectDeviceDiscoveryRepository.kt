@@ -197,6 +197,7 @@ class WifiDirectDeviceDiscoveryRepository(
             restartRoleAfterCleanup = null
             cleanupCallbacksRemaining = 0
             channel = if (wasMonitoring) initializeChannel() else null
+            clearConnectionState()
 
             mutableSnapshot.value = mutableSnapshot.value.copy(
                 availability = if (!wasMonitoring || channel == null) {
@@ -363,6 +364,7 @@ class WifiDirectDeviceDiscoveryRepository(
             registerP2pStateReceiverIfPermitted()
             requestP2pStateIfNeeded()
         } else {
+            clearConnectionState()
             invalidateP2pStateQuery()
             p2pEnabled = null
             unregisterP2pStateReceiver()
@@ -492,8 +494,8 @@ class WifiDirectDeviceDiscoveryRepository(
                         if (!isCurrentConnection(requestGeneration)) return
                         // ActionListener success only means Android accepted the request.
                         // Group formation is confirmed separately by the P2P broadcast
-                        // followed by requestConnectionInfo().
-                        stopDiscovery()
+                        // followed by requestConnectionInfo(). Discovery registrations
+                        // are released only after the group is confirmed.
                     }
 
                     override fun onFailure(reason: Int) {
@@ -518,6 +520,12 @@ class WifiDirectDeviceDiscoveryRepository(
         if (!monitoring || !hasRequiredRuntimePermission()) return
         val manager = wifiP2pManager ?: return
         val activeChannel = channel ?: return
+        val currentStatus = mutableConnection.value.status
+        if (currentStatus == PeerConnectionStatus.FAILED ||
+            currentStatus == PeerConnectionStatus.DISCONNECTING
+        ) {
+            return
+        }
         val requestGeneration = connectionGeneration
 
         try {
@@ -543,6 +551,9 @@ class WifiDirectDeviceDiscoveryRepository(
                             groupOwnerAddress = ownerAddress,
                             locallyInitiated = previous.locallyInitiated,
                         )
+                        if (mutableSnapshot.value.status != DiscoveryStatus.IDLE) {
+                            stopDiscovery()
+                        }
                     } else if (mutableConnection.value.status == PeerConnectionStatus.GROUP_FORMED) {
                         clearConnectionTimeout()
                         mutableConnection.value = PeerConnectionSnapshot()
