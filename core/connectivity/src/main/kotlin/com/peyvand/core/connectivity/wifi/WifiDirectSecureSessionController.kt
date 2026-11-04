@@ -357,7 +357,7 @@ internal class WifiDirectSecureSessionController(
             closeQuietly(localSocket)
             alias?.let(::deleteKeyAlias)
             throw exception
-        } catch (exception: PairingRejectedException) {
+        } catch (_: PairingRejectedException) {
             diagnostics.event("SESSION_REJECTED", "stage=$currentStage")
             closeQuietly(tlsSocket)
             closeQuietly(localSocket)
@@ -674,8 +674,6 @@ internal class WifiDirectSecureSessionController(
         const val MAX_STALE_KEY_ALIASES_PER_START = 32
         const val TCP_READY_TIMEOUT_MILLIS = 25_000L
         const val USER_APPROVAL_TIMEOUT_MILLIS = 60_000L
-        const val CERTIFICATE_CLOCK_SKEW_MILLIS = 60_000L
-        const val CERTIFICATE_LIFETIME_MILLIS = 10 * 60_000L
         const val TLS_HANDSHAKE_TIMEOUT_MILLIS = 15_000
         const val NANOS_PER_MILLI = 1_000_000L
     }
