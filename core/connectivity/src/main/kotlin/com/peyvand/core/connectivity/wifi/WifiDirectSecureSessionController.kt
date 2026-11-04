@@ -76,6 +76,7 @@ internal class WifiDirectSecureSessionController(
     private var rawSocket: Socket? = null
     private var secureSocket: SSLSocket? = null
     private var activeKeyAlias: String? = null
+    private val staleAliasCleanupJob = scope.launch { cleanupStaleKeyAliases() }
 
     fun start(connection: PeerConnectionSnapshot) {
         if (connection.status != com.peyvand.core.domain.connection.PeerConnectionStatus.GROUP_FORMED) {
@@ -172,7 +173,8 @@ internal class WifiDirectSecureSessionController(
 
             val sessionId: UUID
             val remoteHello: PairingBootstrapHello
-            val keyAlias = "peyvand_session_${UUID.randomUUID().toString().replace("-", "")}"
+            staleAliasCleanupJob.join()
+            val keyAlias = "$SESSION_KEY_ALIAS_PREFIX${UUID.randomUUID().toString().replace("-", "")}"
             alias = keyAlias
 
             synchronized(lock) { activeKeyAlias = keyAlias }
@@ -466,6 +468,17 @@ internal class WifiDirectSecureSessionController(
     private fun sha256(bytes: ByteArray): ByteArray =
         MessageDigest.getInstance("SHA-256").digest(bytes)
 
+    private fun cleanupStaleKeyAliases() {
+        runCatching {
+            val store = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+            java.util.Collections.list(store.aliases())
+                .asSequence()
+                .filter { it.startsWith(SESSION_KEY_ALIAS_PREFIX) }
+                .take(MAX_STALE_KEY_ALIASES_PER_START)
+                .forEach(store::deleteEntry)
+        }
+    }
+
     private fun deleteKeyAlias(alias: String) {
         runCatching {
             KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.let { store ->
@@ -586,6 +599,8 @@ internal class WifiDirectSecureSessionController(
 
     private companion object {
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        const val SESSION_KEY_ALIAS_PREFIX = "peyvand_session_"
+        const val MAX_STALE_KEY_ALIASES_PER_START = 32
         const val TCP_READY_TIMEOUT_MILLIS = 25_000L
         const val USER_APPROVAL_TIMEOUT_MILLIS = 60_000L
         const val CERTIFICATE_CLOCK_SKEW_MILLIS = 60_000L
