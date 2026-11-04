@@ -64,6 +64,14 @@ object PeerConnectionStatePolicy {
         groupOwnerAddress: String?,
     ): Boolean = groupFormed && (isGroupOwner || !groupOwnerAddress.isNullOrBlank())
 
+    /** A timed-out removal remains unresolved until a later platform signal confirms it. */
+    fun isDisconnectPending(
+        status: PeerConnectionStatus,
+        failure: PeerConnectionFailure?,
+    ): Boolean =
+        status == PeerConnectionStatus.DISCONNECTING ||
+            (status == PeerConnectionStatus.FAILED && failure == PeerConnectionFailure.DISCONNECT_TIMEOUT)
+
     fun mayInitiate(
         peerId: String,
         currentlyDiscoveredPeerIds: Collection<String>,

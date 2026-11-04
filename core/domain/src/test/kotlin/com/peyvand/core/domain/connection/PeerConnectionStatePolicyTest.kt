@@ -52,4 +52,32 @@ class PeerConnectionStatePolicyTest {
         assertFalse(PeerConnectionStatePolicy.isGroupFormed(true, false, null))
         assertFalse(PeerConnectionStatePolicy.isGroupFormed(true, false, " "))
     }
+
+    @Test
+    fun `disconnect timeout remains pending until platform confirms removal`() {
+        assertTrue(
+            PeerConnectionStatePolicy.isDisconnectPending(
+                PeerConnectionStatus.DISCONNECTING,
+                null,
+            ),
+        )
+        assertTrue(
+            PeerConnectionStatePolicy.isDisconnectPending(
+                PeerConnectionStatus.FAILED,
+                PeerConnectionFailure.DISCONNECT_TIMEOUT,
+            ),
+        )
+        assertFalse(
+            PeerConnectionStatePolicy.isDisconnectPending(
+                PeerConnectionStatus.FAILED,
+                PeerConnectionFailure.CONNECTION_TIMEOUT,
+            ),
+        )
+        assertFalse(
+            PeerConnectionStatePolicy.isDisconnectPending(
+                PeerConnectionStatus.GROUP_FORMED,
+                null,
+            ),
+        )
+    }
 }

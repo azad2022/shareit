@@ -128,8 +128,10 @@ internal class WifiDirectPeerConnectionController(
         if (!isMonitoring() || !isReceiverRegistered() || !hasRequiredRuntimePermission()) {
             return
         }
-        val status = mutableConnection.value.status
-        if (status == PeerConnectionStatus.FAILED) return
+        val initial = mutableConnection.value
+        if (initial.status == PeerConnectionStatus.FAILED &&
+            !PeerConnectionStatePolicy.isDisconnectPending(initial.status, initial.failure)
+        ) return
 
         val manager = managerProvider() ?: return
         val activeChannel = channelProvider() ?: return
@@ -140,7 +142,8 @@ internal class WifiDirectPeerConnectionController(
                 WifiP2pManager.ConnectionInfoListener { info ->
                     if (!isCurrent(requestGeneration)) return@ConnectionInfoListener
 
-                    if (mutableConnection.value.status == PeerConnectionStatus.DISCONNECTING) {
+                    val current = mutableConnection.value
+                    if (PeerConnectionStatePolicy.isDisconnectPending(current.status, current.failure)) {
                         if (!info.groupFormed) {
                             clearTimeout()
                             mutableConnection.value = PeerConnectionSnapshot()
@@ -220,14 +223,19 @@ internal class WifiDirectPeerConnectionController(
                 activeChannel,
                 object : WifiP2pManager.ActionListener {
                     override fun onSuccess() {
-                        if (generation == requestGeneration) {
+                        val current = mutableConnection.value
+                        if (generation == requestGeneration &&
+                            PeerConnectionStatePolicy.isDisconnectPending(current.status, current.failure)
+                        ) {
                             clearTimeout()
                             mutableConnection.value = PeerConnectionSnapshot()
                         }
                     }
 
                     override fun onFailure(reason: Int) {
-                        if (generation == requestGeneration) {
+                        if (generation == requestGeneration &&
+                            mutableConnection.value.status == PeerConnectionStatus.DISCONNECTING
+                        ) {
                             clearTimeout()
                             publishFailure(
                                 mapFailure(reason),
@@ -239,7 +247,9 @@ internal class WifiDirectPeerConnectionController(
                 },
             )
         } catch (_: SecurityException) {
-            if (generation == requestGeneration) {
+            if (generation == requestGeneration &&
+                mutableConnection.value.status == PeerConnectionStatus.DISCONNECTING
+            ) {
                 clearTimeout()
                 publishFailure(
                     PeerConnectionFailure.PERMISSION_DENIED,
@@ -248,7 +258,9 @@ internal class WifiDirectPeerConnectionController(
                 )
             }
         } catch (_: RuntimeException) {
-            if (generation == requestGeneration) {
+            if (generation == requestGeneration &&
+                mutableConnection.value.status == PeerConnectionStatus.DISCONNECTING
+            ) {
                 clearTimeout()
                 publishFailure(
                     PeerConnectionFailure.PLATFORM_ERROR,
