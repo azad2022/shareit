@@ -252,6 +252,7 @@ internal class WifiDirectSecureSessionController(
             )
             TransferFrameCodec.write(approvalFrame, activeSocket.getOutputStream())
             activeSocket.getOutputStream().flush()
+            activeSocket.soTimeout = USER_APPROVAL_TIMEOUT_MILLIS.toInt()
             val remoteApproval = TransferFrameCodec.read(activeSocket.getInputStream())
                 ?: throw SessionSetupException(SecureSessionFailure.PROTOCOL_ERROR)
             if (remoteApproval.type != TransferFrameType.PAIRING_APPROVED ||
