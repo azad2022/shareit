@@ -13,6 +13,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.peyvand.app.presentation.MainViewModel
+import com.peyvand.app.presentation.connection.PeerConnectionViewModel
+import com.peyvand.app.presentation.connection.PeerConnectionViewModelFactory
 import com.peyvand.app.presentation.MainViewModelFactory
 import com.peyvand.app.presentation.PeyvandApp
 import com.peyvand.app.presentation.files.ShareSelectionViewModel
@@ -39,6 +41,7 @@ class MainActivity : AppCompatActivity() {
             val discoveryViewModel: DeviceDiscoveryViewModel,
             val networkEnvironmentViewModel: NetworkEnvironmentViewModel,
             val shareSelectionViewModel: ShareSelectionViewModel,
+            val peerConnectionViewModel: PeerConnectionViewModel,
         ) : StartupState
     }
 
@@ -66,6 +69,7 @@ class MainActivity : AppCompatActivity() {
                         discoveryViewModel = state.discoveryViewModel,
                         networkEnvironmentViewModel = state.networkEnvironmentViewModel,
                         shareSelectionViewModel = state.shareSelectionViewModel,
+                        peerConnectionViewModel = state.peerConnectionViewModel,
                     )
                 }
             }
@@ -135,11 +139,19 @@ class MainActivity : AppCompatActivity() {
                     ),
                 )[ShareSelectionViewModel::class.java]
 
+                val peerConnectionViewModel = ViewModelProvider(
+                    this@MainActivity,
+                    PeerConnectionViewModelFactory(
+                        (application as PeyvandApplication).peerConnectionRepository,
+                    ),
+                )[PeerConnectionViewModel::class.java]
+
                 startupState = StartupState.Ready(
                     languageViewModel = languageViewModel,
                     discoveryViewModel = discoveryViewModel,
                     networkEnvironmentViewModel = networkEnvironmentViewModel,
                     shareSelectionViewModel = shareSelectionViewModel,
+                    peerConnectionViewModel = peerConnectionViewModel,
                 )
             } catch (cancellation: CancellationException) {
                 throw cancellation
