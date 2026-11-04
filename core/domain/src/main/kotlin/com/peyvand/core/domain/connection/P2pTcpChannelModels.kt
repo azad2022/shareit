@@ -47,7 +47,8 @@ interface P2pTcpChannelStateRepository {
 /** Combined application-facing repository for the P2P group and its local TCP channel. */
 interface PeerConnectivityRepository :
     PeerConnectionRepository,
-    P2pTcpChannelStateRepository
+    P2pTcpChannelStateRepository,
+    PeerSecureSessionRepository
 
 data class P2pIpv4InterfaceAddress(
     val address: Inet4Address,
