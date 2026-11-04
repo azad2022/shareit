@@ -148,6 +148,7 @@
     <string name="connection_error_permission">مجوز لازم برای اتصال Wi-Fi Direct در دسترس نیست.</string>
     <string name="connection_error_busy">سرویس Wi-Fi Direct مشغول است. کمی بعد دوباره تلاش کنید.</string>
     <string name="connection_error_timeout">در مهلت تعیین‌شده گروه Wi-Fi Direct تشکیل نشد.</string>
+    <string name="connection_error_disconnect_timeout">در مهلت تعیین‌شده قطع اتصال تأیید نشد. Wi-Fi Direct را بررسی کنید و دوباره تلاش کنید.</string>
     <string name="connection_error_unsupported">اتصال Wi-Fi Direct در این دستگاه پشتیبانی نمی‌شود.</string>
     <string name="connection_error_generic">اتصال Wi-Fi Direct با خطای سیستم مواجه شد.</string>
 </resources>

@@ -32,6 +32,7 @@ internal class WifiDirectPeerConnectionController(
     private val hasRequiredRuntimePermission: () -> Boolean,
     private val onGroupFormed: () -> Unit,
     private val connectionTimeoutMillis: Long = DEFAULT_CONNECTION_TIMEOUT_MILLIS,
+    private val disconnectTimeoutMillis: Long = DEFAULT_DISCONNECT_TIMEOUT_MILLIS,
 ) : PeerConnectionRepository {
     private val mutableConnection = MutableStateFlow(PeerConnectionSnapshot())
     override val connection = mutableConnection.asStateFlow()
@@ -41,6 +42,7 @@ internal class WifiDirectPeerConnectionController(
 
     init {
         require(connectionTimeoutMillis > 0L)
+        require(disconnectTimeoutMillis > 0L)
     }
 
     @SuppressLint("MissingPermission")
@@ -127,11 +129,7 @@ internal class WifiDirectPeerConnectionController(
             return
         }
         val status = mutableConnection.value.status
-        if (status == PeerConnectionStatus.FAILED ||
-            status == PeerConnectionStatus.DISCONNECTING
-        ) {
-            return
-        }
+        if (status == PeerConnectionStatus.FAILED) return
 
         val manager = managerProvider() ?: return
         val activeChannel = channelProvider() ?: return
@@ -141,6 +139,14 @@ internal class WifiDirectPeerConnectionController(
                 activeChannel,
                 WifiP2pManager.ConnectionInfoListener { info ->
                     if (!isCurrent(requestGeneration)) return@ConnectionInfoListener
+
+                    if (mutableConnection.value.status == PeerConnectionStatus.DISCONNECTING) {
+                        if (!info.groupFormed) {
+                            clearTimeout()
+                            mutableConnection.value = PeerConnectionSnapshot()
+                        }
+                        return@ConnectionInfoListener
+                    }
 
                     val ownerAddress = info.groupOwnerAddress?.hostAddress
                     // Android may anonymize the local Group Owner address. Only the
@@ -185,7 +191,9 @@ internal class WifiDirectPeerConnectionController(
     override fun disconnect() {
         clearTimeout()
         val previous = mutableConnection.value
-        if (previous.status == PeerConnectionStatus.IDLE) return
+        if (previous.status == PeerConnectionStatus.IDLE ||
+            previous.status == PeerConnectionStatus.DISCONNECTING
+        ) return
 
         val manager = managerProvider()
         val activeChannel = channelProvider()
@@ -198,34 +206,55 @@ internal class WifiDirectPeerConnectionController(
         )
 
         if (manager == null || activeChannel == null) {
-            mutableConnection.value = PeerConnectionSnapshot()
+            publishFailure(
+                PeerConnectionFailure.PLATFORM_ERROR,
+                previous.selectedPeerId,
+                previous.locallyInitiated,
+            )
             return
         }
 
+        scheduleDisconnectTimeout(requestGeneration, previous)
         try {
             manager.removeGroup(
                 activeChannel,
                 object : WifiP2pManager.ActionListener {
                     override fun onSuccess() {
                         if (generation == requestGeneration) {
+                            clearTimeout()
                             mutableConnection.value = PeerConnectionSnapshot()
                         }
                     }
 
                     override fun onFailure(reason: Int) {
                         if (generation == requestGeneration) {
-                            publishFailure(mapFailure(reason), previous.selectedPeerId)
+                            clearTimeout()
+                            publishFailure(
+                                mapFailure(reason),
+                                previous.selectedPeerId,
+                                previous.locallyInitiated,
+                            )
                         }
                     }
                 },
             )
         } catch (_: SecurityException) {
             if (generation == requestGeneration) {
-                publishFailure(PeerConnectionFailure.PERMISSION_DENIED, previous.selectedPeerId)
+                clearTimeout()
+                publishFailure(
+                    PeerConnectionFailure.PERMISSION_DENIED,
+                    previous.selectedPeerId,
+                    previous.locallyInitiated,
+                )
             }
         } catch (_: RuntimeException) {
             if (generation == requestGeneration) {
-                publishFailure(PeerConnectionFailure.PLATFORM_ERROR, previous.selectedPeerId)
+                clearTimeout()
+                publishFailure(
+                    PeerConnectionFailure.PLATFORM_ERROR,
+                    previous.selectedPeerId,
+                    previous.locallyInitiated,
+                )
             }
         }
     }
@@ -235,6 +264,28 @@ internal class WifiDirectPeerConnectionController(
         clearTimeout()
         generation += 1
         mutableConnection.value = PeerConnectionSnapshot()
+    }
+
+    private fun scheduleDisconnectTimeout(
+        expectedGeneration: Long,
+        previous: PeerConnectionSnapshot,
+    ) {
+        clearTimeout()
+        val task = Runnable {
+            timeoutTask = null
+            if (generation == expectedGeneration &&
+                mutableConnection.value.status == PeerConnectionStatus.DISCONNECTING
+            ) {
+                publishFailure(
+                    PeerConnectionFailure.DISCONNECT_TIMEOUT,
+                    previous.selectedPeerId,
+                    previous.locallyInitiated,
+                )
+                removeGroupBestEffort()
+            }
+        }
+        timeoutTask = task
+        mainHandler.postDelayed(task, disconnectTimeoutMillis)
     }
 
     private fun scheduleTimeout(expectedGeneration: Long) {
@@ -311,5 +362,6 @@ internal class WifiDirectPeerConnectionController(
 
     private companion object {
         const val DEFAULT_CONNECTION_TIMEOUT_MILLIS = 30_000L
+        const val DEFAULT_DISCONNECT_TIMEOUT_MILLIS = 10_000L
     }
 }

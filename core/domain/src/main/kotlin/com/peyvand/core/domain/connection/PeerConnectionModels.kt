@@ -21,6 +21,7 @@ enum class PeerConnectionFailure {
     PERMISSION_DENIED,
     BUSY,
     CONNECTION_TIMEOUT,
+    DISCONNECT_TIMEOUT,
     UNSUPPORTED,
     PLATFORM_ERROR,
 }

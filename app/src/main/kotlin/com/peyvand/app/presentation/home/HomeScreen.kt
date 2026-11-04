@@ -444,6 +444,8 @@ fun DeviceDiscoveryScreen(
                         R.string.connection_error_busy
                     PeerConnectionFailure.CONNECTION_TIMEOUT ->
                         R.string.connection_error_timeout
+                    PeerConnectionFailure.DISCONNECT_TIMEOUT ->
+                        R.string.connection_error_disconnect_timeout
                     PeerConnectionFailure.UNSUPPORTED ->
                         R.string.connection_error_unsupported
                     PeerConnectionFailure.PLATFORM_ERROR,
