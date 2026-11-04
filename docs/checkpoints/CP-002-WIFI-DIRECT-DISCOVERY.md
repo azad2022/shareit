@@ -2,7 +2,7 @@
 
 - **Status:** `IN_PROGRESS`
 - **Started:** 2026-11-01
-- **Branch:** `feature/dns-sd-wildcard-query-experiment` (Debug-only experiment; integration target: `feature/foundation-bootstrap`)
+- **Branch:** `feature/reliable-bidirectional-discovery` (bidirectional DNS-SD and foreground-session recovery; draft PR #2)
 - **Implementation authorization:** Explicitly granted by the product owner in the conversation on 2026-11-01.
 - **Depends on:** CP-001 foundation. The app has been installed and opened on one physical phone; device/API and cold-relaunch persistence evidence remain incomplete.
 
