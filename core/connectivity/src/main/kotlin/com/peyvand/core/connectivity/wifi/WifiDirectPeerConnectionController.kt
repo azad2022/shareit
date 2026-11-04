@@ -30,7 +30,7 @@ internal class WifiDirectPeerConnectionController(
     private val isMonitoring: () -> Boolean,
     private val isReceiverRegistered: () -> Boolean,
     private val hasRequiredRuntimePermission: () -> Boolean,
-    private val onConnectAccepted: () -> Unit,
+    private val onGroupFormed: () -> Unit,
     private val connectionTimeoutMillis: Long = DEFAULT_CONNECTION_TIMEOUT_MILLIS,
 ) : PeerConnectionRepository {
     private val mutableConnection = MutableStateFlow(PeerConnectionSnapshot())
@@ -104,8 +104,7 @@ internal class WifiDirectPeerConnectionController(
                         if (!isCurrent(requestGeneration)) return
                         // This callback only confirms that Android accepted the request.
                         // Actual group formation is confirmed via CONNECTION_CHANGED and
-                        // requestConnectionInfo().
-                        onConnectAccepted()
+                        // requestConnectionInfo(). Do not tear down discovery on acceptance.
                     }
 
                     override fun onFailure(reason: Int) {
@@ -156,7 +155,7 @@ internal class WifiDirectPeerConnectionController(
                         )
                         // Releasing DNS-SD registrations is safe only after Android
                         // confirms that the P2P group has actually formed.
-                        onConnectAccepted()
+                        onGroupFormed()
                     } else if (mutableConnection.value.status == PeerConnectionStatus.GROUP_FORMED) {
                         clearTimeout()
                         mutableConnection.value = PeerConnectionSnapshot()
