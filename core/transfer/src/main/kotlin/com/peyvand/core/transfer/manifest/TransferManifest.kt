@@ -132,7 +132,7 @@ object SafeTransferFileName {
             val safeCodePoint = when {
                 codePoint == '/'.code || codePoint == '\\'.code || codePoint == ':'.code -> '_'.code
                 Character.isISOControl(codePoint) ||
-                    Character.getType(codePoint) == Character.SURROGATE ||
+                    Character.getType(codePoint) == Character.SURROGATE.toInt() ||
                     isBidiOverride(codePoint) -> '_'.code
                 else -> codePoint
             }
