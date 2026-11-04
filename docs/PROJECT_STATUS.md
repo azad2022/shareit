@@ -4,8 +4,8 @@
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-002 — Wi-Fi Direct service discovery
-- **Current branch:** `feature/foundation-bootstrap`
-- **Last updated:** 2026-11-02 (TXT-independent candidate publication, source-aware diagnostics and serialized cleanup implemented; CI/physical retest pending)
+- **Current branch:** `feature/reliable-bidirectional-discovery` (bidirectional DNS-SD and foreground-session recovery; draft PR #2 targets `feature/foundation-bootstrap`)
+- **Last updated:** 2026-11-04 (bidirectional DNS-SD and foreground-session recovery committed; exact-head CI and physical retest pending)
 
 ## Milestones
 
@@ -118,3 +118,31 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - The active implementation has asymmetric roles: Receive registers only the local PEYVAND DNS-SD advertisement; Send registers only the PEYVAND service request and browses. Older text in this status document that described both routes advertising and browsing has been superseded.
 - The current lifecycle controller applies only to the browser role. No role change, fallback transport, connection, pairing, or file-transfer implementation is implied.
 - The scan-state controller has been extracted from the Wi-Fi Direct repository adapter into a focused connectivity class. The repository retains role ownership, platform permission checks, DNS-SD registration, error policy and snapshot publication; the lifecycle controller owns state queries, STARTED/STOPPED handling, bounded re-arm scheduling and cancellation.
+
+
+## 2026-11-02 — wildcard Bonjour request experiment
+
+- Created isolated branch `feature/dns-sd-wildcard-query-experiment` from `feature/foundation-bootstrap` at `df7c595462ed445a721cc0ddb95bc754ae3b4ec8`.
+- The browser now uses Android's no-argument `WifiP2pDnsSdServiceRequest.newInstance()` to request all Bonjour services for a controlled compatibility test. The PEYVAND-only instance-name and registration-type checks in the service callback are unchanged, so unrelated Bonjour services must never be published as PEYVAND candidates.
+- The sender/receiver roles, local service advertisement, TXT-optional policy, lifecycle/retry behavior and cleanup ordering are unchanged.
+- This is not a confirmed root-cause fix. The purpose is to determine whether a device/firmware combination mishandles the narrower typed PTR request. A broader query may increase callback traffic.
+- ADR-0005 records the controlled two-device test and rollback criteria. CI and physical validation of the experiment are pending. CP-002 remains `IN_PROGRESS`.
+
+
+## 2026-11-02 — first-file transport production gate
+
+- Confirmed the current Android app configuration is `compileSdk=37`, `targetSdk=36`, `minSdk=26`; the Debug application ID remains provisional (`com.peyvand.app`).
+- Android's current Local Network Protection guidance states that Android 16 has an opt-in phase and Android 17 enforces runtime `ACCESS_LOCAL_NETWORK` for apps targeting SDK 37 or higher when performing direct local-network TCP/UDP operations. The future socket-transfer checkpoint must cover this permission, denial/revocation, and Android 16 opt-in tests before raising targetSdk to 37. Do not add that permission prematurely while still targeting SDK 36.
+- No connection, TLS, pairing, socket or file-transfer implementation is added by the current DNS-SD experiment. First-file work remains gated on stable two-device discovery and a reviewed secure-session ADR.
+- Architecture note: `docs/architecture/FOUNDATION.md` now reflects that a valid service response publishes an unverified candidate without waiting for optional TXT metadata.
+
+
+## Owner retest — discovery order and repeated-session failures (2026-11-04)
+
+- The owner reports that discovery requires Receive/advertiser to start before Send/browser; simultaneous start or a late-starting receiver is not discovered reliably.
+- The owner also reports that a second discovery attempt often fails until both apps are exited and reopened.
+- The owner suspects that retaining selected files contributes to the failure. Source review does not support that hypothesis: `ShareSelectionViewModel.clearSelection()` only clears `selectedItems`; it does not invoke or mutate Wi-Fi P2P discovery.
+- Source review identified an application-imposed asymmetric role split: Receive registered only a local service, while Send registered only a service request and browsed only. The follow-up change makes both routes advertise and browse while preserving strict PEYVAND callback filtering.
+- Source review also identified a foreground-resume gap: the discovery screen used a one-shot auto-start flag that survives Activity backgrounding while `MainActivity.onStop()` stops monitoring/discovery. The follow-up gates automatic start on Activity RESUMED, platform readiness, IDLE status, permission, and absence of an explicit user stop.
+- The all-Bonjour wildcard request did not resolve the reported ordering failure on the owner's installed build; the follow-up restores the typed PEYVAND service request.
+- These are source-level corrections, not physical acceptance evidence. CP-002 remains `IN_PROGRESS`; repeatability on both physical test devices is mandatory.

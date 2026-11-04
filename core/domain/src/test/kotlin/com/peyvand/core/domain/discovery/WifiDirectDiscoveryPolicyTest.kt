@@ -78,7 +78,7 @@ class WifiDirectDiscoveryPolicyTest {
     }
 
     @Test
-    fun `rearm is blocked for advertiser stopped unknown cleanup or pending start states`() {
+    fun `rearm is allowed for both sender and receiver discovery sessions`() {
         fun allowed(
             activeRole: DiscoveryRole? = DiscoveryRole.BROWSE_ONLY,
             monitoring: Boolean = true,
@@ -97,7 +97,8 @@ class WifiDirectDiscoveryPolicyTest {
             platformState,
         )
 
-        assertFalse(allowed(activeRole = DiscoveryRole.ADVERTISE_ONLY))
+        assertTrue(allowed(activeRole = DiscoveryRole.ADVERTISE_ONLY))
+        assertFalse(allowed(activeRole = null))
         assertFalse(allowed(monitoring = false))
         assertFalse(allowed(cleanupInProgress = true))
         assertFalse(allowed(cleanupRequested = true))
@@ -105,6 +106,34 @@ class WifiDirectDiscoveryPolicyTest {
         assertFalse(allowed(discoveryRequestAccepted = false))
         assertFalse(allowed(platformState = PlatformDiscoveryState.RUNNING))
         assertFalse(allowed(platformState = PlatformDiscoveryState.UNKNOWN))
+    }
+
+
+    @Test
+    fun `automatic discovery starts only for a resumed ready idle session not explicitly stopped`() {
+        fun shouldStart(
+            isResumed: Boolean = true,
+            userStopped: Boolean = false,
+            hasPermission: Boolean = true,
+            availability: WifiDirectAvailability = WifiDirectAvailability.READY,
+            status: DiscoveryStatus = DiscoveryStatus.IDLE,
+        ) = WifiDirectDiscoveryAutoStartPolicy.shouldAutoStart(
+            isResumed,
+            userStopped,
+            hasPermission,
+            availability,
+            status,
+        )
+
+        assertTrue(shouldStart())
+        assertFalse(shouldStart(isResumed = false))
+        assertFalse(shouldStart(userStopped = true))
+        assertFalse(shouldStart(hasPermission = false))
+        assertFalse(shouldStart(availability = WifiDirectAvailability.CHECKING))
+        assertFalse(shouldStart(availability = WifiDirectAvailability.UNAVAILABLE))
+        assertFalse(shouldStart(status = DiscoveryStatus.STARTING))
+        assertFalse(shouldStart(status = DiscoveryStatus.DISCOVERING))
+        assertFalse(shouldStart(status = DiscoveryStatus.FAILED))
     }
 
     @Test

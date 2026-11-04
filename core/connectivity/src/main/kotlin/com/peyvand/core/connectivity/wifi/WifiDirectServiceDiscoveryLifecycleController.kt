@@ -11,7 +11,7 @@ import com.peyvand.core.domain.discovery.PlatformDiscoveryState
 import com.peyvand.core.domain.discovery.WifiDirectServiceDiscoveryRearmPolicy
 
 /**
- * Owns the Android Wi-Fi P2P service-discovery lifecycle for the browser role.
+ * Owns the Android Wi-Fi P2P service-discovery lifecycle for an active session.
  *
  * This controller does not register DNS-SD requests, own permission policy, or
  * decide peer compatibility. It observes platform scan state and schedules a
@@ -78,7 +78,7 @@ internal class WifiDirectServiceDiscoveryLifecycleController(
     }
 
     fun onRearmRequested(expectedGeneration: Long) {
-        if (!isCurrentBrowserScan(expectedGeneration)) return
+        if (!isCurrentScanSession(expectedGeneration)) return
         // The old STOPPED state no longer describes the newly submitted request.
         platformState = PlatformDiscoveryState.UNKNOWN
         publishState()
@@ -94,7 +94,7 @@ internal class WifiDirectServiceDiscoveryLifecycleController(
         expectedGeneration: Long,
         isRearm: Boolean,
     ) {
-        if (!isCurrentBrowserScan(expectedGeneration)) return
+        if (!isCurrentScanSession(expectedGeneration)) return
 
         if (isRearm) discoveryRestartCount += 1
         publishState()
@@ -114,7 +114,7 @@ internal class WifiDirectServiceDiscoveryLifecycleController(
 
     private fun handlePlatformState(state: Int, source: String) {
         val expectedGeneration = activeScanGeneration()
-        if (!isCurrentBrowserScan(expectedGeneration)) return
+        if (!isCurrentScanSession(expectedGeneration)) return
 
         when (state) {
             WifiP2pManager.WIFI_P2P_DISCOVERY_STARTED -> {
@@ -172,7 +172,7 @@ internal class WifiDirectServiceDiscoveryLifecycleController(
     }
 
     private fun canRearm(expectedGeneration: Long): Boolean =
-        isCurrentBrowserScan(expectedGeneration) &&
+        isCurrentScanSession(expectedGeneration) &&
             WifiDirectServiceDiscoveryRearmPolicy.shouldRearm(
                 activeRole = activeRoleProvider(),
                 monitoring = isMonitoring(),
@@ -194,7 +194,7 @@ internal class WifiDirectServiceDiscoveryLifecycleController(
         expectedChannel: WifiP2pManager.Channel,
     ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-            !isCurrentBrowserScan(expectedGeneration) ||
+            !isCurrentScanSession(expectedGeneration) ||
             stateQueryInFlight ||
             !isReceiverRegistered()
         ) {
@@ -254,7 +254,7 @@ internal class WifiDirectServiceDiscoveryLifecycleController(
             isReceiverRegistered() &&
             stateQueryInFlight &&
             stateQueryGeneration == expectedQueryGeneration &&
-            isCurrentBrowserScan(expectedScanGeneration) &&
+            isCurrentScanSession(expectedScanGeneration) &&
             channelProvider() === expectedChannel &&
             hasRequiredPermission()
 
@@ -277,9 +277,9 @@ internal class WifiDirectServiceDiscoveryLifecycleController(
         cancelRearm()
     }
 
-    private fun isCurrentBrowserScan(expectedGeneration: Long): Boolean =
+    private fun isCurrentScanSession(expectedGeneration: Long): Boolean =
         isCurrentScan(expectedGeneration) &&
-            activeRoleProvider() == DiscoveryRole.BROWSE_ONLY
+            activeRoleProvider() != null
 
     private fun publishState() {
         onSnapshotChanged(platformState, discoveryStopCount, discoveryRestartCount)

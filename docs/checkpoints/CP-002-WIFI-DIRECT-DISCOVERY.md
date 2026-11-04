@@ -2,7 +2,7 @@
 
 - **Status:** `IN_PROGRESS`
 - **Started:** 2026-11-01
-- **Branch:** `feature/foundation-bootstrap`
+- **Branch:** `feature/reliable-bidirectional-discovery` (bidirectional DNS-SD and foreground-session recovery; draft PR #2)
 - **Implementation authorization:** Explicitly granted by the product owner in the conversation on 2026-11-01.
 - **Depends on:** CP-001 foundation. The app has been installed and opened on one physical phone; device/API and cold-relaunch persistence evidence remain incomplete.
 
@@ -135,3 +135,32 @@ Keep `IN_PROGRESS` until every applicable criterion has reproducible evidence. U
 - The browser radar is now driven by the actual platform scan state: confirmed RUNNING animates; STOPPED shows recovery; UNKNOWN remains non-animated. This avoids presenting a successful API request as proof that the radio is currently scanning.
 - The re-arm eligibility decision is centralized in an Android-free domain policy with unit coverage for role, foreground monitoring, cleanup, in-flight starts, accepted discovery requests and confirmed STOPPED state.
 - The restart counter is explicitly described as accepted re-arm API requests, not confirmed platform starts.
+
+
+## 2026-11-02 experiment — all-Bonjour request
+
+- An isolated Debug branch replaces the typed `newInstance("_peyvand._tcp")` request with Android's documented no-argument `newInstance()` request for all Bonjour services.
+- PEYVAND-only publication remains protected by the existing exact registration-type and instance-name filters. TXT remains optional metadata.
+- This is a diagnostic compatibility experiment, not an accepted production change. It does not add peer discovery, a fallback transport, a socket or transfer behavior.
+- Required next evidence: exact-head CI plus repeated late-advertiser and late-browser tests on the Galaxy A12 / ASUS X017DA pair. Keep CP-002 `IN_PROGRESS` until repeatable physical discovery is demonstrated.
+- See `docs/decisions/ADR-0005-WILDCARD-BONJOUR-EXPERIMENT.md`.
+
+
+## Owner retest — order dependency and repeat-session failure (2026-11-04)
+
+- Owner observation: Receive must start before Send; simultaneous starts and a Receive session started after Send are not reliably discovered.
+- Owner observation: a later attempt may fail until both apps are exited and reopened.
+- File-selection hypothesis audited: the selection-clear action only empties the ShareSelectionViewModel's selectedItems map. No call path from clearSelection() reaches DeviceDiscoveryRepository; selection retention is not a discovery precondition.
+- Source-level cause addressed: the old role split made Receive advertise-only and Send browse-only. Both flows now register the PEYVAND service and browse for PEYVAND peers. Existing instance/type checks and TXT-optional semantics remain unchanged.
+- Source-level cause addressed: a one-shot Compose auto-start flag was not reset when the Activity lifecycle stopped discovery in the background. The new foreground-aware start policy restarts an IDLE ready session on resume unless the user explicitly stopped it.
+- The wildcard Bonjour experiment is rolled back to the typed PEYVAND service request because the owner's latest observation does not demonstrate that the wildcard query resolved discovery ordering.
+- Required physical acceptance remains: both timing orders and simultaneous start, at least five repetitions per mode, repeated stop/start without process restart, and foreground/background recovery on Galaxy A12 and ASUS X017DA.
+- CI can validate compilation and pure policy tests only; it cannot validate Wi-Fi P2P interoperability. Keep CP-002 `IN_PROGRESS`.
+
+## Owner validation update — discovery currently operational (2026-11-04)
+
+- **Product-owner confirmation:** after installing/testing the Debug build from source commit `690b932d4a6305fa04544ad0b93d2eb4fbe066b1`, the owner reports that the two devices now discover one another easily across several tested operating scenarios. The previous start-order and repeat-session discovery failures are considered **currently resolved in the owner's tested environment**.
+- This is a physical-test observation reported by the product owner, not a claim that every OEM/chipset/Android build is supported. The latest report does not restate exact device firmware/API details, trial counts, time-to-first-peer, or the full test matrix; those values remain unverified in this update.
+- The bidirectional advertiser/browser change and foreground-aware restart are the source-level corrections in ADR-0006. The owner report is consistent with the intended behavior, but it does not by itself close all CP-002 reliability criteria.
+- **Status remains `IN_PROGRESS`** until the repeatable matrix is documented: receiver-first, sender-first, simultaneous start, repeated stop/start without process restart, and foreground/background recovery, with at least five repetitions per mode on the Galaxy A12 (SM-A125F) and ASUS X017DA, plus exact APK SHA-256 and API/firmware details.
+- This update does not imply a peer connection, authentication, receiver consent, TCP/TLS transport, file streaming, integrity verification, resume, or APK installation. Those are separate milestones.
