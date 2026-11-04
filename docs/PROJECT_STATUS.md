@@ -156,15 +156,16 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 
 ## CP-003 — Secure one-to-one generic file transfer
 
-- CP-003 is active on `feature/secure-file-transfer`, stacked from the owner-updated discovery checkpoint commit `05c24ea634cfe016a255532da17d13d10ac9482f`.
-- ADR-0007 defines the first transfer milestone: one-to-one, one arbitrary user-selected file, Wi-Fi Direct only, session pairing, mutual TLS, receiver consent, bounded streaming, SHA-256 verification, and SAF publication.
-- CP-003 is split into protocol/streaming core (003A), Wi-Fi Direct connection and authentication (003B), then the end-to-end received-file path (003C). Group transfer, multiple-file batches, resume, APK package sets, background-transfer guarantees, fallback transports and full visual redesign are later milestones.
-- The existing media catalog and SAF picker provide source selection metadata only. No transfer code, socket, pairing, TLS, receiver-consent handshake or destination publication is claimed complete at this stage.
-- Android local TCP socket permission policy is tracked in ADR-0007 and `docs/architecture/FOUNDATION.md`: `INTERNET` is for local socket APIs, not public Internet; do not add `ACCESS_LOCAL_NETWORK` while targeting SDK 36. Target-SDK-37 permission work remains a separate compatibility gate.
-- New checkpoint: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`.
-- **CP-003A source slice added (not yet CI-validated):** `:core:transfer` now contains bounded versioned frames, a format-agnostic manifest with optional size, safe peer filename sanitation, session SAS transcript derivation, transfer state policy, bounded streaming with inline SHA-256, contiguous chunk validation, cumulative receiver acknowledgements, a four-chunk/256 KiB initial flow-control window, and completion/receipt integrity verification. Android connection, TLS adapter, URI data-plane integration and user-facing consent/transfer flow are not implemented.
-- **Exact source HEAD at the time of this update:** `04b0634a70b7bcfa07d4d8134bc160f67524dd8c`. GitHub Actions run `41833007190` targets this SHA; its latest observed status was pending/in progress and must not be reported as passed: https://github.com/azad2022/shareit/actions/runs/41833007190.
-- Draft PR #3: https://github.com/azad2022/shareit/pull/3 (base `feature/reliable-bidirectional-discovery`; unmerged).
+- CP-003 is active on `feature/secure-file-transfer`, stacked on the owner-updated CP-002 discovery branch. Draft PR #3 remains open and unmerged.
+- ADR-0007 defines the first transfer milestone: one-to-one, one arbitrary user-selected file, Wi-Fi Direct only, session pairing, mutually authenticated TLS, receiver consent, bounded streaming, SHA-256 verification and SAF publication.
+- CP-003A protocol/streaming primitives are implemented in `:core:transfer`: bounded versioned frames, format-agnostic manifest, filename sanitation, pairing SAS transcript derivation, transfer state policy, bounded streaming with inline SHA-256, contiguous chunk validation, cumulative ACK model and a four-chunk/256 KiB sender window. The ACK/window models are not yet wired to an Android socket/staging data plane.
+- CP-003B initial Wi-Fi Direct connection slice is implemented: a focused controller reuses the discovery adapter's manager/channel/receiver; sender selection is limited to a currently discovered compatible peer; group formation is confirmed only after the P2P connection broadcast and `requestConnectionInfo()`; timeout and teardown paths are present; a minimal Persian connection-status UI is wired.
+- A P2P group is not authentication. Still not implemented: local TCP listener/client and interface binding, Android Keystore ephemeral identity, SAS exchange and user approval, pinned mutual TLS, receiver consent handshake, ContentResolver source streaming, private receiving staging, SAF publication and authenticated integrity receipt.
+- CI run `41838844163` succeeded on source HEAD `f519e508792d3d495976b802091f66edddb3b646`: 88 unit tests passed (0 failures/errors/skips), configured lint completed with 9 warnings and 0 errors, and `:app:assembleDebug` succeeded. Validation evidence: https://github.com/azad2022/shareit/actions/runs/41838844163.
+- Debug APK artifact `13327953810`: 14,010,025 bytes; SHA-256 `820b5064883b19defa8b2ee525800bf46c9483826ef4bb042af6da702886de89`. This is a connection-stage Debug build, not a file-transfer-ready release.
+- Physical group-connection testing and all end-to-end transfer tests remain outstanding. CP-003 stays `IN_PROGRESS`.
+- Local TCP permission policy remains in ADR-0007 and `docs/architecture/FOUNDATION.md`: `INTERNET` is for local socket APIs, not public Internet; do not add `ACCESS_LOCAL_NETWORK` while targeting SDK 36. Target-SDK-37 permission handling is a separate compatibility gate.
+- Checkpoint: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`.
 
 ## Current module boundaries
 
