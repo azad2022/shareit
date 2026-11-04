@@ -4,6 +4,7 @@ import com.peyvand.core.transfer.manifest.TransferManifestItem
 import com.peyvand.core.transfer.protocol.TransferCompletionRecord
 import com.peyvand.core.transfer.stream.TransferStreamResult
 import java.security.MessageDigest
+import java.util.Locale
 
 data class VerifiedTransferReceipt(
     val itemId: java.util.UUID,
@@ -46,7 +47,7 @@ object TransferIntegrityVerifier {
         return VerifiedTransferReceipt(
             itemId = manifest.itemId,
             actualSizeBytes = localStreamResult.bytesTransferred,
-            sha256Hex = localStreamResult.sha256Hex.lowercase(),
+            sha256Hex = localStreamResult.sha256Hex.lowercase(Locale.ROOT),
         )
     }
 
