@@ -8,8 +8,13 @@ class PeerConnectionViewModel(
 ) : ViewModel() {
     val state = repository.connection
     val tcpChannel = repository.tcpChannel
+    val secureSession = repository.secureSession
 
     fun connectToPeer(peerId: String) = repository.connectToPeer(peerId)
 
     fun disconnect() = repository.disconnect()
+
+    fun approvePairing() = repository.approvePairing()
+
+    fun rejectPairing() = repository.rejectPairing()
 }

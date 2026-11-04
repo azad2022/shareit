@@ -170,4 +170,19 @@
     <string name="tcp_channel_error_rejected">تعداد تلاش‌های اتصال نامعتبر بیش از حد مجاز بود.</string>
     <string name="tcp_channel_error_permission">دسترسی محلی شبکه برای ایجاد سوکت در دسترس نیست.</string>
     <string name="tcp_channel_error_generic">ایجاد کانال محلی با خطای شبکه مواجه شد.</string>
+    <string name="secure_session_title">احراز هویت امن دستگاه</string>
+    <string name="secure_session_bootstrapping">در حال ایجاد هویت موقت و تبادل اطلاعات احراز هویت…</string>
+    <string name="secure_session_waiting_approval">کد زیر را با کد نمایش‌داده‌شده در دستگاه مقابل مقایسه کنید. فقط در صورت یکسان بودن کد، هر دو دستگاه باید تأیید کنند.</string>
+    <string name="secure_session_sas_label">کد تطبیق دو دستگاه</string>
+    <string name="secure_session_approve">کد یکسان است؛ تأیید می‌کنم</string>
+    <string name="secure_session_reject">کد متفاوت است؛ رد اتصال</string>
+    <string name="secure_session_tls">تأیید دوطرفه انجام شد؛ در حال برقراری کانال رمزنگاری‌شده…</string>
+    <string name="secure_session_authenticated">هویت دو دستگاه تأیید و کانال TLS دوطرفه برقرار شد. هنوز انتقال فایل آغاز نشده است.</string>
+    <string name="secure_session_rejected">درخواست جفت‌سازی رد شد. هیچ اطلاعات فایل ارسال نشده است.</string>
+    <string name="secure_session_error">احراز هویت امن انجام نشد. اتصال را قطع و دوباره تلاش کنید.</string>
+    <string name="secure_session_error_keystore">ساخت کلید موقت امن در Android Keystore انجام نشد.</string>
+    <string name="secure_session_error_certificate">گواهی موقت دستگاه مقابل معتبر نیست.</string>
+    <string name="secure_session_error_role">نقش فرستنده و گیرنده در دو دستگاه با هم سازگار نیست.</string>
+    <string name="secure_session_error_timeout">مهلت احراز هویت یا تأیید کاربر به پایان رسید.</string>
+    <string name="secure_session_error_tls">برقراری TLS دوطرفه انجام نشد.</string>
 </resources>

@@ -19,6 +19,9 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.UUID
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
+import com.peyvand.core.domain.connection.PeerSecureSessionRepository
+import com.peyvand.core.domain.connection.SecureSessionSnapshot
+import kotlinx.coroutines.flow.StateFlow
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
 import com.peyvand.core.domain.discovery.DiscoveryCandidateRegistry
@@ -76,12 +79,24 @@ class WifiDirectDeviceDiscoveryRepository(
             onGroupFormed = { snapshot ->
                 stopDiscovery()
                 tcpChannelController.value.start(snapshot)
+                secureSessionController.value.start(snapshot)
             },
             onGroupEnded = {
+                if (secureSessionController.isInitialized()) {
+                    secureSessionController.value.stop()
+                }
                 if (tcpChannelController.isInitialized()) {
                     tcpChannelController.value.stop()
                 }
             },
+        )
+    }
+
+    private val secureSessionController = lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        WifiDirectSecureSessionController(
+            context = appContext,
+            tcpChannelProvider = { tcpChannelController.value.tcpChannel },
+            rawSocketProvider = { tcpChannelController.value.connectedSocketForSecurityUpgrade() },
         )
     }
 
@@ -99,6 +114,13 @@ class WifiDirectDeviceDiscoveryRepository(
 
     override val tcpChannel
         get() = tcpChannelController.value.tcpChannel
+
+    override val secureSession: StateFlow<SecureSessionSnapshot>
+        get() = secureSessionController.value.secureSession
+
+    override fun approvePairing() = secureSessionController.value.approvePairing()
+
+    override fun rejectPairing() = secureSessionController.value.rejectPairing()
     private var p2pStateQueryInFlight = false
     private var p2pStateQueryFailed = false
     private var p2pStateQueryGeneration = 0L

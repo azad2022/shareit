@@ -77,6 +77,8 @@ import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
 import com.peyvand.app.presentation.connection.PeerConnectionViewModel
 import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
 import com.peyvand.core.domain.connection.P2pTcpChannelFailure
+import com.peyvand.core.domain.connection.SecureSessionFailure
+import com.peyvand.core.domain.connection.SecureSessionStatus
 import com.peyvand.core.domain.connection.P2pTcpChannelStatus
 import com.peyvand.core.domain.connection.PeerConnectionFailure
 import com.peyvand.core.domain.connection.PeerConnectionStatus
@@ -106,6 +108,7 @@ fun DeviceDiscoveryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val connection by peerConnectionViewModel.state.collectAsStateWithLifecycle()
     val tcpChannel by peerConnectionViewModel.tcpChannel.collectAsStateWithLifecycle()
+    val secureSession by peerConnectionViewModel.secureSession.collectAsStateWithLifecycle()
     val networkEnvironment by networkEnvironmentViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = context as? Activity
@@ -491,6 +494,85 @@ fun DeviceDiscoveryScreen(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(stringResource(R.string.connection_cancel))
+                        }
+                    }
+                }
+            }
+        }
+
+        if (secureSession.status != SecureSessionStatus.IDLE) {
+            val sessionMessage = when (secureSession.status) {
+                SecureSessionStatus.IDLE -> R.string.secure_session_title
+                SecureSessionStatus.BOOTSTRAPPING -> R.string.secure_session_bootstrapping
+                SecureSessionStatus.WAITING_FOR_SAS_APPROVAL -> R.string.secure_session_waiting_approval
+                SecureSessionStatus.TLS_HANDSHAKING -> R.string.secure_session_tls
+                SecureSessionStatus.AUTHENTICATED -> R.string.secure_session_authenticated
+                SecureSessionStatus.REJECTED -> R.string.secure_session_rejected
+                SecureSessionStatus.FAILED -> when (secureSession.failure) {
+                    SecureSessionFailure.KEYSTORE_ERROR -> R.string.secure_session_error_keystore
+                    SecureSessionFailure.INVALID_PEER_CERTIFICATE -> R.string.secure_session_error_certificate
+                    SecureSessionFailure.PARTICIPANT_ROLE_MISMATCH -> R.string.secure_session_error_role
+                    SecureSessionFailure.BOOTSTRAP_TIMEOUT,
+                    SecureSessionFailure.USER_APPROVAL_TIMEOUT -> R.string.secure_session_error_timeout
+                    SecureSessionFailure.TLS_UNAVAILABLE,
+                    SecureSessionFailure.TLS_HANDSHAKE_FAILED -> R.string.secure_session_error_tls
+                    SecureSessionFailure.MISSING_TRANSFER_ROLE,
+                    SecureSessionFailure.PROTOCOL_ERROR,
+                    SecureSessionFailure.IO_ERROR,
+                    null -> R.string.secure_session_error
+                }
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (secureSession.status == SecureSessionStatus.FAILED ||
+                        secureSession.status == SecureSessionStatus.REJECTED
+                    ) MaterialTheme.colorScheme.errorContainer
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = stringResource(R.string.secure_session_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(sessionMessage),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (secureSession.status == SecureSessionStatus.FAILED ||
+                            secureSession.status == SecureSessionStatus.REJECTED
+                        ) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (secureSession.status == SecureSessionStatus.WAITING_FOR_SAS_APPROVAL) {
+                        Text(
+                            text = stringResource(R.string.secure_session_sas_label),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = secureSession.sasCode.orEmpty(),
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        OutlinedButton(
+                            onClick = peerConnectionViewModel::approvePairing,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.secure_session_approve))
+                        }
+                        TextButton(
+                            onClick = peerConnectionViewModel::rejectPairing,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.secure_session_reject))
                         }
                     }
                 }
