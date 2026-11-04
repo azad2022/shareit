@@ -151,4 +151,23 @@
     <string name="connection_error_disconnect_timeout">در مهلت تعیین‌شده قطع اتصال تأیید نشد. Wi-Fi Direct را بررسی کنید و دوباره تلاش کنید.</string>
     <string name="connection_error_unsupported">اتصال Wi-Fi Direct در این دستگاه پشتیبانی نمی‌شود.</string>
     <string name="connection_error_generic">اتصال Wi-Fi Direct با خطای سیستم مواجه شد.</string>
+    <string name="tcp_channel_title">کانال ارتباطی محلی</string>
+    <string name="tcp_channel_idle">کانال ارتباطی آماده نیست.</string>
+    <string name="tcp_channel_resolving">در حال شناسایی رابط اختصاصی Wi-Fi Direct…</string>
+    <string name="tcp_channel_listening">این دستگاه میزبان کانال محلی است و در انتظار اتصال همتاست…</string>
+    <string name="tcp_channel_connecting">در حال اتصال به کانال محلی دستگاه میزبان…</string>
+    <string name="tcp_channel_connected">کانال TCP محلی برقرار شد.</string>
+    <string name="tcp_channel_security_notice">این فقط کانال خام شبکه است؛ احراز هویت رمزنگاری‌شده و تأیید کاربر هنوز انجام نشده و هیچ فایل یا فراداده‌ای ارسال نشده است.</string>
+    <string name="tcp_channel_error_group_info">اطلاعات گروه Wi-Fi Direct از Android دریافت نشد.</string>
+    <string name="tcp_channel_error_group_role">نقش دستگاه در اطلاعات گروه با وضعیت اتصال مطابقت ندارد.</string>
+    <string name="tcp_channel_error_interface">رابط اختصاصی Wi-Fi Direct در دسترس نیست.</string>
+    <string name="tcp_channel_error_local_address">نشانی IPv4 معتبر روی رابط Wi-Fi Direct پیدا نشد.</string>
+    <string name="tcp_channel_error_owner_address">نشانی دستگاه میزبان Wi-Fi Direct معتبر نیست.</string>
+    <string name="tcp_channel_error_subnet">نشانی میزبان خارج از زیرشبکهٔ Wi-Fi Direct است؛ اتصال متوقف شد.</string>
+    <string name="tcp_channel_error_bind">بازکردن درگاه کانال روی رابط Wi-Fi Direct ممکن نشد.</string>
+    <string name="tcp_channel_error_accept_timeout">در مهلت تعیین‌شده دستگاه دیگر به کانال متصل نشد.</string>
+    <string name="tcp_channel_error_connect_timeout">اتصال به کانال دستگاه میزبان در مهلت تعیین‌شده برقرار نشد.</string>
+    <string name="tcp_channel_error_rejected">تعداد تلاش‌های اتصال نامعتبر بیش از حد مجاز بود.</string>
+    <string name="tcp_channel_error_permission">دسترسی محلی شبکه برای ایجاد سوکت در دسترس نیست.</string>
+    <string name="tcp_channel_error_generic">ایجاد کانال محلی با خطای شبکه مواجه شد.</string>
 </resources>

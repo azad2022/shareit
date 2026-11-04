@@ -76,6 +76,8 @@ import com.peyvand.app.R
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
 import com.peyvand.app.presentation.connection.PeerConnectionViewModel
 import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
+import com.peyvand.core.domain.connection.P2pTcpChannelFailure
+import com.peyvand.core.domain.connection.P2pTcpChannelStatus
 import com.peyvand.core.domain.connection.PeerConnectionFailure
 import com.peyvand.core.domain.connection.PeerConnectionStatus
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
@@ -103,6 +105,7 @@ fun DeviceDiscoveryScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val connection by peerConnectionViewModel.state.collectAsStateWithLifecycle()
+    val tcpChannel by peerConnectionViewModel.tcpChannel.collectAsStateWithLifecycle()
     val networkEnvironment by networkEnvironmentViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = context as? Activity
@@ -489,6 +492,78 @@ fun DeviceDiscoveryScreen(
                         ) {
                             Text(stringResource(R.string.connection_cancel))
                         }
+                    }
+                }
+            }
+        }
+
+        if (tcpChannel.status != P2pTcpChannelStatus.IDLE) {
+            val channelMessage = when (tcpChannel.status) {
+                P2pTcpChannelStatus.IDLE -> R.string.tcp_channel_idle
+                P2pTcpChannelStatus.RESOLVING_INTERFACE -> R.string.tcp_channel_resolving
+                P2pTcpChannelStatus.LISTENING -> R.string.tcp_channel_listening
+                P2pTcpChannelStatus.CONNECTING -> R.string.tcp_channel_connecting
+                P2pTcpChannelStatus.CONNECTED -> R.string.tcp_channel_connected
+                P2pTcpChannelStatus.FAILED -> when (tcpChannel.failure) {
+                    P2pTcpChannelFailure.GROUP_INFO_UNAVAILABLE ->
+                        R.string.tcp_channel_error_group_info
+                    P2pTcpChannelFailure.GROUP_ROLE_MISMATCH ->
+                        R.string.tcp_channel_error_group_role
+                    P2pTcpChannelFailure.INTERFACE_UNAVAILABLE,
+                    P2pTcpChannelFailure.INTERFACE_DOWN,
+                    -> R.string.tcp_channel_error_interface
+                    P2pTcpChannelFailure.LOCAL_IPV4_UNAVAILABLE ->
+                        R.string.tcp_channel_error_local_address
+                    P2pTcpChannelFailure.OWNER_ADDRESS_UNAVAILABLE ->
+                        R.string.tcp_channel_error_owner_address
+                    P2pTcpChannelFailure.OWNER_OUTSIDE_P2P_SUBNET ->
+                        R.string.tcp_channel_error_subnet
+                    P2pTcpChannelFailure.LISTENER_BIND_FAILED ->
+                        R.string.tcp_channel_error_bind
+                    P2pTcpChannelFailure.ACCEPT_TIMEOUT ->
+                        R.string.tcp_channel_error_accept_timeout
+                    P2pTcpChannelFailure.CONNECT_TIMEOUT ->
+                        R.string.tcp_channel_error_connect_timeout
+                    P2pTcpChannelFailure.CONNECTION_REJECTED ->
+                        R.string.tcp_channel_error_rejected
+                    P2pTcpChannelFailure.PERMISSION_DENIED ->
+                        R.string.tcp_channel_error_permission
+                    P2pTcpChannelFailure.IO_ERROR,
+                    null,
+                    -> R.string.tcp_channel_error_generic
+                }
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.tcp_channel_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(channelMessage),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (tcpChannel.status == P2pTcpChannelStatus.FAILED) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    if (tcpChannel.status == P2pTcpChannelStatus.CONNECTED) {
+                        Text(
+                            text = stringResource(R.string.tcp_channel_security_notice),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

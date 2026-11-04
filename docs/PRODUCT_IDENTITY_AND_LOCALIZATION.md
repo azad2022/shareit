@@ -1,6 +1,6 @@
 # PEYVAND (پیوند) — Product Identity, Localization, and Motion Specification
 
-- **Status:** Confirmed product direction; CP-001 foundation implementation authorized; translations and feature implementation remain milestone-gated.
+- **Status:** Confirmed product direction; CP-001/CP-002 and the narrowly scoped CP-003 one-to-one transfer implementation are owner-authorized. Product-wide visual redesign and later group-transfer scope remain milestone-gated.
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit` — keep repository name unless separately approved.
 - **Last updated:** 2026-11-01.

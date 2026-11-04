@@ -55,7 +55,9 @@ class WifiDirectDeviceDiscoveryRepository(
     private val mutableSnapshot = MutableStateFlow(DeviceDiscoverySnapshot())
     override val snapshot = mutableSnapshot.asStateFlow()
 
+    @Volatile
     private var channel: WifiP2pManager.Channel? = null
+    @Volatile
     private var monitoring = false
     private var receiverRegistered = false
     private var p2pEnabled: Boolean? = null

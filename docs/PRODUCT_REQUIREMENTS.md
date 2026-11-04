@@ -1,8 +1,8 @@
 # PEYVAND (پیوند) — Android Product Requirements
 
-- **Status:** CP-001/CP-002 foundation and discovery implementation were authorized on 2026-11-01. The owner separately authorized CP-003 on 2026-11-04: a staged, one-to-one secure transfer of one user-selected file over Wi-Fi Direct under ADR-0007. This does not authorize unapproved fallback transports, group-transfer implementation, APK extraction, release signing, or unrelated scope.
+- **Status:** CP-001/CP-002 foundation and discovery implementation were authorized on 2026-11-01. The owner separately authorized CP-003 on 2026-11-04: a staged, one-to-one secure transfer of one user-selected file over Wi-Fi Direct under ADR-0007. The active CP-003B substage also includes the raw TCP channel restricted to the P2P interface under ADR-0008. This does not authorize unapproved fallback transports, group-transfer implementation, APK extraction, release signing, or unrelated scope.
 - **Repository:** `azad2022/shareit` (private), default branch `main`.
-- **Last decision update:** 2026-11-01.
+- **Last decision update:** 2026-11-04.
 
 ## 1. Product vision
 

@@ -30,7 +30,8 @@ internal class WifiDirectPeerConnectionController(
     private val isMonitoring: () -> Boolean,
     private val isReceiverRegistered: () -> Boolean,
     private val hasRequiredRuntimePermission: () -> Boolean,
-    private val onGroupFormed: () -> Unit,
+    private val onGroupFormed: (PeerConnectionSnapshot) -> Unit,
+    private val onGroupEnded: () -> Unit,
     private val connectionTimeoutMillis: Long = DEFAULT_CONNECTION_TIMEOUT_MILLIS,
     private val disconnectTimeoutMillis: Long = DEFAULT_DISCONNECT_TIMEOUT_MILLIS,
 ) : PeerConnectionRepository {
@@ -146,6 +147,7 @@ internal class WifiDirectPeerConnectionController(
                     if (PeerConnectionStatePolicy.isDisconnectPending(current.status, current.failure)) {
                         if (!info.groupFormed) {
                             clearTimeout()
+                            onGroupEnded()
                             mutableConnection.value = PeerConnectionSnapshot()
                         }
                         return@ConnectionInfoListener
@@ -163,18 +165,20 @@ internal class WifiDirectPeerConnectionController(
                     ) {
                         clearTimeout()
                         val previous = mutableConnection.value
-                        mutableConnection.value = PeerConnectionSnapshot(
+                        val formedSnapshot = PeerConnectionSnapshot(
                             status = PeerConnectionStatus.GROUP_FORMED,
                             selectedPeerId = previous.selectedPeerId,
                             isGroupOwner = info.isGroupOwner,
                             groupOwnerAddress = remoteGroupOwnerAddress,
                             locallyInitiated = previous.locallyInitiated,
                         )
-                        // Releasing DNS-SD registrations is safe only after Android
-                        // confirms that the P2P group has actually formed.
-                        onGroupFormed()
+                        mutableConnection.value = formedSnapshot
+                        // Releasing DNS-SD registrations and opening the group-only TCP
+                        // channel are safe only after Android confirms group formation.
+                        onGroupFormed(formedSnapshot)
                     } else if (mutableConnection.value.status == PeerConnectionStatus.GROUP_FORMED) {
                         clearTimeout()
+                        onGroupEnded()
                         mutableConnection.value = PeerConnectionSnapshot()
                     }
                 },
@@ -198,6 +202,7 @@ internal class WifiDirectPeerConnectionController(
             previous.status == PeerConnectionStatus.DISCONNECTING
         ) return
 
+        onGroupEnded()
         val manager = managerProvider()
         val activeChannel = channelProvider()
         val requestGeneration = ++generation
@@ -274,6 +279,7 @@ internal class WifiDirectPeerConnectionController(
     /** Called after channel loss or P2P disable; Android has already invalidated the group. */
     fun reset() {
         clearTimeout()
+        onGroupEnded()
         generation += 1
         mutableConnection.value = PeerConnectionSnapshot()
     }
@@ -328,6 +334,7 @@ internal class WifiDirectPeerConnectionController(
     private fun fail(failure: PeerConnectionFailure) {
         val previous = mutableConnection.value
         clearTimeout()
+        onGroupEnded()
         generation += 1
         publishFailure(failure, previous.selectedPeerId, previous.locallyInitiated)
         removeGroupBestEffort()
