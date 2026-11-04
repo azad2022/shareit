@@ -25,6 +25,7 @@ import com.peyvand.core.domain.connection.PeerConnectionSnapshot
 import com.peyvand.core.domain.connection.PeerConnectionStatePolicy
 import com.peyvand.core.domain.connection.PeerConnectionStatus
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
+import com.peyvand.core.domain.discovery.DiscoveryMetadataStatus
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
 import com.peyvand.core.domain.discovery.DiscoveryCandidateRegistry
 import com.peyvand.core.domain.discovery.DiscoverySourceDiagnostics
@@ -364,7 +365,7 @@ class WifiDirectDeviceDiscoveryRepository(
             registerP2pStateReceiverIfPermitted()
             requestP2pStateIfNeeded()
         } else {
-            clearConnectionState()
+            disconnect()
             invalidateP2pStateQuery()
             p2pEnabled = null
             unregisterP2pStateReceiver()
@@ -419,10 +420,13 @@ class WifiDirectDeviceDiscoveryRepository(
     @SuppressLint("MissingPermission")
     override fun connectToPeer(peerId: String) {
         val discovery = mutableSnapshot.value
+        val candidate = discovery.peers.firstOrNull { it.id == peerId }
         val isDiscoveryActive = discovery.status == DiscoveryStatus.STARTING ||
             discovery.status == DiscoveryStatus.ADVERTISING ||
             discovery.status == DiscoveryStatus.DISCOVERING
-        if (!PeerConnectionStatePolicy.mayInitiate(
+        if (candidate == null ||
+            candidate.metadataStatus == DiscoveryMetadataStatus.INCOMPATIBLE ||
+            !PeerConnectionStatePolicy.mayInitiate(
                 peerId = peerId,
                 currentlyDiscoveredPeerIds = discovery.peers.map { it.id },
                 isDiscoveryActive = isDiscoveryActive,
