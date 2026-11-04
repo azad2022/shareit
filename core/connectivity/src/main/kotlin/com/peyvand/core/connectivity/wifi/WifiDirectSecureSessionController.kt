@@ -146,7 +146,7 @@ internal class WifiDirectSecureSessionController(
             ensureCurrent(expectedGeneration)
             diagnostics.event(
                 "TCP_CHANNEL_RESULT",
-                "status=§{channel.status} groupRole=§{channel.isGroupOwner ?: "unknown"}",
+                "status=${channel.status} groupRole=${channel.isGroupOwner ?: "unknown"}",
             )
             if (channel.status != com.peyvand.core.domain.connection.P2pTcpChannelStatus.CONNECTED) {
                 throw SessionSetupException(SecureSessionFailure.IO_ERROR)
@@ -156,7 +156,7 @@ internal class WifiDirectSecureSessionController(
             if (connection.isGroupOwner != groupOwner) {
                 diagnostics.event(
                     "GROUP_ROLE_MISMATCH",
-                    "connectionGroupOwner=§{connection.isGroupOwner} tcpGroupOwner=$groupOwner",
+                    "connectionGroupOwner=${connection.isGroupOwner} tcpGroupOwner=$groupOwner",
                 )
                 throw SessionSetupException(SecureSessionFailure.IO_ERROR)
             }
@@ -182,8 +182,8 @@ internal class WifiDirectSecureSessionController(
             )
             diagnostics.event(
                 "TCP_CONNECTED",
-                "groupRole=§{if (groupOwner) "GROUP_OWNER" else "GROUP_CLIENT"} " +
-                    "productRole=§{localRole.name} connectionGroupOwner=§{connection.isGroupOwner}",
+                "groupRole=${if (groupOwner) "GROUP_OWNER" else "GROUP_CLIENT"} " +
+                    "productRole=${localRole.name} connectionGroupOwner=${connection.isGroupOwner}",
             )
 
             val sessionId: UUID
@@ -204,7 +204,7 @@ internal class WifiDirectSecureSessionController(
             diagnostics.event(
                 "LOCAL_IDENTITY_CREATED",
                 "keyAlgorithm=EC curve=P-256 certificateValid=true selfSignatureValid=true " +
-                    "certificateFingerprintPrefix=§{SecureTlsDiagnostics.fingerprintPrefix(localFingerprintAtCreation)}",
+                    "certificateFingerprintPrefix=${SecureTlsDiagnostics.fingerprintPrefix(localFingerprintAtCreation)}",
             )
             val localNonce = ByteArray(PairingBootstrapHello.NONCE_BYTES).also {
                 SecureRandom().nextBytes(it)
@@ -223,12 +223,12 @@ internal class WifiDirectSecureSessionController(
                 PairingBootstrapCodec.write(localHello, activeSocket.getOutputStream())
                 diagnostics.event(
                     "LOCAL_BOOTSTRAP_SENT",
-                    "participantRole=§{participantRole.name} certificateBytes=§{identity.certificate.encoded.size}",
+                    "participantRole=${participantRole.name} certificateBytes=${identity.certificate.encoded.size}",
                 )
                 remoteHello = PairingBootstrapCodec.read(activeSocket.getInputStream())
                 diagnostics.event(
                     "REMOTE_BOOTSTRAP_RECEIVED",
-                    "participantRole=§{remoteHello.role.name} certificateBytes=§{remoteHello.certificateBytes().size}",
+                    "participantRole=${remoteHello.role.name} certificateBytes=${remoteHello.certificateBytes().size}",
                 )
             } else {
                 remoteHello = PairingBootstrapCodec.read(activeSocket.getInputStream())
@@ -236,7 +236,7 @@ internal class WifiDirectSecureSessionController(
                 diagnostics.bindSession(sessionId)
                 diagnostics.event(
                     "REMOTE_BOOTSTRAP_RECEIVED",
-                    "participantRole=§{remoteHello.role.name} certificateBytes=§{remoteHello.certificateBytes().size}",
+                    "participantRole=${remoteHello.role.name} certificateBytes=${remoteHello.certificateBytes().size}",
                 )
                 val localHello = PairingBootstrapHello(
                     sessionId = sessionId,
@@ -247,7 +247,7 @@ internal class WifiDirectSecureSessionController(
                 PairingBootstrapCodec.write(localHello, activeSocket.getOutputStream())
                 diagnostics.event(
                     "LOCAL_BOOTSTRAP_SENT",
-                    "participantRole=§{participantRole.name} certificateBytes=§{identity.certificate.encoded.size}",
+                    "participantRole=${participantRole.name} certificateBytes=${identity.certificate.encoded.size}",
                 )
             }
             ensureCurrent(expectedGeneration)
@@ -262,7 +262,7 @@ internal class WifiDirectSecureSessionController(
             diagnostics.event(
                 "REMOTE_CERTIFICATE_VALIDATED",
                 "validity=valid selfSignature=valid ecCurve=P-256 " +
-                    "fingerprintPrefix=§{SecureTlsDiagnostics.fingerprintPrefix(peerFingerprint)}",
+                    "fingerprintPrefix=${SecureTlsDiagnostics.fingerprintPrefix(peerFingerprint)}",
             )
             val localMaterial = PairingEndpointMaterial(
                 localFingerprint,
@@ -282,7 +282,7 @@ internal class WifiDirectSecureSessionController(
             )
             diagnostics.event(
                 "SAS_DERIVED",
-                "protocolVersion=§{TransferFrameCodec.CURRENT_PROTOCOL_VERSION} sasValueLogged=false",
+                "protocolVersion=${TransferFrameCodec.CURRENT_PROTOCOL_VERSION} sasValueLogged=false",
             )
 
             val approvalSignal = CompletableDeferred<Boolean>()
@@ -485,7 +485,7 @@ internal class WifiDirectSecureSessionController(
                 arrayOf<TrustManager>(trustManager),
                 SecureRandom(),
             )
-            diagnostics.event("TLS_CONTEXT_INITIALIZED", "provider=§{context.provider.name}")
+            diagnostics.event("TLS_CONTEXT_INITIALIZED", "provider=${context.provider.name}")
 
             stage = "TLS_SOCKET_CREATION"
             val socket = context.socketFactory.createSocket(
@@ -502,12 +502,12 @@ internal class WifiDirectSecureSessionController(
             val enabledProtocols = listOf("TLSv1.3", "TLSv1.2").filter(supportedProtocols::contains)
             diagnostics.event(
                 "TLS_PROTOCOLS",
-                "supported=§{supportedProtocols.joinToString(",")} enabled=§{enabledProtocols.joinToString(",")}",
+                "supported=${supportedProtocols.joinToString(",")} enabled=${enabledProtocols.joinToString(",")}",
             )
             diagnostics.event(
                 "TLS_CIPHER_SUITES",
-                "supported=§{socket.supportedCipherSuites.joinToString(",")} " +
-                    "enabled=§{socket.enabledCipherSuites.joinToString(",")}",
+                "supported=${socket.supportedCipherSuites.joinToString(",")} " +
+                    "enabled=${socket.enabledCipherSuites.joinToString(",")}",
             )
             if ("TLSv1.2" !in enabledProtocols) {
                 val exception = IllegalStateException("TLSv1.2 is not supported by the active provider")
@@ -524,10 +524,10 @@ internal class WifiDirectSecureSessionController(
             val expectedClientAuth = isGroupOwner
             diagnostics.event(
                 "TLS_ROLE_CONFIGURED",
-                "groupRole=§{if (isGroupOwner) "GROUP_OWNER" else "GROUP_CLIENT"} " +
-                    "tlsRole=$tlsRole useClientMode=§{socket.useClientMode} " +
-                    "needClientAuth=§{socket.needClientAuth} " +
-                    "roleConfigurationMatches=§{socket.useClientMode == expectedClientMode && socket.needClientAuth == expectedClientAuth}",
+                "groupRole=${if (isGroupOwner) "GROUP_OWNER" else "GROUP_CLIENT"} " +
+                    "tlsRole=$tlsRole useClientMode=${socket.useClientMode} " +
+                    "needClientAuth=${socket.needClientAuth} " +
+                    "roleConfigurationMatches=${socket.useClientMode == expectedClientMode && socket.needClientAuth == expectedClientAuth}",
             )
             if (socket.useClientMode != expectedClientMode || socket.needClientAuth != expectedClientAuth) {
                 throw IllegalStateException("The TLS socket did not retain the required role configuration")
@@ -555,7 +555,7 @@ internal class WifiDirectSecureSessionController(
             val pinMatches = MessageDigest.isEqual(actualPeerFingerprint, expectedPeerFingerprint)
             diagnostics.event(
                 "TLS_POST_HANDSHAKE_PIN",
-                "matched=$pinMatches peerFingerprintPrefix=§{SecureTlsDiagnostics.fingerprintPrefix(actualPeerFingerprint)}",
+                "matched=$pinMatches peerFingerprintPrefix=${SecureTlsDiagnostics.fingerprintPrefix(actualPeerFingerprint)}",
             )
             if (!pinMatches) {
                 val exception = java.security.cert.CertificateException("Post-handshake peer certificate pin mismatch")
@@ -565,9 +565,9 @@ internal class WifiDirectSecureSessionController(
 
             diagnostics.event(
                 "TLS_HANDSHAKE_COMPLETED",
-                "tlsRole=$tlsRole provider=§{context.provider.name} " +
-                    "protocol=§{socket.session.protocol} cipherSuite=§{socket.session.cipherSuite} " +
-                    "peerCertificateCount=§{socket.session.peerCertificates.size} " +
+                "tlsRole=$tlsRole provider=${context.provider.name} " +
+                    "protocol=${socket.session.protocol} cipherSuite=${socket.session.cipherSuite} " +
+                    "peerCertificateCount=${socket.session.peerCertificates.size} " +
                     "durationMs=$elapsedMillis peerPinVerified=true",
             )
             return socket
