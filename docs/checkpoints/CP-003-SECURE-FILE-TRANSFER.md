@@ -110,3 +110,18 @@ Keep `IN_PROGRESS` until all acceptance criteria have reproducible evidence. Use
 - No TCP payload, protocol frame, file name, MIME type, file size or file byte is sent. A raw TCP connection is not peer authentication.
 
 - Draft PR: https://github.com/azad2022/shareit/pull/3. It is open, unmerged and intentionally draft.
+
+
+### 2026-11-04 — CP-003B session pairing and mutual TLS implementation
+
+- Source implementation was added on the active branch in commits beginning with `90ab385bed876c03d13718c70e887594c6df0898` and consolidated through `848fb054d3e55de7fc797db5dcf318c9a32f29a5`.
+- The incomplete domain contract introduced in `90ab385` was followed by a concrete `PeerSecureSessionRepository` implementation; the initial commit's CI failure was due to the missing implementation and is not treated as passing evidence.
+- `WifiDirectSecureSessionController` now waits for the P2P TCP channel, assigns the application role from the connection initiator, and exchanges a bounded bootstrap containing a session UUID, role, 32-byte nonce and ephemeral X.509 certificate. The bootstrap carries no file name, MIME type, size or file bytes.
+- Each endpoint generates an ephemeral ECDSA P-256 key in Android Keystore. Peer certificates are parsed, validity-checked, constrained to EC P-256 and checked for self-signature. Session aliases are removed on teardown and up to 32 stale aliases are cleaned on controller startup.
+- Both endpoints derive the SAS from the same session-bound transcript (certificate fingerprints, nonces, participant roles and protocol version). Local approval is explicit on each device. Approval/rejection is exchanged before TLS; rejection and approval timeout attempt to send a zero-payload session-close frame.
+- The socket is upgraded to mutually authenticated TLS, preferring TLS 1.3 and requiring TLS 1.2 or newer. Each side pins the exact peer certificate fingerprint from the bootstrap; default permissive trust and certificate-validation bypasses are not used.
+- Persian UI now exposes the SAS and approve/reject actions and distinguishes bootstrapping, waiting for approval, TLS handshake, authenticated, rejected and failed. The authenticated message explicitly states that file transfer has not started.
+- The exact source head at this point is `848fb054d3e55de7fc797db5dcf318c9a32f29a5`. The corresponding CI run was still pending/in progress during implementation; no compile, test, lint or APK success is claimed here. A fresh exact-head CI run is required after this documentation update.
+- No physical-device pairing/TLS test has yet been performed. Required next test: install the same exact-head Debug APK on both physical devices, verify identical SAS, approve on both, verify authenticated state, then separately test mismatch/rejection, timeout and disconnect cleanup.
+- This substage does not implement receiver consent to a particular file manifest, file metadata exchange, file streaming, staging, SAF publication or authenticated integrity receipt. No file can yet be transferred.
+- CP-003 remains `IN_PROGRESS`; CP-003B is not marked `PASSED`.

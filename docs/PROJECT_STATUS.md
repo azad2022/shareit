@@ -179,3 +179,12 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - `:core:storage`: URI-based MediaStore/SAF catalog and (in CP-003C) source/staging/publication adapters.
 - `:core:transfer`: bounded transport-independent wire protocol and streaming core introduced during CP-003A.
 - `:core:designsystem`: PEYVAND semantic palette and Compose theme.
+
+
+## 2026-11-04 — CP-003B secure-session implementation update
+
+- Active branch: `feature/secure-file-transfer`; draft PR #3 remains open and unmerged.
+- Source commit: `848fb054d3e55de7fc797db5dcf318c9a32f29a5` (session pairing, Android Keystore ephemeral identity, SAS approval, pinned mutual TLS, UI state and bounded stale-key cleanup).
+- The current implementation is a security-session substage, not a completed file-transfer feature. It does not yet exchange a file manifest, obtain per-file receiver consent, read a selected ContentResolver URI, stream bytes, stage/publish a destination, or return a verified completion receipt.
+- CI for the exact source head had not completed at the time of this status entry. Do not infer a successful build or tests from the earlier validated TCP-only commit `fbc0a6027dd6ed2ef7182b5f2f3df590001bd074`.
+- No physical pairing or TLS interoperability evidence is recorded yet. CP-003 remains `IN_PROGRESS`.
