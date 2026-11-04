@@ -239,10 +239,14 @@ internal class WifiDirectSecureSessionController(
             val approved = try {
                 withTimeout(USER_APPROVAL_TIMEOUT_MILLIS) { approvalSignal.await() }
             } catch (_: TimeoutCancellationException) {
+                notifySessionClose(activeSocket, sessionId)
                 throw SessionSetupException(SecureSessionFailure.USER_APPROVAL_TIMEOUT)
             }
             ensureCurrent(expectedGeneration)
-            if (!approved) throw PairingRejectedException()
+            if (!approved) {
+                notifySessionClose(activeSocket, sessionId)
+                throw PairingRejectedException()
+            }
 
             val approvalFrame = TransferFrame(
                 protocolVersion = TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
@@ -255,10 +259,13 @@ internal class WifiDirectSecureSessionController(
             activeSocket.soTimeout = USER_APPROVAL_TIMEOUT_MILLIS.toInt()
             val remoteApproval = TransferFrameCodec.read(activeSocket.getInputStream())
                 ?: throw SessionSetupException(SecureSessionFailure.PROTOCOL_ERROR)
-            if (remoteApproval.type != TransferFrameType.PAIRING_APPROVED ||
-                remoteApproval.sessionId != sessionId ||
-                remoteApproval.payloadSize != 0
-            ) {
+            if (remoteApproval.sessionId != sessionId || remoteApproval.payloadSize != 0) {
+                throw SessionSetupException(SecureSessionFailure.PROTOCOL_ERROR)
+            }
+            if (remoteApproval.type == TransferFrameType.SESSION_CLOSE) {
+                throw PairingRejectedException()
+            }
+            if (remoteApproval.type != TransferFrameType.PAIRING_APPROVED) {
                 throw SessionSetupException(SecureSessionFailure.PROTOCOL_ERROR)
             }
 
@@ -439,6 +446,21 @@ internal class WifiDirectSecureSessionController(
             throw SessionSetupException(SecureSessionFailure.INVALID_PEER_CERTIFICATE)
         }
         return socket
+    }
+
+    private fun notifySessionClose(socket: Socket, sessionId: UUID) {
+        runCatching {
+            TransferFrameCodec.write(
+                TransferFrame(
+                    protocolVersion = TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+                    type = TransferFrameType.SESSION_CLOSE,
+                    sessionId = sessionId,
+                    payload = byteArrayOf(),
+                ),
+                socket.getOutputStream(),
+            )
+            socket.getOutputStream().flush()
+        }
     }
 
     private fun sha256(bytes: ByteArray): ByteArray =
