@@ -161,7 +161,10 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - CP-003 is split into protocol/streaming core (003A), Wi-Fi Direct connection and authentication (003B), then the end-to-end received-file path (003C). Group transfer, multiple-file batches, resume, APK package sets, background-transfer guarantees, fallback transports and full visual redesign are later milestones.
 - The existing media catalog and SAF picker provide source selection metadata only. No transfer code, socket, pairing, TLS, receiver-consent handshake or destination publication is claimed complete at this stage.
 - Android local TCP socket permission policy is tracked in ADR-0007 and `docs/architecture/FOUNDATION.md`: `INTERNET` is for local socket APIs, not public Internet; do not add `ACCESS_LOCAL_NETWORK` while targeting SDK 36. Target-SDK-37 permission work remains a separate compatibility gate.
-- New checkpoint: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`. No CP-003 source, build or test result is claimed until recorded there.
+- New checkpoint: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`.
+- **CP-003A source slice added (not yet CI-validated):** `:core:transfer` now contains bounded versioned frames, a format-agnostic manifest with optional size, safe peer filename sanitation, session SAS transcript derivation, transfer state policy, bounded streaming with inline SHA-256, contiguous chunk validation, cumulative receiver acknowledgements, a four-chunk/256 KiB initial flow-control window, and completion/receipt integrity verification. Android connection, TLS adapter, URI data-plane integration and user-facing consent/transfer flow are not implemented.
+- **Exact source HEAD at the time of this update:** `04b0634a70b7bcfa07d4d8134bc160f67524dd8c`. GitHub Actions run `41833007190` targets this SHA; its latest observed status was pending/in progress and must not be reported as passed: https://github.com/azad2022/shareit/actions/runs/41833007190.
+- Draft PR #3: https://github.com/azad2022/shareit/pull/3 (base `feature/reliable-bidirectional-discovery`; unmerged).
 
 ## Current module boundaries
 
