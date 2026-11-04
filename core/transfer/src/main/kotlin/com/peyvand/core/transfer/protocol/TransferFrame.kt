@@ -22,9 +22,10 @@ enum class TransferFrameType(
         TransferFrameCodec.CHUNK_METADATA_BYTES + TransferFrameCodec.MAX_DATA_CHUNK_BYTES,
         TransferFrameCodec.CHUNK_METADATA_BYTES + 1,
     ),
-    ITEM_VERIFIED(6, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
-    ERROR(7, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
-    SESSION_CLOSE(8, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES);
+    ITEM_COMPLETE(6, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
+    ITEM_VERIFIED(7, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
+    ERROR(8, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
+    SESSION_CLOSE(9, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES);
 
     companion object {
         internal fun fromWireCode(code: Int): TransferFrameType =
