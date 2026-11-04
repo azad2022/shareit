@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.peyvand.app.R
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
+import com.peyvand.app.presentation.connection.PeerConnectionViewModel
 import com.peyvand.app.presentation.files.FileSelectionScreen
 import com.peyvand.app.presentation.files.ShareSelectionViewModel
 import com.peyvand.app.presentation.home.DeviceDiscoveryScreen
@@ -59,6 +60,7 @@ fun PeyvandApp(
     discoveryViewModel: DeviceDiscoveryViewModel,
     networkEnvironmentViewModel: NetworkEnvironmentViewModel,
     shareSelectionViewModel: ShareSelectionViewModel,
+    peerConnectionViewModel: PeerConnectionViewModel,
 ) {
     val uiState by languageViewModel.uiState.collectAsStateWithLifecycle()
     var destination by rememberSaveable { mutableStateOf(HomeDestination.HOME) }
@@ -124,6 +126,7 @@ fun PeyvandApp(
                     subtitle = stringResource(R.string.receive_screen_subtitle),
                     role = DiscoveryRole.ADVERTISE_ONLY,
                     onBack = { destination = HomeDestination.HOME },
+                    peerConnectionViewModel = peerConnectionViewModel,
                 )
 
                 HomeDestination.SEND_DISCOVERY -> DeviceDiscoveryScreen(
@@ -133,6 +136,7 @@ fun PeyvandApp(
                     subtitle = stringResource(R.string.send_discovery_subtitle),
                     role = DiscoveryRole.BROWSE_ONLY,
                     onBack = { destination = HomeDestination.SEND_SELECTION },
+                    peerConnectionViewModel = peerConnectionViewModel,
                 )
 
                 HomeDestination.ACTIVITY -> TransferActivityScreen(
