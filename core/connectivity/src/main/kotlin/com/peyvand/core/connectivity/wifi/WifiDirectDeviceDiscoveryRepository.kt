@@ -73,7 +73,7 @@ class WifiDirectDeviceDiscoveryRepository(
             isMonitoring = { monitoring },
             isReceiverRegistered = { receiverRegistered },
             hasRequiredRuntimePermission = ::hasRequiredRuntimePermission,
-            onGroupFormed = ::stopDiscovery,
+            onGroupFormed = { stopDiscovery() },
         )
     }
 
