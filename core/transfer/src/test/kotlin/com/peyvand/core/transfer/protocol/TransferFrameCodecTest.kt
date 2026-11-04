@@ -97,7 +97,7 @@ class TransferFrameCodecTest {
         val header = ByteBuffer.allocate(TransferFrameCodec.HEADER_BYTES)
             .order(ByteOrder.BIG_ENDIAN)
             .putInt(0x50595644)
-            .put(1)
+            .put(1.toByte())
             .put(TransferFrameType.MANIFEST.wireCode.toByte())
             .putLong(sessionId.mostSignificantBits)
             .putLong(sessionId.leastSignificantBits)
