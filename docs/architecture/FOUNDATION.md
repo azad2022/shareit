@@ -25,6 +25,7 @@ CP-002 discovers PEYVAND service advertisements. It does **not** connect peers, 
 - `:core:data`: Preferences DataStore and AppCompat per-app locale adapter.
 - `:core:connectivity`: Android `WifiP2pManager` adapter, P2P state receiver, DNS-SD advertisement/discovery, runtime capability reporting and app-default network diagnostics through `ConnectivityManager`. It does not depend on app presentation.
 - `:core:designsystem`: PEYVAND semantic colors and Compose theme.
+- `:core:transfer`: transport-independent, bounded transfer frames, manifest validation, pairing transcript/SAS derivation, lifecycle policy, and streaming/hash primitives. It must not import Android UI or Wi-Fi P2P framework types.
 
 Keep the project graph acyclic. Add security, transfer, storage and package-sharing modules only when their contracts and ownership are defined in ADRs.
 
@@ -64,3 +65,18 @@ The app observes its own default network and checks whether it carries `TRANSPOR
 ## Deferred responsibilities
 
 No peer connection, pairing, TLS, local socket, transfer protocol, file selection, streaming, integrity verification, resume, APK extraction, PackageInstaller or background transfer is implemented in CP-002. These responsibilities require later ADRs, threat review and physical-device interoperability tests.
+
+## CP-003 transfer boundary
+
+- `:core:connectivity` owns Wi-Fi Direct group connection lifecycle and the platform-specific group-owner/client socket endpoint binding.
+- `:core:transfer` owns transport-neutral protocol contracts, strict frame parsing, pairing transcript rules, transfer state policy, bounded streaming and SHA-256 computation. It does not own Android sockets, ContentResolver, Compose, or Activity lifecycle.
+- `:core:storage` owns ContentResolver-backed source access, private staging, and SAF destination publication. It must not accept a remote filesystem path.
+- `:app` composes repositories/use cases and renders observable transfer state. It does not own network streams, file descriptors, TLS trust policy, or transfer state transitions.
+- Session authentication and TLS credentials are a separate security responsibility to be implemented and reviewed before any file bytes are sent. DNS-SD markers and transient P2P addresses are never trusted identities.
+- The first vertical slice is one-to-one and one arbitrary byte stream. Group transfer, resume, APK sets, background execution and final product-wide visual design remain separate checkpoints.
+
+## Transfer permission gate
+
+- Local TCP socket implementation is introduced only in the connection/transport stage. `INTERNET` is needed by Android socket APIs but is not a request to use public Internet.
+- Current target SDK 36 does not add `ACCESS_LOCAL_NETWORK`; test the Android 16 opt-in behavior. Before target SDK 37, add and test runtime `ACCESS_LOCAL_NETWORK` handling as a separate compatibility gate.
+- Generic user documents are accessed through SAF/content URIs; do not add broad storage permissions for the transfer engine.
