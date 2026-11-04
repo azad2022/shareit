@@ -3,9 +3,9 @@
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
-- **Current checkpoint:** CP-002 — Wi-Fi Direct service discovery
-- **Current branch:** `feature/reliable-bidirectional-discovery` (bidirectional DNS-SD and foreground-session recovery; draft PR #2 targets `feature/foundation-bootstrap`)
-- **Last updated:** 2026-11-04 (bidirectional DNS-SD and foreground-session recovery committed; exact-head CI and physical retest pending)
+- **Current checkpoint:** CP-003 — Secure one-to-one generic file transfer
+- **Current branch:** `feature/secure-file-transfer` (stacked on owner-updated CP-002 discovery branch; PR #2 remains open and unmerged)
+- **Last updated:** 2026-11-04 (owner reports discovery currently operational in several tested scenarios; CP-003 transfer work started)
 
 ## Milestones
 
@@ -146,3 +146,29 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - Source review also identified a foreground-resume gap: the discovery screen used a one-shot auto-start flag that survives Activity backgrounding while `MainActivity.onStop()` stops monitoring/discovery. The follow-up gates automatic start on Activity RESUMED, platform readiness, IDLE status, permission, and absence of an explicit user stop.
 - The all-Bonjour wildcard request did not resolve the reported ordering failure on the owner's installed build; the follow-up restores the typed PEYVAND service request.
 - These are source-level corrections, not physical acceptance evidence. CP-002 remains `IN_PROGRESS`; repeatability on both physical test devices is mandatory.
+
+## Owner validation update — discovery currently operational (2026-11-04)
+
+- The owner reports that the two phones now find one another easily across several manual operating scenarios after the bidirectional DNS-SD and foreground-restart changes on commit `690b932d4a6305fa04544ad0b93d2eb4fbe066b1`.
+- The earlier discovery order-dependency and repeated-session symptoms are considered currently resolved in the owner's tested environment. This is not a universal OEM/API support claim.
+- The latest report did not include a full device/API/build matrix, exact trial count, time-to-first-peer or repeatability evidence for every required case. CP-002 therefore remains `IN_PROGRESS`; see `docs/checkpoints/CP-002-WIFI-DIRECT-DISCOVERY.md` for the precise remaining matrix.
+- Do not treat discovery as connection, authentication, consent, or transfer. The `NearbyPeer` identifier remains transient and untrusted.
+
+## CP-003 — Secure one-to-one generic file transfer
+
+- CP-003 is active on `feature/secure-file-transfer`, stacked from the owner-updated discovery checkpoint commit `05c24ea634cfe016a255532da17d13d10ac9482f`.
+- ADR-0007 defines the first transfer milestone: one-to-one, one arbitrary user-selected file, Wi-Fi Direct only, session pairing, mutual TLS, receiver consent, bounded streaming, SHA-256 verification, and SAF publication.
+- CP-003 is split into protocol/streaming core (003A), Wi-Fi Direct connection and authentication (003B), then the end-to-end received-file path (003C). Group transfer, multiple-file batches, resume, APK package sets, background-transfer guarantees, fallback transports and full visual redesign are later milestones.
+- The existing media catalog and SAF picker provide source selection metadata only. No transfer code, socket, pairing, TLS, receiver-consent handshake or destination publication is claimed complete at this stage.
+- Android local TCP socket permission policy is tracked in ADR-0007 and `docs/architecture/FOUNDATION.md`: `INTERNET` is for local socket APIs, not public Internet; do not add `ACCESS_LOCAL_NETWORK` while targeting SDK 36. Target-SDK-37 permission work remains a separate compatibility gate.
+- New checkpoint: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`. No CP-003 source, build or test result is claimed until recorded there.
+
+## Current module boundaries
+
+- `:app`: Android entry point, lifecycle, ViewModels and Compose presentation.
+- `:core:domain`: Android-free shared product models and policies.
+- `:core:data`: language persistence.
+- `:core:connectivity`: Wi-Fi Direct discovery and (in CP-003B) connection lifecycle adapters.
+- `:core:storage`: URI-based MediaStore/SAF catalog and (in CP-003C) source/staging/publication adapters.
+- `:core:transfer`: bounded transport-independent wire protocol and streaming core introduced during CP-003A.
+- `:core:designsystem`: PEYVAND semantic palette and Compose theme.
