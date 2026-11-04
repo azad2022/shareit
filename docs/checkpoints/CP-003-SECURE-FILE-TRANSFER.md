@@ -53,3 +53,12 @@ Multiple files per batch, one-sender-to-many group transfer, independent recipie
 ## Status rule
 
 Keep `IN_PROGRESS` until all acceptance criteria have reproducible evidence. Use `BLOCKED` if a mandatory dependency or device limitation prevents completion. Mark `PASSED` only when the full evidence package is repeatable.
+
+### 2026-11-04 — CP-003A Android-free transfer core added
+
+- Source files include `TransferFrame`, `TransferChunkFlowControl`, `TransferCompletionCodec`, `TransferManifest`, `StreamingTransferEngine`, `PairingShortAuthenticationString`, `TransferIntegrityVerifier`, and `TransferStateMachine`, with corresponding unit tests.
+- Frames have a fixed 26-byte header and strict control/data size limits. Manifest supports unknown provider length and unknown MIME. Source and receiver digest are computed inline; receiver compares final byte count and SHA-256 and must issue a receipt after successful publication.
+- Chunk sequence validation rejects duplicate, skipped, reordered, cross-item and over-limit data. Cumulative acknowledgements are modeled with an initial maximum of four 64 KiB chunks in flight (256 KiB). This is a conservative starting point to measure, not a claimed throughput optimum.
+- The core remains Android-free. No Android Keystore certificate generator, mTLS socket, Wi-Fi Direct `connect()` flow, TCP listener/client, ContentResolver transfer stream, staging/publication adapter, transfer UI, or physical end-to-end transfer exists yet.
+- Source baseline at evidence update: `04b0634a70b7bcfa07d4d8134bc160f67524dd8c`. GitHub Actions run `41833007190` targets that exact SHA and is still pending/in progress. Do not mark tests or lint as passed until exact-head run has completed successfully.
+- Draft PR: https://github.com/azad2022/shareit/pull/3. It is open, unmerged and intentionally draft.
