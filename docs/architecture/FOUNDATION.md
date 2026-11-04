@@ -8,7 +8,7 @@ The repository contains the native Android foundation and the first connectivity
 - CP-002: Wi-Fi Direct runtime capability checks, version-aware permissions and PEYVAND Bonjour/DNS-SD service discovery.
 - App-default network diagnostics: observes whether the network Android selects for the PEYVAND app UID is VPN-backed and shows a non-blocking warning. This diagnostic is not a local peer reachability test.
 
-CP-002 discovery itself only finds PEYVAND service advertisements. CP-003B now contains an initial selected-peer Wi-Fi Direct group-connection implementation, but it has not yet been validated on physical devices. Neither discovery nor a formed P2P group authenticates the peer, creates a secure session, or transfers files.
+CP-002 discovery itself only finds PEYVAND service advertisements. CP-003B contains an initial selected-peer Wi-Fi Direct group-connection implementation. The owner reports a physical smoke test in which two devices discover one another and the UI reports that a group formed; exact handset/API/build/role details and a confirmed disconnect result remain unrecorded. Neither discovery nor a formed P2P group authenticates the peer, creates a secure session, or transfers files.
 
 ## Project modules
 
@@ -80,10 +80,11 @@ CP-002 discovery does not own peer connection, pairing, TLS, local sockets, tran
 - `:core:domain` defines `PeerConnectionRepository`, immutable connection state and pure candidate/group-state policies.
 - `:core:connectivity` uses `WifiDirectPeerConnectionController` to request connection to a currently discovered candidate and confirm formation only after `WIFI_P2P_CONNECTION_CHANGED_ACTION` plus `requestConnectionInfo()`.
 - The controller receives the existing manager/channel from the discovery repository. It does not initialize another channel or register a competing receiver.
-- A formed group exposes only ephemeral owner/client role and group-owner address for the current session. This state must not be treated as peer identity or authentication.
-- A 30-second formation timeout and group cleanup on user disconnect, Activity foreground teardown, permission loss, P2P disable and channel loss are implemented. Physical callback ordering and OEM behavior remain to be tested.
+- A formed group exposes only the ephemeral owner/client role and, on the client, the remote Group Owner endpoint for the current session. Android may anonymize the local Group Owner address on the owner device; the owner must host its listener without depending on that local address. This state must not be treated as peer identity or authentication.
+- A 30-second formation timeout and group cleanup on user disconnect, Activity foreground teardown, permission loss, P2P disable and channel loss are implemented. The owner reports that the disconnect action is visible, but has not confirmed its result in the latest test report. Physical callback ordering, teardown and OEM behavior remain to be tested.
 - The Compose discovery flow exposes sender-side candidate selection and displays connection status. Group formation is explicitly labelled as unauthenticated; no file metadata or bytes are sent at this stage.
 - Not implemented: TCP listener/client, local interface/socket binding, ephemeral Keystore certificate, SAS exchange and confirmation, pinned mutual TLS, receiver consent, storage streaming/staging/publication or physical file transfer.
+- The owner-reported group-formation observation is a smoke test only; it does not replace a recorded handset/API/APK/role matrix or a successful disconnect/reconnect cycle.
 - Checkpoint and validation evidence: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`.
 
 ## Transfer permission gate

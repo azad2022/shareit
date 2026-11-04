@@ -6,7 +6,7 @@
 
 ## Context
 
-CP-002 has a product-owner report that peers now discover one another in several manually tested operating scenarios. The current application still has no peer connection, authenticated session, receiver-consent protocol, socket transport, or file data plane.
+CP-002 has a product-owner report that peers now discover one another in several manually tested operating scenarios. CP-003B now implements the first selected-peer Wi-Fi Direct group-connection slice, and the owner reports seeing the group-formed UI state on two devices. The current application still has no authenticated session, receiver-consent protocol, socket transport, or file data plane.
 
 The existing sender catalog resolves user-authorized media and document URIs. That is selection/catalog functionality, not transfer. A discovered peer is public, spoofable metadata; its transient P2P address is neither identity nor a trusted endpoint.
 
@@ -18,7 +18,7 @@ CP-003 must establish a secure, complete one-to-one transfer before adding group
 
 1. Wi-Fi Direct is the only transport in CP-003. No QR/local-only-hotspot fallback, infrastructure Wi-Fi fallback, cloud, relay, or public-internet endpoint is added.
 2. The sender requests a connection to the selected discovered peer through WifiP2pManager.connect(). The app must observe the P2P connection-state broadcast and then query requestConnectionInfo(); an accepted ActionListener callback is not proof that a group has formed.
-3. The group owner hosts the TCP listener; the group client connects to the group-owner address returned by the framework. Either product role may become group owner. The first implementation supports one authenticated peer session at a time.
+3. The group owner hosts the TCP listener; the group client connects to the remote group-owner address returned by the framework. Do not require the local Group Owner to use `WifiP2pInfo.groupOwnerAddress` as its own bind address: Android may anonymize that value on the owner device. The owner must bind/listen on the Wi-Fi Direct interface using a verified local endpoint; if the platform does not provide enough information to identify that interface safely, fail closed rather than silently binding an unauthenticated listener to every network interface. The client must have a usable remote owner endpoint before connecting. Either product role may become group owner. The first implementation supports one authenticated peer session at a time.
 4. Socket connect, read, bootstrap, and TLS handshake operations have finite timeouts, bounded retries, cancellation, and deterministic cleanup. No alternate transport is silently selected.
 
 ### 2. Session authentication and TLS

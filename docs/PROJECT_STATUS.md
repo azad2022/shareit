@@ -163,7 +163,8 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - A P2P group is not authentication. Still not implemented: local TCP listener/client and interface binding, Android Keystore ephemeral identity, SAS exchange and user approval, pinned mutual TLS, receiver consent handshake, ContentResolver source streaming, private receiving staging, SAF publication and authenticated integrity receipt.
 - CI run `41838844163` succeeded on source HEAD `f519e508792d3d495976b802091f66edddb3b646`: 88 unit tests passed (0 failures/errors/skips), configured lint completed with 9 warnings and 0 errors, and `:app:assembleDebug` succeeded. Validation evidence: https://github.com/azad2022/shareit/actions/runs/41838844163.
 - Debug APK artifact `13327953810`: 14,010,025 bytes; SHA-256 `820b5064883b19defa8b2ee525800bf46c9483826ef4bb042af6da702886de89`. This is a connection-stage Debug build, not a file-transfer-ready release.
-- Physical group-connection testing and all end-to-end transfer tests remain outstanding. CP-003 stays `IN_PROGRESS`.
+- Owner-reported physical smoke test (2026-11-04): two devices discover one another, the UI reports `Wi-Fi Direct group formed`, and a disconnect action is visible. Device/API/build details, group-owner role matrix, repeat count, APK SHA-256, and an observed disconnect result were not supplied. This is not a PASSED interoperability or teardown test.
+- All end-to-end transfer tests remain outstanding. CP-003 stays `IN_PROGRESS`.
 - Local TCP permission policy remains in ADR-0007 and `docs/architecture/FOUNDATION.md`: `INTERNET` is for local socket APIs, not public Internet; do not add `ACCESS_LOCAL_NETWORK` while targeting SDK 36. Target-SDK-37 permission handling is a separate compatibility gate.
 - Checkpoint: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`.
 
