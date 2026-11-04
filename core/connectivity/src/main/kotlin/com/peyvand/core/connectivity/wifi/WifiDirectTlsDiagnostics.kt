@@ -42,7 +42,7 @@ internal object AndroidEphemeralTlsIdentityFactory {
                 KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY,
             )
                 .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-                .setDigests(KeyProperties.DIGEST_SHA256)
+                .setDigests(KeyProperties.DIGEST_NONE, KeyProperties.DIGEST_SHA256)
                 .setCertificateSubject(X500Principal("CN=PEYVAND Session"))
                 .setCertificateSerialNumber(BigInteger(128, SecureRandom()).abs().max(BigInteger.ONE))
                 .setCertificateNotBefore(Date(now - CERTIFICATE_CLOCK_SKEW_MILLIS))

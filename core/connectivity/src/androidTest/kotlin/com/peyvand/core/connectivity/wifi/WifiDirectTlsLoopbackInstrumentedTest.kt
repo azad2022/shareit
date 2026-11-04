@@ -7,6 +7,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.security.Signature
 import java.security.cert.CertificateException
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -17,6 +18,7 @@ import javax.net.ssl.SSLSocket
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -24,6 +26,26 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class WifiDirectTlsLoopbackInstrumentedTest {
+    @Test
+    fun androidKeystoreIdentityAllowsRawEcdsaSigningRequiredByTls() {
+        val alias = "peyvand_test_raw_ecdsa_" + UUID.randomUUID().toString().replace("-", "")
+        try {
+            val identity = AndroidEphemeralTlsIdentityFactory.create(alias)
+            val message = byteArrayOf(0x50, 0x45, 0x59, 0x56, 0x41, 0x4e, 0x44)
+            val signer = Signature.getInstance("NONEwithECDSA")
+            signer.initSign(identity.privateKey)
+            signer.update(message)
+            val signature = signer.sign()
+
+            val verifier = Signature.getInstance("NONEwithECDSA")
+            verifier.initVerify(identity.certificate.publicKey)
+            verifier.update(message)
+            assertTrue("Android Keystore raw ECDSA signature must verify", verifier.verify(signature))
+        } finally {
+            AndroidEphemeralTlsIdentityFactory.delete(alias)
+        }
+    }
+
     @Test
     fun mutualTlsWithAndroidKeystoreIdentityNegotiatesTls12() {
         assertMutualTls("TLSv1.2")
@@ -104,6 +126,9 @@ class WifiDirectTlsLoopbackInstrumentedTest {
                     val peer = session.peerCertificates.firstOrNull()
                         ?: throw AssertionError("Server did not receive a client certificate")
                     HandshakeSummary(session.protocol, session.cipherSuite, sha256(peer.encoded))
+                } catch (failure: Throwable) {
+                    trace.failure("LOOPBACK_SERVER_FAILURE", "TLS_HANDSHAKE", "SERVER", failure)
+                    throw failure
                 } finally {
                     runCatching { secure.close() }
                     runCatching { accepted.close() }
@@ -193,7 +218,10 @@ class WifiDirectTlsLoopbackInstrumentedTest {
         }
 
     private fun supportsProtocol(protocol: String): Boolean {
-        val probe = SSLContext.getInstance("TLS").socketFactory.createSocket() as SSLSocket
+        val context = SSLContext.getInstance("TLS").apply {
+            init(null, null, SecureRandom())
+        }
+        val probe = context.socketFactory.createSocket() as SSLSocket
         return try {
             protocol in probe.supportedProtocols
         } finally {
