@@ -19,7 +19,6 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.UUID
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
-import com.peyvand.core.domain.connection.PeerSecureSessionRepository
 import com.peyvand.core.domain.connection.SecureSessionSnapshot
 import kotlinx.coroutines.flow.StateFlow
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
@@ -94,7 +93,6 @@ class WifiDirectDeviceDiscoveryRepository(
 
     private val secureSessionController = lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         WifiDirectSecureSessionController(
-            context = appContext,
             tcpChannelProvider = { tcpChannelController.value.tcpChannel },
             rawSocketProvider = { tcpChannelController.value.connectedSocketForSecurityUpgrade() },
         )
