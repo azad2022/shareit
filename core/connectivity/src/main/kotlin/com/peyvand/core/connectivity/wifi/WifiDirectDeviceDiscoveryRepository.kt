@@ -417,8 +417,6 @@ class WifiDirectDeviceDiscoveryRepository(
     }
 
     @SuppressLint("MissingPermission")
-
-    @SuppressLint("MissingPermission")
     override fun connectToPeer(peerId: String) {
         val discovery = mutableSnapshot.value
         val isDiscoveryActive = discovery.status == DiscoveryStatus.STARTING ||
@@ -701,6 +699,7 @@ class WifiDirectDeviceDiscoveryRepository(
         else -> PeerConnectionFailure.PLATFORM_ERROR
     }
 
+    @SuppressLint("MissingPermission")
     override fun startDiscovery(role: DiscoveryRole) {
         val currentStatus = mutableSnapshot.value.status
         val isActive = currentStatus == DiscoveryStatus.STARTING ||
