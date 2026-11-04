@@ -105,7 +105,7 @@ class TransferChunkFlowControlTest {
             ),
         )
         assertEquals(3, window.inFlightChunkCount)
-        assertEquals(3L * chunkBytes.size, window.inFlightBytes)
+        assertEquals(3 * chunkBytes.size, window.inFlightBytes)
     }
 
     @Test
