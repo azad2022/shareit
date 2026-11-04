@@ -18,7 +18,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.UUID
-import com.peyvand.core.domain.connection.PeerConnectionRepository
+import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
 import com.peyvand.core.domain.discovery.DiscoveryCandidateRegistry
@@ -43,7 +43,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class WifiDirectDeviceDiscoveryRepository(
     context: Context,
-) : DeviceDiscoveryRepository, PeerConnectionRepository {
+) : DeviceDiscoveryRepository, PeerConnectivityRepository {
 
     private val appContext = context.applicationContext
     private val packageManager = appContext.packageManager
@@ -73,12 +73,32 @@ class WifiDirectDeviceDiscoveryRepository(
             isMonitoring = { monitoring },
             isReceiverRegistered = { receiverRegistered },
             hasRequiredRuntimePermission = ::hasRequiredRuntimePermission,
-            onGroupFormed = { stopDiscovery() },
+            onGroupFormed = { snapshot ->
+                stopDiscovery()
+                tcpChannelController.value.start(snapshot)
+            },
+            onGroupEnded = {
+                if (tcpChannelController.isInitialized()) {
+                    tcpChannelController.value.stop()
+                }
+            },
+        )
+    }
+
+    private val tcpChannelController = lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        WifiDirectTcpChannelController(
+            managerProvider = { wifiP2pManager },
+            channelProvider = { channel },
+            isMonitoring = { monitoring },
+            hasRequiredRuntimePermission = ::hasRequiredRuntimePermission,
         )
     }
 
     override val connection
         get() = connectionController.connection
+
+    override val tcpChannel
+        get() = tcpChannelController.value.tcpChannel
     private var p2pStateQueryInFlight = false
     private var p2pStateQueryFailed = false
     private var p2pStateQueryGeneration = 0L
