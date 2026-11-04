@@ -24,7 +24,7 @@ class StreamingTransferEngineTest {
             destination = destination,
             expectedSizeBytes = sourceBytes.size.toLong(),
             maximumSizeBytes = sourceBytes.size.toLong(),
-            onProgress = progress::add,
+            onProgress = { progress.add(it) },
         )
 
         assertEquals(sourceBytes.size.toLong(), result.bytesTransferred)
