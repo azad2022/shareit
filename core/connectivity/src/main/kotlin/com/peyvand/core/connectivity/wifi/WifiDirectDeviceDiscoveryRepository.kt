@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.location.LocationManager
+import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pManager
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest
@@ -18,6 +19,11 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.UUID
+import com.peyvand.core.domain.connection.PeerConnectionFailure
+import com.peyvand.core.domain.connection.PeerConnectionRepository
+import com.peyvand.core.domain.connection.PeerConnectionSnapshot
+import com.peyvand.core.domain.connection.PeerConnectionStatePolicy
+import com.peyvand.core.domain.connection.PeerConnectionStatus
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
 import com.peyvand.core.domain.discovery.DiscoveryCandidateRegistry
@@ -42,7 +48,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class WifiDirectDeviceDiscoveryRepository(
     context: Context,
-) : DeviceDiscoveryRepository {
+) : DeviceDiscoveryRepository, PeerConnectionRepository {
 
     private val appContext = context.applicationContext
     private val packageManager = appContext.packageManager
@@ -52,6 +58,11 @@ class WifiDirectDeviceDiscoveryRepository(
         appContext.getSystemService(Context.WIFI_P2P_SERVICE) as? WifiP2pManager
 
     private val mutableSnapshot = MutableStateFlow(DeviceDiscoverySnapshot())
+    private val mutableConnection = MutableStateFlow(PeerConnectionSnapshot())
+    override val connection = mutableConnection.asStateFlow()
+
+    private var connectionGeneration = 0L
+    private var connectionTimeoutTask: Runnable? = null
     override val snapshot = mutableSnapshot.asStateFlow()
 
     private var channel: WifiP2pManager.Channel? = null
@@ -126,6 +137,7 @@ class WifiDirectDeviceDiscoveryRepository(
         const val MAX_PENDING_PEERS = 128
         const val MAX_VISIBLE_PEERS = 64
         const val P2P_STATE_QUERY_TIMEOUT_MS = 5_000L
+        const val P2P_CONNECTION_TIMEOUT_MS = 30_000L
     }
 
     private val candidateRegistry = DiscoveryCandidateRegistry(
@@ -213,11 +225,18 @@ class WifiDirectDeviceDiscoveryRepository(
 
     private val p2pStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION) {
-                serviceDiscoveryLifecycle.onDiscoveryStateBroadcast(intent)
-                return
+            when (intent.action) {
+                WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION -> {
+                    serviceDiscoveryLifecycle.onDiscoveryStateBroadcast(intent)
+                    return
+                }
+                WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
+                    handleP2pConnectionChanged()
+                    return
+                }
+                WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION -> Unit
+                else -> return
             }
-            if (intent.action != WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION) return
 
             invalidateP2pStateQuery()
             p2pEnabled = intent.getIntExtra(
@@ -226,6 +245,7 @@ class WifiDirectDeviceDiscoveryRepository(
             ) == WifiP2pManager.WIFI_P2P_STATE_ENABLED
 
             if (p2pEnabled == false) {
+                clearConnectionState()
                 serviceDiscoveryLifecycle.cancelPendingWork()
                 serviceDiscoveryStartInFlight = false
                 val wasDiscovering = mutableSnapshot.value.status.let {
@@ -278,6 +298,7 @@ class WifiDirectDeviceDiscoveryRepository(
         val filter = IntentFilter().apply {
             addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
             addAction(WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION)
+            addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
         }
         try {
             val stickyIntent = ContextCompat.registerReceiver(
@@ -303,6 +324,7 @@ class WifiDirectDeviceDiscoveryRepository(
     override fun stopMonitoring() {
         if (!monitoring && !receiverRegistered) return
 
+        disconnect()
         stopDiscovery()
         monitoring = false
         invalidateP2pStateQuery()
@@ -393,6 +415,281 @@ class WifiDirectDeviceDiscoveryRepository(
     }
 
     @SuppressLint("MissingPermission")
+
+    @SuppressLint("MissingPermission")
+    override fun connectToPeer(peerId: String) {
+        val discovery = mutableSnapshot.value
+        val isDiscoveryActive = discovery.status == DiscoveryStatus.STARTING ||
+            discovery.status == DiscoveryStatus.ADVERTISING ||
+            discovery.status == DiscoveryStatus.DISCOVERING
+        if (!PeerConnectionStatePolicy.mayInitiate(
+                peerId = peerId,
+                currentlyDiscoveredPeerIds = discovery.peers.map { it.id },
+                isDiscoveryActive = isDiscoveryActive,
+            )
+        ) {
+            mutableConnection.value = PeerConnectionSnapshot(
+                status = PeerConnectionStatus.FAILED,
+                failure = PeerConnectionFailure.INVALID_DISCOVERY_CANDIDATE,
+            )
+            return
+        }
+
+        if (!hasRequiredRuntimePermission()) {
+            mutableConnection.value = PeerConnectionSnapshot(
+                status = PeerConnectionStatus.FAILED,
+                selectedPeerId = peerId,
+                locallyInitiated = true,
+                failure = PeerConnectionFailure.PERMISSION_DENIED,
+            )
+            return
+        }
+
+        if (mutableConnection.value.status == PeerConnectionStatus.CONNECTING ||
+            mutableConnection.value.status == PeerConnectionStatus.GROUP_FORMED ||
+            mutableConnection.value.status == PeerConnectionStatus.DISCONNECTING
+        ) {
+            return
+        }
+
+        val manager = wifiP2pManager ?: run {
+            mutableConnection.value = PeerConnectionSnapshot(
+                status = PeerConnectionStatus.FAILED,
+                selectedPeerId = peerId,
+                locallyInitiated = true,
+                failure = PeerConnectionFailure.UNSUPPORTED,
+            )
+            return
+        }
+        val activeChannel = channel ?: run {
+            mutableConnection.value = PeerConnectionSnapshot(
+                status = PeerConnectionStatus.FAILED,
+                selectedPeerId = peerId,
+                locallyInitiated = true,
+                failure = PeerConnectionFailure.PLATFORM_ERROR,
+            )
+            return
+        }
+
+        clearConnectionTimeout()
+        val requestGeneration = ++connectionGeneration
+        mutableConnection.value = PeerConnectionSnapshot(
+            status = PeerConnectionStatus.CONNECTING,
+            selectedPeerId = peerId,
+            locallyInitiated = true,
+        )
+        scheduleConnectionTimeout(requestGeneration)
+
+        val config = WifiP2pConfig().apply {
+            deviceAddress = peerId
+        }
+        try {
+            manager.connect(
+                activeChannel,
+                config,
+                object : WifiP2pManager.ActionListener {
+                    override fun onSuccess() {
+                        if (!isCurrentConnection(requestGeneration)) return
+                        // ActionListener success only means Android accepted the request.
+                        // Group formation is confirmed separately by the P2P broadcast
+                        // followed by requestConnectionInfo().
+                        stopDiscovery()
+                    }
+
+                    override fun onFailure(reason: Int) {
+                        if (!isCurrentConnection(requestGeneration)) return
+                        failConnection(mapConnectionFailure(reason))
+                    }
+                },
+            )
+        } catch (_: SecurityException) {
+            if (isCurrentConnection(requestGeneration)) {
+                failConnection(PeerConnectionFailure.PERMISSION_DENIED)
+            }
+        } catch (_: RuntimeException) {
+            if (isCurrentConnection(requestGeneration)) {
+                failConnection(PeerConnectionFailure.PLATFORM_ERROR)
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun handleP2pConnectionChanged() {
+        if (!monitoring || !hasRequiredRuntimePermission()) return
+        val manager = wifiP2pManager ?: return
+        val activeChannel = channel ?: return
+        val requestGeneration = connectionGeneration
+
+        try {
+            manager.requestConnectionInfo(
+                activeChannel,
+                WifiP2pManager.ConnectionInfoListener { info ->
+                    if (!isCurrentConnection(requestGeneration)) {
+                        return@ConnectionInfoListener
+                    }
+
+                    val ownerAddress = info.groupOwnerAddress?.hostAddress
+                    if (PeerConnectionStatePolicy.isGroupFormed(
+                            info.groupFormed,
+                            ownerAddress,
+                        )
+                    ) {
+                        clearConnectionTimeout()
+                        val previous = mutableConnection.value
+                        mutableConnection.value = PeerConnectionSnapshot(
+                            status = PeerConnectionStatus.GROUP_FORMED,
+                            selectedPeerId = previous.selectedPeerId,
+                            isGroupOwner = info.isGroupOwner,
+                            groupOwnerAddress = ownerAddress,
+                            locallyInitiated = previous.locallyInitiated,
+                        )
+                    } else if (mutableConnection.value.status == PeerConnectionStatus.GROUP_FORMED) {
+                        clearConnectionTimeout()
+                        mutableConnection.value = PeerConnectionSnapshot()
+                    }
+                },
+            )
+        } catch (_: SecurityException) {
+            if (mutableConnection.value.status != PeerConnectionStatus.IDLE) {
+                failConnection(PeerConnectionFailure.PERMISSION_DENIED)
+            }
+        } catch (_: RuntimeException) {
+            if (mutableConnection.value.status != PeerConnectionStatus.IDLE) {
+                failConnection(PeerConnectionFailure.PLATFORM_ERROR)
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    override fun disconnect() {
+        clearConnectionTimeout()
+        val previous = mutableConnection.value
+        if (previous.status == PeerConnectionStatus.IDLE) return
+
+        val manager = wifiP2pManager
+        val activeChannel = channel
+        val requestGeneration = ++connectionGeneration
+        mutableConnection.value = previous.copy(
+            status = PeerConnectionStatus.DISCONNECTING,
+            groupOwnerAddress = null,
+            isGroupOwner = null,
+            failure = null,
+        )
+
+        if (manager == null || activeChannel == null) {
+            mutableConnection.value = PeerConnectionSnapshot()
+            return
+        }
+
+        try {
+            manager.removeGroup(
+                activeChannel,
+                object : WifiP2pManager.ActionListener {
+                    override fun onSuccess() {
+                        if (connectionGeneration == requestGeneration) {
+                            mutableConnection.value = PeerConnectionSnapshot()
+                        }
+                    }
+
+                    override fun onFailure(reason: Int) {
+                        if (connectionGeneration == requestGeneration) {
+                            mutableConnection.value = PeerConnectionSnapshot(
+                                status = PeerConnectionStatus.FAILED,
+                                selectedPeerId = previous.selectedPeerId,
+                                failure = mapConnectionFailure(reason),
+                            )
+                        }
+                    }
+                },
+            )
+        } catch (_: SecurityException) {
+            if (connectionGeneration == requestGeneration) {
+                mutableConnection.value = PeerConnectionSnapshot(
+                    status = PeerConnectionStatus.FAILED,
+                    selectedPeerId = previous.selectedPeerId,
+                    failure = PeerConnectionFailure.PERMISSION_DENIED,
+                )
+            }
+        } catch (_: RuntimeException) {
+            if (connectionGeneration == requestGeneration) {
+                mutableConnection.value = PeerConnectionSnapshot(
+                    status = PeerConnectionStatus.FAILED,
+                    selectedPeerId = previous.selectedPeerId,
+                    failure = PeerConnectionFailure.PLATFORM_ERROR,
+                )
+            }
+        }
+    }
+
+    private fun scheduleConnectionTimeout(expectedGeneration: Long) {
+        clearConnectionTimeout()
+        val timeoutTask = Runnable {
+            connectionTimeoutTask = null
+            if (isCurrentConnection(expectedGeneration) &&
+                mutableConnection.value.status == PeerConnectionStatus.CONNECTING
+            ) {
+                failConnection(PeerConnectionFailure.CONNECTION_TIMEOUT)
+            }
+        }
+        connectionTimeoutTask = timeoutTask
+        mainHandler.postDelayed(timeoutTask, P2P_CONNECTION_TIMEOUT_MS)
+    }
+
+    private fun clearConnectionTimeout() {
+        connectionTimeoutTask?.let(mainHandler::removeCallbacks)
+        connectionTimeoutTask = null
+    }
+
+    private fun isCurrentConnection(expectedGeneration: Long): Boolean =
+        connectionGeneration == expectedGeneration &&
+            monitoring &&
+            receiverRegistered &&
+            hasRequiredRuntimePermission()
+
+    private fun failConnection(failure: PeerConnectionFailure) {
+        clearConnectionTimeout()
+        val previous = mutableConnection.value
+        connectionGeneration += 1
+        mutableConnection.value = PeerConnectionSnapshot(
+            status = PeerConnectionStatus.FAILED,
+            selectedPeerId = previous.selectedPeerId,
+            locallyInitiated = previous.locallyInitiated,
+            failure = failure,
+        )
+        removeP2pGroupBestEffort()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun removeP2pGroupBestEffort() {
+        val manager = wifiP2pManager ?: return
+        val activeChannel = channel ?: return
+        try {
+            manager.removeGroup(
+                activeChannel,
+                object : WifiP2pManager.ActionListener {
+                    override fun onSuccess() = Unit
+                    override fun onFailure(reason: Int) = Unit
+                },
+            )
+        } catch (_: SecurityException) {
+            // Best effort: clear local session state even if platform permission was revoked.
+        } catch (_: RuntimeException) {
+            // Best effort cleanup must not crash the discovery lifecycle.
+        }
+    }
+
+    private fun clearConnectionState() {
+        clearConnectionTimeout()
+        connectionGeneration += 1
+        mutableConnection.value = PeerConnectionSnapshot()
+    }
+
+    private fun mapConnectionFailure(reason: Int): PeerConnectionFailure = when (reason) {
+        WifiP2pManager.BUSY -> PeerConnectionFailure.BUSY
+        WifiP2pManager.P2P_UNSUPPORTED -> PeerConnectionFailure.UNSUPPORTED
+        else -> PeerConnectionFailure.PLATFORM_ERROR
+    }
+
     override fun startDiscovery(role: DiscoveryRole) {
         val currentStatus = mutableSnapshot.value.status
         val isActive = currentStatus == DiscoveryStatus.STARTING ||
