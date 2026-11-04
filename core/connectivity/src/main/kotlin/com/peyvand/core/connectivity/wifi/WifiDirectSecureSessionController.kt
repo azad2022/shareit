@@ -1,6 +1,5 @@
 package com.peyvand.core.connectivity.wifi
 
-import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
@@ -60,14 +59,12 @@ import kotlinx.coroutines.withTimeout
  * until the SAS is approved on both devices and pinned mutual TLS completes.
  */
 internal class WifiDirectSecureSessionController(
-    context: Context,
     private val tcpChannelProvider: () -> kotlinx.coroutines.flow.StateFlow<
         com.peyvand.core.domain.connection.P2pTcpChannelSnapshot
     >,
     private val rawSocketProvider: () -> Socket?,
 ) : com.peyvand.core.domain.connection.PeerSecureSessionRepository {
 
-    private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableState = MutableStateFlow(SecureSessionSnapshot())
     override val secureSession: StateFlow<SecureSessionSnapshot> = mutableState.asStateFlow()
@@ -365,9 +362,9 @@ internal class WifiDirectSecureSessionController(
             ?: throw SessionSetupException(SecureSessionFailure.KEYSTORE_ERROR)
         certificate.checkValidity()
         certificate.verify(certificate.publicKey)
-        val privateKey = store.getKey(alias, null) as? PrivateKey
+        val privateKey = refreshedStore.getKey(alias, null) as? PrivateKey
             ?: throw SessionSetupException(SecureSessionFailure.KEYSTORE_ERROR)
-        return EphemeralIdentity(alias, privateKey, certificate)
+        return EphemeralIdentity(privateKey, certificate)
     }
 
     private fun parseAndValidatePeerCertificate(encoded: ByteArray): X509Certificate {
@@ -485,7 +482,6 @@ internal class WifiDirectSecureSessionController(
     }
 
     private data class EphemeralIdentity(
-        val alias: String,
         val privateKey: PrivateKey,
         val certificate: X509Certificate,
     )
