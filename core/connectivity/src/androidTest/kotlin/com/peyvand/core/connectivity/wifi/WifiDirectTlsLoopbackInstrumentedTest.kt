@@ -83,6 +83,8 @@ class WifiDirectTlsLoopbackInstrumentedTest {
         var listener: ServerSocket? = null
         var clientRaw: Socket? = null
         var clientTls: SSLSocket? = null
+        val serverRawSocket = AtomicReference<Socket?>()
+        val serverTlsSocket = AtomicReference<SSLSocket?>()
         val executor = Executors.newSingleThreadExecutor()
 
         try {
@@ -104,8 +106,6 @@ class WifiDirectTlsLoopbackInstrumentedTest {
             )
             val loopback = InetAddress.getByName(LOOPBACK_ADDRESS)
             val activeListener = ServerSocket(0, 1, loopback)
-            val serverRawSocket = AtomicReference<Socket?>()
-            val serverTlsSocket = AtomicReference<SSLSocket?>()
             listener = activeListener
             activeListener.soTimeout = HANDSHAKE_TIMEOUT_MILLIS
 
