@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.domain.transfer.TransferFileStorageRepository
 import com.peyvand.core.transfer.session.SingleFileTransferCoordinator
-import com.peyvand.core.transfer.session.TransferSessionSnapshot
 import com.peyvand.core.domain.files.ShareItem
 
 class FileTransferViewModel(
