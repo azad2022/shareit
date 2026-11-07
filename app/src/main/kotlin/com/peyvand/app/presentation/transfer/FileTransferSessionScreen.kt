@@ -50,6 +50,7 @@ fun FileTransferSessionScreen(
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val context = LocalContext.current
     var lastLaunchedPickerRequestId by rememberSaveable { mutableIntStateOf(0) }
+    var lastLaunchedTreeRequestId by rememberSaveable { mutableIntStateOf(0) }
     val createDocument = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("*/*"),
     ) { uri ->
@@ -79,12 +80,12 @@ fun FileTransferSessionScreen(
         if (state.phase != TransferSessionPhase.AWAITING_DESTINATION_TREE &&
             state.destinationTreePickerRequestId == 0
         ) {
-            lastLaunchedPickerRequestId = 0
+            lastLaunchedTreeRequestId = 0
         }
         if (state.phase == TransferSessionPhase.AWAITING_DESTINATION_TREE &&
-            state.destinationTreePickerRequestId > lastLaunchedPickerRequestId
+            state.destinationTreePickerRequestId > lastLaunchedTreeRequestId
         ) {
-            lastLaunchedPickerRequestId = state.destinationTreePickerRequestId
+            lastLaunchedTreeRequestId = state.destinationTreePickerRequestId
             openDestinationTree.launch(null)
         }
     }
