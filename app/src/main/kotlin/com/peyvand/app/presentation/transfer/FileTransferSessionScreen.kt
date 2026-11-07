@@ -41,14 +41,14 @@ fun FileTransferSessionScreen(
     }
 
     LaunchedEffect(state.destinationPickerRequestId, state.phase) {
-        if (state.phase == FileTransferPhase.AWAITING_DESTINATION &&
+        if (state.phase == TransferSessionPhase.AWAITING_DESTINATION &&
             state.destinationPickerRequestId > 0
         ) {
             createDocument.launch(state.displayName ?: "received-file")
         }
     }
 
-    val terminal = state.phase == FileTransferPhase.COMPLETED ||
+    val terminal = state.phase == TransferSessionPhase.COMPLETED ||
         state.phase == FileTransferPhase.REJECTED ||
         state.phase == FileTransferPhase.CANCELLED ||
         state.phase == FileTransferPhase.FAILED
@@ -230,8 +230,8 @@ private fun phaseLabel(phase: FileTransferPhase, isSender: Boolean): Int = when 
     FileTransferPhase.FAILED -> R.string.file_transfer_failed
 }
 
-private fun errorLabel(error: FileTransferError): Int = when (error) {
-    FileTransferError.SELECTION_REQUIRED -> R.string.file_transfer_error_selection
+private fun errorLabel(error: TransferSessionError): Int = when (error) {
+    TransferSessionError.SELECTION_REQUIRED -> R.string.file_transfer_error_selection
     FileTransferError.UNSUPPORTED_SOURCE -> R.string.file_transfer_error_source
     FileTransferError.CHANNEL_UNAVAILABLE -> R.string.file_transfer_error_channel
     FileTransferError.INSUFFICIENT_STORAGE -> R.string.file_transfer_error_storage
