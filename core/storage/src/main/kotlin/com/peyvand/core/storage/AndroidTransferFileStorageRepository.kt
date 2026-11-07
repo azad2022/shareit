@@ -304,7 +304,22 @@ class AndroidTransferFileStorageRepository(
             val source = resolver.openInputStream(uri)
                 ?: throw FileNotFoundException("The selected source URI could not be opened")
             val managed = object : FilterInputStream(source) {
+                private val closeLock = Any()
+
+                @Volatile
+                private var sourceClosed = false
+
                 override fun close() {
+                    val shouldClose = synchronized(closeLock) {
+                        if (sourceClosed) {
+                            false
+                        } else {
+                            sourceClosed = true
+                            true
+                        }
+                    }
+                    if (!shouldClose) return
+
                     try {
                         super.close()
                     } finally {
