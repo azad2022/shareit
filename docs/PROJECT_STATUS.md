@@ -5,7 +5,7 @@
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-003 — Secure one-to-one generic file transfer
 - **Current branch:** `feature/secure-file-transfer` (stacked on owner-updated CP-002 discovery branch; PR #2 remains open and unmerged)
-- **Last updated:** 2026-11-04 (owner reports discovery currently operational in several tested scenarios; CP-003 transfer work started)
+- **Last updated:** 2026-11-07 (CP-003C single-file transfer runtime integrated; exact-head CI and physical file-transfer validation pending)
 
 ## Milestones
 
@@ -191,3 +191,17 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - The lint report includes a `CustomX509TrustManager` warning in `:core:connectivity`; complete a focused trust-manager security review and physical Keystore/SAS/TLS tests before treating session authentication as accepted. CI did not run Android instrumentation or physical-device tests.
 - Successful build/test results do not imply end-to-end transfer. Receiver consent, socket manifest exchange, streaming, staging, SAF publication and authenticated integrity receipt remain unimplemented.
 - No physical pairing or TLS interoperability evidence is recorded yet. CP-003 remains `IN_PROGRESS`.
+
+
+## 2026-11-07 — CP-003C single-file transfer runtime integrated
+
+- **Current source branch:** `feature/secure-file-transfer`; CP-003 remains `IN_PROGRESS`.
+- **Source implementation:** the mutually authenticated TLS channel is now exclusively claimed by `SingleFileTransferCoordinator` and passed to `SingleFileTransferProtocol`. The app has a direct `:core:transfer` dependency.
+- **One-to-one file path:** user-selected `content://` source → bounded manifest → explicit receiver consent → 64 KiB binary chunks with four-chunk cumulative ACK window → private app staging with sync-before-ACK → SHA-256/byte-count verification → SAF destination copy and read-back verification → authenticated completion receipt.
+- **UI states:** sender ready/consent wait/transferring/verifying/completed; receiver waiting/consent/transferring/verifying/destination selection/publishing/completed; reject/cancel/failure are distinct. Failure copy warns the user to remove any incomplete destination artifact that a provider could not delete.
+- **Storage boundary:** only content URIs are supported by this first transfer slice. The transfer data plane is format-agnostic; installed package sources are intentionally rejected until APK-set transfer has its own checkpoint. SAF provider atomicity varies; the app does not promise atomic publication.
+- **Tests added:** JVM coordinator orchestration test over a paired full-duplex stream, plus existing protocol, streaming, frame, flow-control, manifest, integrity and state tests. The coordinator test is not a replacement for hardware or Android DocumentProvider tests.
+- **Build correction:** initial CP-003C integration CI run `42389254385` failed because `:app` did not depend directly on `:core:transfer`. The direct dependency and stale lifecycle phase type were corrected. That failed run is not passing evidence. See the latest exact-head CI link in the PR before downloading an APK.
+- **Physical evidence:** owner reported matching SAS and successful TLS between ASUS and Galaxy A12 (SM-A125F). No real file transfer using the new CP-003C runtime has yet been reported; CP-003 cannot be marked `PASSED`.
+- **Known remaining gates:** exact-head CI and APK checksum, repeated real-file tests both directions, SAF provider failure/cleanup behavior, large and zero-byte files, rejection/cancellation, source permission revocation and integrity mismatch.
+- **Deferred:** multi-file queue, group transfer, resume, background guarantees, APK/split-APK flow, discovery speed optimization and final design pass.
