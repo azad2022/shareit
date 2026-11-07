@@ -250,7 +250,11 @@ class SingleFileTransferCoordinator(
                         onProgress = { bytes ->
                             update(operation) {
                                 it.copy(
-                                    phase = TransferSessionPhase.TRANSFERRING,
+                                    phase = if (it.phase == TransferSessionPhase.VERIFYING) {
+                                        TransferSessionPhase.VERIFYING
+                                    } else {
+                                        TransferSessionPhase.TRANSFERRING
+                                    },
                                     transferredBytes = bytes,
                                 )
                             }
@@ -354,7 +358,11 @@ class SingleFileTransferCoordinator(
                 onProgress = { bytes ->
                     update(operation) {
                         it.copy(
-                            phase = TransferSessionPhase.TRANSFERRING,
+                            phase = if (it.phase == TransferSessionPhase.VERIFYING) {
+                                TransferSessionPhase.VERIFYING
+                            } else {
+                                TransferSessionPhase.TRANSFERRING
+                            },
                             transferredBytes = bytes,
                         )
                     }
