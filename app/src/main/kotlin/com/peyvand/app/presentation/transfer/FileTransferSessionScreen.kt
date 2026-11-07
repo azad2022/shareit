@@ -140,9 +140,10 @@ fun FileTransferSessionScreen(
                 )
 
                 if (state.phase == TransferSessionPhase.TRANSFERRING ||
+                    state.phase == TransferSessionPhase.VERIFYING ||
                     state.phase == TransferSessionPhase.PUBLISHING
                 ) {
-                    if (progress == null) {
+                    if (state.phase == TransferSessionPhase.VERIFYING || progress == null) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     } else {
                         LinearProgressIndicator(
@@ -243,6 +244,7 @@ private fun phaseLabel(phase: TransferSessionPhase, isSender: Boolean): Int = wh
         R.string.file_transfer_waiting_consent_receiver
     }
     TransferSessionPhase.TRANSFERRING -> R.string.file_transfer_transferring
+    TransferSessionPhase.VERIFYING -> R.string.file_transfer_verifying
     TransferSessionPhase.AWAITING_DESTINATION -> R.string.file_transfer_awaiting_destination
     TransferSessionPhase.PUBLISHING -> R.string.file_transfer_publishing
     TransferSessionPhase.COMPLETED -> R.string.file_transfer_completed
