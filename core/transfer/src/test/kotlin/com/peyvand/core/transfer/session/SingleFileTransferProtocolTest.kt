@@ -260,10 +260,13 @@ class SingleFileTransferProtocolTest {
         }
 
         override fun sync() {
+            check(!sealed && !deleted)
             syncCount += 1
         }
 
         override fun seal() {
+            if (sealed) return
+            sync()
             sealed = true
         }
 
