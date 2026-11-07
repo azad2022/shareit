@@ -71,7 +71,7 @@ class SingleFileTransferProtocolTest {
             protocol.sendOne(
                 sessionId = sessionId,
                 manifest = manifest,
-                source = ByteArrayInputStream(bytes),
+                openSource = { ByteArrayInputStream(bytes) },
                 channelInput = receiverToSender,
                 channelOutput = senderOutput,
                 onProgress = senderProgress::set,
@@ -102,6 +102,7 @@ class SingleFileTransferProtocolTest {
         val senderOutput = PipedOutputStream(senderToReceiver)
         val receiverToSender = PipedInputStream()
         val receiverOutput = PipedOutputStream(receiverToSender)
+        var sourceOpenCount = 0
         var sourceReads = 0
 
         val protocol = SingleFileTransferProtocol(1024L)
@@ -118,10 +119,13 @@ class SingleFileTransferProtocolTest {
             protocol.sendOne(
                 sessionId,
                 manifest,
-                object : InputStream() {
+                {
+                    sourceOpenCount += 1
+                    object : InputStream() {
                     override fun read(): Int {
                         sourceReads += 1
                         return -1
+                    }
                     }
                 },
                 receiverToSender,
@@ -131,6 +135,7 @@ class SingleFileTransferProtocolTest {
 
         assertTrue(receiving.await() is TransferSessionOutcome.Rejected)
         assertTrue(sending.await() is TransferSessionOutcome.Rejected)
+        assertEquals(0, sourceOpenCount)
         assertEquals(0, sourceReads)
         senderOutput.close()
         receiverOutput.close()
@@ -235,8 +240,8 @@ class SingleFileTransferProtocolTest {
             protocol.sendOne(
                 sessionId,
                 manifest,
-                ByteArrayInputStream(byteArrayOf()),
-                receiverToSender,
+                openSource = { ByteArrayInputStream(byteArrayOf()) },
+                channelInput = receiverToSender,
                 senderOutput,
             )
         }
