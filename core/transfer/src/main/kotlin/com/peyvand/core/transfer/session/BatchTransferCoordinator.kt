@@ -4,7 +4,7 @@ import com.peyvand.core.domain.files.ShareItem
 import com.peyvand.core.domain.transfer.TransferFileStorageRepository
 import com.peyvand.core.transfer.manifest.BatchTransferManifest
 import com.peyvand.core.transfer.manifest.TransferManifestItem
-import com.peyvand.core.transfer.protocol.BatchItemCompletionRecord
+import com.peyvand.core.transfer.protocol.BatchOffer
 import com.peyvand.core.transfer.protocol.BatchItemOutcome
 import com.peyvand.core.transfer.protocol.TransferFrame
 import java.io.IOException
@@ -91,7 +91,8 @@ internal class BatchTransferCoordinator(
 
     suspend fun receive(
         channel: com.peyvand.core.domain.connection.AuthenticatedPeerChannel,
-        firstManifestFrame: TransferFrame,
+        firstOfferFrame: TransferFrame,
+        acquireOfferConsent: suspend (BatchOffer) -> Boolean,
         cancellationRequests: ReceiveChannel<UUID>,
         isCancelledBeforeStart: (UUID) -> Boolean,
         acquireSelection: suspend (BatchTransferManifest) -> BatchReceiverSelection?,
@@ -100,11 +101,12 @@ internal class BatchTransferCoordinator(
         onItemVerifying: (UUID) -> Unit,
         onItemPublishing: (TransferManifestItem, Long) -> Unit,
         onItemOutcome: (BatchItemOutcome) -> Unit,
-    ): BatchTransferResult {
+    ): BatchTransferResult? {
         val maximumReceiveSizeBytes = storageRepository.maximumReceiveSizeBytes()
         return MultiItemTransferProtocol(maximumReceiveSizeBytes).receiveBatch(
             sessionId = channel.sessionId,
-            firstManifestFrame = firstManifestFrame,
+            firstOfferFrame = firstOfferFrame,
+            acquireOfferConsent = acquireOfferConsent,
             channelInput = channel.inputStream,
             channelOutput = channel.outputStream,
             acquireSelection = { manifest ->
