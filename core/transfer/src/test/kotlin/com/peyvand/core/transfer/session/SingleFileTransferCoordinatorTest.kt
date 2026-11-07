@@ -24,6 +24,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -117,6 +118,11 @@ class SingleFileTransferCoordinatorTest {
             assertEquals(5, receiverStorage.stagingSyncCount)
             assertEquals(fileBytes.size.toLong(), sender.state.value.transferredBytes)
             assertEquals(fileBytes.size.toLong(), receiver.state.value.transferredBytes)
+            withTimeout(10_000L) {
+                while (!senderConnectivity.disconnected || !receiverConnectivity.disconnected) {
+                    delay(1L)
+                }
+            }
             assertTrue(senderConnectivity.disconnected)
             assertTrue(receiverConnectivity.disconnected)
         } finally {
