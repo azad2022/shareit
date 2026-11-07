@@ -106,6 +106,7 @@ class MultiItemTransferProtocol(
         isCancelledBeforeStart: (UUID) -> Boolean = { false },
         onActiveSourceChanged: (UUID, InputStream?) -> Unit = { _, _ -> },
         onItemProgress: (UUID, Long) -> Unit = { _, _ -> },
+        onItemVerifying: (UUID) -> Unit = {},
         onItemOutcome: (BatchItemOutcome) -> Unit = {},
     ): BatchTransferResult {
         val output = BufferedOutputStream(channelOutput, IO_BUFFER_BYTES)
@@ -200,6 +201,7 @@ class MultiItemTransferProtocol(
                         cancellationRequests = cancellationRequests,
                         onActiveSourceChanged = onActiveSourceChanged,
                         onItemProgress = onItemProgress,
+                        onItemVerifying = onItemVerifying,
                     )
                 } finally {
                     onActiveSourceChanged(item.itemId, null)
@@ -344,6 +346,7 @@ class MultiItemTransferProtocol(
                         publishVerified,
                         cancellationRequests,
                         onItemProgress,
+                        onItemVerifying,
                     )
                 } finally {
                     staging.close()
@@ -380,6 +383,7 @@ class MultiItemTransferProtocol(
         cancellationRequests: ReceiveChannel<UUID>,
         onActiveSourceChanged: (UUID, InputStream?) -> Unit,
         onItemProgress: (UUID, Long) -> Unit,
+        onItemVerifying: (UUID) -> Unit,
     ): BatchItemOutcome {
         val itemId = manifestItem.itemId
         val reference = BatchItemReference(batchId, itemId)
@@ -467,6 +471,7 @@ class MultiItemTransferProtocol(
                         }
 
                         if (bytes == null) {
+                            onItemVerifying(itemId)
                             val localHash = digest.digest().toLowerHex()
                             if (manifestItem.sizeBytes != null && manifestItem.sizeBytes != totalBytes) {
                                 writeFailure(
@@ -552,6 +557,7 @@ class MultiItemTransferProtocol(
         ) -> Boolean,
         cancellationRequests: ReceiveChannel<UUID>,
         onItemProgress: (UUID, Long) -> Unit,
+        onItemVerifying: (UUID) -> Unit,
     ): BatchItemOutcome {
         val maximum = minOf(maximumFileSizeBytes, item.sizeBytes ?: maximumFileSizeBytes)
         val digest = MessageDigest.getInstance("SHA-256")
@@ -637,6 +643,7 @@ class MultiItemTransferProtocol(
                                 reference.itemId,
                             )
                             try {
+                                onItemVerifying(item.itemId)
                                 if (pendingChunks > 0) {
                                     staging.sync()
                                     sendBatchAck(output, sessionId, reference, nextExpectedOffset)
