@@ -247,6 +247,7 @@ class SingleFileTransferProtocol(
             )
             var receivedOffsetBytes = 0L
             var totalBytes = 0L
+            var previousChunkSizeBytes: Int? = null
 
             fun commitPendingChunks() {
                 if (pendingChunks.isEmpty()) return
@@ -275,6 +276,13 @@ class SingleFileTransferProtocol(
                 when (frame.type) {
                     TransferFrameType.DATA_CHUNK -> {
                         val chunk = TransferDataChunkCodec.decodePayload(frame.payloadBytes())
+                        if (previousChunkSizeBytes != null &&
+                            previousChunkSizeBytes != TransferFrameCodec.MAX_DATA_CHUNK_BYTES
+                        ) {
+                            throw TransferProtocolException(
+                                "Only the final data chunk may be shorter than the configured chunk size",
+                            )
+                        }
                         if (chunk.itemId != manifest.itemId) {
                             throw TransferProtocolException("Chunk belongs to a different transfer item")
                         }
@@ -295,6 +303,7 @@ class SingleFileTransferProtocol(
                         digest.update(bytes)
                         totalBytes += bytes.size.toLong()
                         receivedOffsetBytes = totalBytes
+                        previousChunkSizeBytes = chunk.sizeBytes
                         pendingChunks += chunk
 
                         if (pendingChunks.size == TransferFlowControlPolicy.MAX_IN_FLIGHT_CHUNKS) {
