@@ -148,6 +148,11 @@ class MultiItemTransferProtocol(
                         return@forEachIndexed
                     }
                     TransferFrameType.BATCH_ITEM_READY -> requireReference(ready, reference)
+                    TransferFrameType.BATCH_ITEM_CANCELLED_ACK -> {
+                        requireReference(ready, reference)
+                        addOutcome(outcomes, BatchItemOutcome(item.itemId, BatchItemOutcomeStatus.CANCELLED), onItemOutcome)
+                        return@forEachIndexed
+                    }
                     else -> throw TransferProtocolException("Expected batch item readiness")
                 }
 
@@ -226,6 +231,7 @@ class MultiItemTransferProtocol(
             BatchItemCompletionRecord,
         ) -> Boolean,
         cancellationRequests: ReceiveChannel<UUID>,
+        isCancelledBeforeStart: (UUID) -> Boolean = { false },
         onItemProgress: (UUID, Long) -> Unit = { _, _ -> },
         onItemOutcome: (BatchItemOutcome) -> Unit = {},
     ): BatchTransferResult {
@@ -288,6 +294,16 @@ class MultiItemTransferProtocol(
                 }
                 requireType(start, TransferFrameType.BATCH_ITEM_START)
                 requireReference(start, reference)
+                if (isCancelledBeforeStart(item.itemId)) {
+                    writeReference(output, sessionId, TransferFrameType.BATCH_ITEM_CANCELLED, reference)
+                    awaitReference(reader, sessionId, TransferFrameType.BATCH_ITEM_CANCELLED_ACK, reference)
+                    addOutcome(
+                        outcomes,
+                        BatchItemOutcome(item.itemId, BatchItemOutcomeStatus.CANCELLED),
+                        onItemOutcome,
+                    )
+                    return@forEach
+                }
 
                 val staging = try {
                     acquireStaging(item)
