@@ -56,7 +56,7 @@ class SingleFileTransferProtocol(
     suspend fun sendOne(
         sessionId: UUID,
         manifest: TransferManifestItem,
-        source: InputStream,
+        openSource: () -> InputStream,
         channelInput: InputStream,
         channelOutput: OutputStream,
         onProgress: (Long) -> Unit = {},
@@ -103,43 +103,47 @@ class SingleFileTransferProtocol(
             }
             onConsentAccepted()
 
-            while (true) {
-                context.ensureActive()
-                if (!window.hasCapacity) {
-                    output.flush()
-                    onProgress(receiveAcknowledgement(input, sessionId, window))
-                }
+            // Do not hold a ContentResolver descriptor open while waiting for user consent.
+            // The source is opened only after ACCEPT has been received on the authenticated channel.
+            openSource().use { source ->
+                while (true) {
+                    context.ensureActive()
+                    if (!window.hasCapacity) {
+                        output.flush()
+                        onProgress(receiveAcknowledgement(input, sessionId, window))
+                    }
 
-                val count = readChunk(source, chunkBuffer)
-                if (count < 0) break
-                val countLong = count.toLong()
-                if (countLong > maximumFileSizeBytes - totalBytes ||
-                    (manifest.sizeBytes != null && countLong > manifest.sizeBytes - totalBytes)
-                ) {
-                    writeError(output, sessionId)
-                    throw TransferProtocolException("Source exceeds the permitted manifest size")
-                }
+                    val count = readChunk(source, chunkBuffer)
+                    if (count < 0) break
+                    val countLong = count.toLong()
+                    if (countLong > maximumFileSizeBytes - totalBytes ||
+                        (manifest.sizeBytes != null && countLong > manifest.sizeBytes - totalBytes)
+                    ) {
+                        writeError(output, sessionId)
+                        throw TransferProtocolException("Source exceeds the permitted manifest size")
+                    }
 
-                val chunkBytes = chunkBuffer.copyOf(count)
-                val chunk = TransferDataChunk(manifest.itemId, totalBytes, chunkBytes)
-                if (!window.tryReserve(chunk)) {
-                    throw TransferProtocolException("Sender window rejected a chunk despite available capacity")
-                }
-                TransferFrameCodec.write(
-                    TransferFrame(
-                        protocolVersion = TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
-                        type = TransferFrameType.DATA_CHUNK,
-                        sessionId = sessionId,
-                        payload = TransferDataChunkCodec.encodePayload(chunk),
-                    ),
-                    output,
-                )
-                digest.update(chunkBytes)
-                totalBytes += countLong
+                    val chunkBytes = chunkBuffer.copyOf(count)
+                    val chunk = TransferDataChunk(manifest.itemId, totalBytes, chunkBytes)
+                    if (!window.tryReserve(chunk)) {
+                        throw TransferProtocolException("Sender window rejected a chunk despite available capacity")
+                    }
+                    TransferFrameCodec.write(
+                        TransferFrame(
+                            protocolVersion = TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+                            type = TransferFrameType.DATA_CHUNK,
+                            sessionId = sessionId,
+                            payload = TransferDataChunkCodec.encodePayload(chunk),
+                        ),
+                        output,
+                    )
+                    digest.update(chunkBytes)
+                    totalBytes += countLong
 
-                if (!window.hasCapacity) {
-                    output.flush()
-                    onProgress(receiveAcknowledgement(input, sessionId, window))
+                    if (!window.hasCapacity) {
+                        output.flush()
+                        onProgress(receiveAcknowledgement(input, sessionId, window))
+                    }
                 }
             }
 
