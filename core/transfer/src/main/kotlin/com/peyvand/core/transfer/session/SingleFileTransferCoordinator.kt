@@ -91,6 +91,7 @@ class SingleFileTransferCoordinator(
     private val storageRepository: TransferFileStorageRepository,
 ) : AutoCloseable {
 
+    private val batchTransferCoordinator = BatchTransferCoordinator(storageRepository)
     private val mutableState = MutableStateFlow(TransferSessionSnapshot())
     val state = mutableState.asStateFlow()
 
@@ -100,7 +101,6 @@ class SingleFileTransferCoordinator(
     private var selectedItem: ShareItem? = null
     private var selectedBatchItems: List<ShareItem> = emptyList()
     private var batchTransferIdsBySourceId: Map<String, UUID> = emptyMap()
-    private var batchSourceItemsByTransferId: Map<UUID, ShareItem> = emptyMap()
     @Volatile
     private var activeBatchItemId: UUID? = null
     @Volatile
@@ -307,7 +307,6 @@ class SingleFileTransferCoordinator(
         selectedItem = null
         selectedBatchItems = emptyList()
         batchTransferIdsBySourceId = emptyMap()
-        batchSourceItemsByTransferId = emptyMap()
         activeBatchItemId = null
         batchCancellationRequests = null
         cancelledBeforeStart.clear()
@@ -334,33 +333,6 @@ class SingleFileTransferCoordinator(
         val cancellation = Channel<UUID>(Channel.UNLIMITED)
         batchCancellationRequests = cancellation
         try {
-            val sourceIds = LinkedHashMap<String, UUID>()
-            val sourcesByTransferId = LinkedHashMap<UUID, ShareItem>()
-            val manifestItems = ArrayList<TransferManifestItem>(items.size)
-
-            // Query metadata one item at a time and close each handle immediately.
-            // Provider content streams remain unopened until the receiver accepts that item.
-            items.forEach { selected ->
-                val transferId = UUID.randomUUID()
-                val source = storageRepository.openSource(selected)
-                val metadata = try {
-                    source.metadata
-                } finally {
-                    source.close()
-                }
-                sourceIds[selected.id] = transferId
-                sourcesByTransferId[transferId] = selected
-                manifestItems += TransferManifestItem(
-                    itemId = transferId,
-                    displayName = metadata.displayName,
-                    mimeType = metadata.mimeType,
-                    sizeBytes = metadata.sizeBytes,
-                )
-            }
-
-            batchTransferIdsBySourceId = sourceIds
-            batchSourceItemsByTransferId = sourcesByTransferId
-            val manifest = BatchTransferManifest(UUID.randomUUID(), manifestItems)
             update(operation) {
                 it.copy(
                     phase = TransferSessionPhase.WAITING_FOR_CONSENT,
@@ -370,38 +342,26 @@ class SingleFileTransferCoordinator(
                     error = null,
                 )
             }
-
-            val result = MultiItemTransferProtocol(Long.MAX_VALUE).sendBatch(
-                sessionId = channel.sessionId,
-                manifest = manifest,
-                channelInput = channel.inputStream,
-                channelOutput = channel.outputStream,
-                openSource = { manifestItem ->
-                    val selected = sourcesByTransferId[manifestItem.itemId]
-                        ?: throw IOException("Batch source identity is no longer available")
-                    val source = storageRepository.openSource(selected)
-                    val current = source.metadata
-                    if (current.displayName != manifestItem.displayName ||
-                        current.mimeType != manifestItem.mimeType ||
-                        current.sizeBytes != manifestItem.sizeBytes
-                    ) {
-                        runCatching { source.close() }
-                        throw IOException("Source metadata changed after the manifest was sent")
-                    }
-                    source
-                },
+            val result = batchTransferCoordinator.send(
+                channel = channel,
+                selectedItems = items,
                 cancellationRequests = cancellation,
                 isCancelledBeforeStart = { itemId -> itemId in cancelledBeforeStart },
+                onManifestReady = { sourceIds ->
+                    batchTransferIdsBySourceId = sourceIds
+                },
                 onActiveSourceChanged = { itemId, stream ->
                     activeBatchItemId = if (stream == null) null else itemId
                     activeSourceStream = stream
                 },
                 onItemProgress = { itemId, bytes ->
-                    val sourceId = sourceIds.entries.firstOrNull { it.value == itemId }?.key
+                    val sourceId = batchTransferIdsBySourceId.entries
+                        .firstOrNull { it.value == itemId }?.key
                     updateBatchItem(operation, sourceId, TransferItemPhase.TRANSFERRING, bytes)
                 },
                 onItemVerifying = { itemId ->
-                    val sourceId = sourceIds.entries.firstOrNull { it.value == itemId }?.key
+                    val sourceId = batchTransferIdsBySourceId.entries
+                        .firstOrNull { it.value == itemId }?.key
                     updateBatchItem(
                         operation,
                         sourceId,
@@ -410,7 +370,7 @@ class SingleFileTransferCoordinator(
                     )
                 },
                 onItemOutcome = { outcome ->
-                    updateBatchOutcome(operation, sourceIds, outcome)
+                    updateBatchOutcome(operation, batchTransferIdsBySourceId, outcome)
                 },
             )
             completeBatch(operation, result)
@@ -592,24 +552,22 @@ class SingleFileTransferCoordinator(
         operation: Long,
         firstFrame: com.peyvand.core.transfer.protocol.TransferFrame,
     ) {
-        val maximumBytes = storageRepository.maximumReceiveSizeBytes()
         val cancellation = Channel<UUID>(Channel.UNLIMITED)
         batchCancellationRequests = cancellation
         try {
-            val result = MultiItemTransferProtocol(maximumBytes).receiveBatch(
-                sessionId = channel.sessionId,
+            val result = batchTransferCoordinator.receive(
+                channel = channel,
                 firstManifestFrame = firstFrame,
-                channelInput = channel.inputStream,
-                channelOutput = channel.outputStream,
-                acquireSelection = { manifest ->
-                    val incomingItems = manifest.items.map { item ->
+                cancellationRequests = cancellation,
+                isCancelledBeforeStart = { itemId -> itemId in cancelledBeforeStart },
+                onManifest = { manifestItems ->
+                    val incomingItems = manifestItems.map { item ->
                         TransferItemSnapshot(
                             id = item.itemId.toString(),
                             displayName = item.displayName,
                             mimeType = item.mimeType,
                             totalSizeBytes = item.sizeBytes,
                             phase = TransferItemPhase.WAITING_FOR_RECEIVER,
-                            isSelectedForConsent = false,
                         )
                     }
                     update(operation) {
@@ -624,6 +582,8 @@ class SingleFileTransferCoordinator(
                             error = null,
                         )
                     }
+                },
+                acquireSelection = { manifest ->
                     val decision = CompletableDeferred<Set<UUID>?>()
                     batchConsentDecision = decision
                     val accepted = try {
@@ -632,76 +592,59 @@ class SingleFileTransferCoordinator(
                         if (batchConsentDecision === decision) batchConsentDecision = null
                     }
 
-                    if (accepted == null) {
-                        null
-                    } else if (accepted.isEmpty()) {
-                        update(operation) {
-                            it.copy(items = it.items.map { item ->
-                                item.copy(phase = TransferItemPhase.REJECTED)
-                            })
+                    when {
+                        accepted == null -> null
+                        accepted.isEmpty() -> {
+                            update(operation) {
+                                it.copy(items = it.items.map { item ->
+                                    item.copy(phase = TransferItemPhase.REJECTED)
+                                })
+                            }
+                            BatchReceiverSelection(emptySet(), null)
                         }
-                        BatchReceiverSelection(emptySet(), null)
-                    } else {
-                        val requestId = mutableState.value.destinationTreePickerRequestId + 1
-                        update(operation) {
-                            it.copy(
-                                phase = TransferSessionPhase.AWAITING_DESTINATION_TREE,
-                                destinationTreePickerRequestId = requestId,
-                                items = it.items.map { item ->
-                                    val uuid = runCatching { UUID.fromString(item.id) }.getOrNull()
-                                    item.copy(isSelectedForConsent = uuid in accepted)
-                                },
-                            )
+                        else -> {
+                            val requestId = mutableState.value.destinationTreePickerRequestId + 1
+                            update(operation) {
+                                it.copy(
+                                    phase = TransferSessionPhase.AWAITING_DESTINATION_TREE,
+                                    destinationTreePickerRequestId = requestId,
+                                    items = it.items.map { item ->
+                                        val itemUuid = runCatching { UUID.fromString(item.id) }.getOrNull()
+                                        item.copy(isSelectedForConsent = itemUuid in accepted)
+                                    },
+                                )
+                            }
+                            val destination = CompletableDeferred<String?>()
+                            destinationTreeDecision = destination
+                            val treeUri = try {
+                                withTimeout(DESTINATION_SELECTION_TIMEOUT_MILLIS) {
+                                    destination.await()
+                                }
+                            } finally {
+                                if (destinationTreeDecision === destination) {
+                                    destinationTreeDecision = null
+                                }
+                            }
+                            if (treeUri.isNullOrBlank()) null
+                            else BatchReceiverSelection(accepted, treeUri)
                         }
-                        val destination = CompletableDeferred<String?>()
-                        destinationTreeDecision = destination
-                        val treeUri = try {
-                            withTimeout(DESTINATION_SELECTION_TIMEOUT_MILLIS) { destination.await() }
-                        } finally {
-                            if (destinationTreeDecision === destination) destinationTreeDecision = null
-                        }
-                        if (treeUri.isNullOrBlank()) null
-                        else BatchReceiverSelection(accepted, treeUri)
                     }
                 },
-                acquireStaging = { manifestItem ->
-                    val maximum = storageRepository.maximumReceiveSizeBytes()
-                    if (manifestItem.sizeBytes != null && manifestItem.sizeBytes > maximum) {
-                        throw IOException("Item size exceeds the current receive capacity")
-                    }
-                    storageRepository.createPrivateStaging(
-                        minOf(manifestItem.sizeBytes ?: maximum, maximum),
-                    )
-                },
-                publishVerified = { manifestItem, staging, treeUri, completion ->
-                    updateBatchItem(
-                        operation,
-                        manifestItem.itemId.toString(),
-                        TransferItemPhase.PUBLISHING,
-                        completion.actualSizeBytes,
-                    )
-                    storageRepository.publishVerifiedToTree(
-                        staging = staging,
-                        treeUri = treeUri,
-                        displayName = manifestItem.displayName,
-                        mimeType = manifestItem.mimeType,
-                        expectedSizeBytes = completion.actualSizeBytes,
-                        expectedSha256Hex = completion.sha256Hex,
-                    )
-                },
-                cancellationRequests = cancellation,
-                isCancelledBeforeStart = { itemId -> itemId in cancelledBeforeStart },
                 onItemProgress = { itemId, bytes ->
-                    updateBatchItem(
-                        operation,
-                        itemId.toString(),
-                        TransferItemPhase.TRANSFERRING,
-                        bytes,
-                    )
+                    val id = itemId.toString()
+                    updateBatchItem(operation, id, TransferItemPhase.TRANSFERRING, bytes)
                 },
                 onItemVerifying = { itemId ->
                     val id = itemId.toString()
                     updateBatchItem(operation, id, TransferItemPhase.VERIFYING, stateForItemBytes(id))
+                },
+                onItemPublishing = { item, bytes ->
+                    updateBatchItem(
+                        operation,
+                        item.itemId.toString(),
+                        TransferItemPhase.PUBLISHING,
+                        bytes,
+                    )
                 },
                 onItemOutcome = { outcome ->
                     updateBatchOutcome(operation, emptyMap(), outcome)
@@ -727,11 +670,11 @@ class SingleFileTransferCoordinator(
             }
             throw cancellationException
         } catch (_: Exception) {
-            update(operation) {
-                it.copy(
+            update(operation) { current ->
+                current.copy(
                     phase = TransferSessionPhase.FAILED,
                     error = TransferSessionError.TRANSFER_FAILED,
-                    items = it.items.map { item ->
+                    items = current.items.map { item ->
                         if (item.phase in setOf(
                                 TransferItemPhase.QUEUED,
                                 TransferItemPhase.WAITING_FOR_RECEIVER,
