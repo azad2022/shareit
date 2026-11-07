@@ -1,6 +1,6 @@
 # ADR-0008 — Secure multi-item one-to-one batch transfer
 
-- **Status:** Engineering design baseline prepared for product-owner approval; implementation and interoperability validation pending.
+- **Status:** Accepted by product owner for CP-004 design; implementation and interoperability validation pending.
 - **Date:** 2026-11-07
 - **Scope:** One sender, one authenticated receiver, multiple user-selected arbitrary `content://` files in one ordered batch.
 - **Explicit exclusions:** Sender-to-many, multi-sender, APK/split APK, pause/resume, durable process-death recovery, guaranteed background continuation, and product-wide visual redesign.
