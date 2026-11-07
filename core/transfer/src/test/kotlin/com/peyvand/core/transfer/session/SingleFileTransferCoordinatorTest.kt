@@ -184,7 +184,7 @@ class SingleFileTransferCoordinatorTest {
             coordinator.prepareSession(isSender = true, selectedItems = listOf(item))
             coordinator.startSending()
             withTimeout(10_000L) {
-                while (!storage.sourceStreamOpened) delay(1L)
+                while (!storage.sourceStreamOpened || !blockingStream.readStarted) delay(1L)
             }
 
             coordinator.cancelTransfer()
@@ -345,7 +345,12 @@ class SingleFileTransferCoordinatorTest {
         var isClosed: Boolean = false
             private set
 
+        @Volatile
+        var readStarted: Boolean = false
+            private set
+
         override fun read(): Int {
+            readStarted = true
             synchronized(monitor) {
                 while (!isClosed) {
                     try {
