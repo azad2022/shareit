@@ -11,6 +11,8 @@ import com.peyvand.core.transfer.manifest.TransferManifestItem
 import com.peyvand.core.transfer.protocol.BatchChunkAcknowledgement
 import com.peyvand.core.transfer.protocol.BatchChunkAcknowledgementCodec
 import com.peyvand.core.transfer.protocol.BatchItemCompletionCodec
+import com.peyvand.core.transfer.protocol.BatchOffer
+import com.peyvand.core.transfer.protocol.BatchOfferCodec
 import com.peyvand.core.transfer.protocol.BatchItemCompletionRecord
 import com.peyvand.core.transfer.protocol.BatchItemFailureCode
 import com.peyvand.core.transfer.protocol.BatchItemFailureCodec
@@ -114,6 +116,26 @@ class MultiItemTransferProtocol(
         val outcomes = ArrayList<BatchItemOutcome>(manifest.items.size)
 
         try {
+            // First disclose only a random batch identifier. Names, MIME types, sizes and
+            // item count remain undisclosed until the receiver explicitly permits the preview.
+            val offer = BatchOffer(manifest.batchId)
+            writeFrame(
+                output,
+                sessionId,
+                TransferFrameType.BATCH_OFFER,
+                BatchOfferCodec.encode(offer),
+            )
+            val offerResponse = reader.next(sessionId)
+            if (offerResponse.type == TransferFrameType.BATCH_ABORT) {
+                val reference = BatchItemReferenceCodec.decode(offerResponse.payloadBytes())
+                requireBatchReference(reference, manifest.batchId, BATCH_ABORT_ITEM_ID)
+                return rejectedResult(manifest)
+            }
+            requireType(offerResponse, TransferFrameType.BATCH_OFFER_ACCEPTED)
+            if (BatchOfferCodec.decode(offerResponse.payloadBytes()) != offer) {
+                throw TransferProtocolException("Batch offer approval belongs to a different batch")
+            }
+
             val encodedManifest = BatchTransferManifestCodec.encode(manifest)
             writeFrame(output, sessionId, TransferFrameType.BATCH_MANIFEST, encodedManifest)
 
@@ -121,7 +143,7 @@ class MultiItemTransferProtocol(
             if (decisionFrame.type == TransferFrameType.BATCH_ABORT) {
                 val reference = BatchItemReferenceCodec.decode(decisionFrame.payloadBytes())
                 requireBatchReference(reference, manifest.batchId, BATCH_ABORT_ITEM_ID)
-                return cancelledResult(manifest)
+                return rejectedResult(manifest)
             }
             requireType(decisionFrame, TransferFrameType.BATCH_DECISION)
             val decision = BatchConsentDecisionCodec.decode(decisionFrame.payloadBytes(), manifest)
@@ -982,6 +1004,16 @@ class MultiItemTransferProtocol(
 
         fun cancelledResult(manifest: BatchTransferManifest): BatchTransferResult {
             val outcomes = manifest.items.map { BatchItemOutcome(it.itemId, BatchItemOutcomeStatus.CANCELLED) }
+            val digest = BatchOutcomeDigest.compute(
+                manifest.batchId,
+                manifest.items.map(TransferManifestItem::itemId),
+                outcomes,
+            )
+            return BatchTransferResult(outcomes, digest)
+        }
+
+        fun rejectedResult(manifest: BatchTransferManifest): BatchTransferResult {
+            val outcomes = manifest.items.map { BatchItemOutcome(it.itemId, BatchItemOutcomeStatus.REJECTED) }
             val digest = BatchOutcomeDigest.compute(
                 manifest.batchId,
                 manifest.items.map(TransferManifestItem::itemId),
