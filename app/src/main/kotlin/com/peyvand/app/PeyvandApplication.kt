@@ -8,6 +8,8 @@ import com.peyvand.core.domain.network.NetworkEnvironmentRepository
 import com.peyvand.core.domain.files.ShareCatalogRepository
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.storage.AndroidShareCatalogRepository
+import com.peyvand.core.storage.AndroidTransferFileStorageRepository
+import com.peyvand.core.domain.transfer.TransferFileStorageRepository
 
 class PeyvandApplication : Application() {
     private val wifiDirectRepository by lazy(
@@ -32,5 +34,11 @@ class PeyvandApplication : Application() {
         LazyThreadSafetyMode.SYNCHRONIZED,
     ) {
         AndroidShareCatalogRepository(applicationContext)
+    }
+
+    val transferFileStorageRepository: TransferFileStorageRepository by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        AndroidTransferFileStorageRepository(applicationContext)
     }
 }

@@ -91,9 +91,9 @@ class AndroidTransferFileStorageRepository(
         val expectedDigest = decodeSha256(expectedSha256Hex)
 
         try {
-            val output = resolver.openOutputStream(target, "wt")
-                ?: throw IOException("The selected document provider did not open a writable stream")
             val copied = staging.openVerifiedInputStream().use { source ->
+                val output = resolver.openOutputStream(target, "wt")
+                    ?: throw IOException("The selected document provider did not open a writable stream")
                 output.use { destination ->
                     copyAndDigest(source, destination, expectedSizeBytes)
                 }

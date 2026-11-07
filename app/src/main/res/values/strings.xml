@@ -39,7 +39,7 @@
 
     <string name="file_selection_title">انتخاب فایل‌ها</string>
     <string name="file_manager_title">فایل‌های دستگاه</string>
-    <string name="file_selection_subtitle">می‌توانید چند فایل را از دسته‌های مختلف انتخاب کنید. انتخاب شما تا پایان این مرحله حفظ می‌شود.</string>
+    <string name="file_selection_subtitle">در این مرحله یک فایل را انتخاب کنید. انتقال دسته‌ای و ارسال برنامه‌ها در مرحله‌های بعدی اضافه می‌شوند.</string>
     <string name="file_category_music">موسیقی</string>
     <string name="file_category_photos">عکس</string>
     <string name="file_category_apps">برنامه‌ها</string>
@@ -71,7 +71,7 @@
     <string name="send_discovery_title">انتخاب دستگاه مقصد</string>
     <string name="send_discovery_subtitle">فایل‌ها انتخاب شده‌اند. پیوند را روی دستگاه مقصد نیز باز کنید تا کشف دوطرفه انجام شود. اتصال و انتقال پس از تکمیل احراز هویت امن فعال می‌شود.</string>
     <string name="receive_screen_title">آماده‌سازی دریافت</string>
-    <string name="receive_screen_subtitle">در این مرحله کشف دستگاه‌های سازگار فعال است. QR، احراز هویت و پذیرش فایل پس از تأیید ارتباط دو دستگاه و تکمیل پروتکل امن اضافه می‌شود.</string>
+    <string name="receive_screen_subtitle">پیوند را در گوشی فرستنده نیز باز کنید. پس از تطبیق کد و برقراری TLS، می‌توانید فایل ورودی را بررسی و قبول یا رد کنید.</string>
 
     <string name="discovery_title">دستگاه‌های نزدیک</string>
     <string name="discovery_subtitle">گوشی‌های دارای پیوند را در نزدیکی خود پیدا کنید.</string>
@@ -185,4 +185,32 @@
     <string name="secure_session_error_role">نقش فرستنده و گیرنده در دو دستگاه با هم سازگار نیست.</string>
     <string name="secure_session_error_timeout">مهلت احراز هویت یا تأیید کاربر به پایان رسید.</string>
     <string name="secure_session_error_tls">برقراری TLS دوطرفه انجام نشد.</string>
+
+    <string name="file_transfer_title">انتقال فایل</string>
+    <string name="file_transfer_ready_to_send">فایل برای ارسال آماده است. با انتخاب «شروع ارسال»، اطلاعات فایل به دستگاه مقابل فرستاده می‌شود.</string>
+    <string name="file_transfer_waiting_incoming">کانال امن برقرار است؛ در انتظار دریافت درخواست فایل از فرستنده…</string>
+    <string name="file_transfer_waiting_consent_sender">اطلاعات فایل ارسال شد. در انتظار پذیرش صریح گیرنده هستیم؛ هنوز محتوای فایل ارسال نمی‌شود.</string>
+    <string name="file_transfer_waiting_consent_receiver">درخواست دریافت فایل رسیده است. پیش از پذیرش، نام و اطلاعات فایل را بررسی کنید.</string>
+    <string name="file_transfer_transferring">در حال انتقال فایل از طریق کانال رمزنگاری‌شده…</string>
+    <string name="file_transfer_awaiting_destination">انتقال و بررسی SHA-256 انجام شد. اکنون محل ذخیره‌سازی فایل را انتخاب کنید.</string>
+    <string name="file_transfer_publishing">در حال ذخیره و بررسی مجدد فایل در مقصد انتخاب‌شده…</string>
+    <string name="file_transfer_completed">فایل ذخیره شد و صحت داده‌ها تأیید شد.</string>
+    <string name="file_transfer_rejected">درخواست فایل توسط گیرنده رد شد.</string>
+    <string name="file_transfer_cancelled">انتقال لغو شد و فایل ناقص منتشر نشد.</string>
+    <string name="file_transfer_failed">انتقال کامل نشد. فایل ناقص به‌عنوان فایل نهایی ذخیره نشده است.</string>
+    <string name="file_transfer_error_selection">برای ارسال، دقیقاً یک فایل انتخاب‌شده لازم است.</string>
+    <string name="file_transfer_error_source">این نوع مورد در مرحلهٔ فعلی قابل ارسال نیست. فعلاً فقط فایل با URI مجاز پشتیبانی می‌شود.</string>
+    <string name="file_transfer_error_channel">کانال امن انتقال در دسترس نیست. اتصال را قطع و دوباره برقرار کنید.</string>
+    <string name="file_transfer_error_storage">فضای آزاد کافی برای دریافت این فایل وجود ندارد.</string>
+    <string name="file_transfer_start">شروع ارسال فایل</string>
+    <string name="file_transfer_accept">پذیرش دریافت</string>
+    <string name="file_transfer_reject">رد درخواست</string>
+    <string name="file_transfer_cancel">لغو انتقال</string>
+    <string name="file_transfer_back">بازگشت به صفحهٔ اصلی</string>
+    <string name="file_transfer_file_name">نام فایل: %1$s</string>
+    <string name="file_transfer_file_type">نوع فایل: %1$s</string>
+    <string name="file_transfer_file_size">حجم فایل: %1$s</string>
+    <string name="file_transfer_progress">دادهٔ منتقل‌شده: %1$s</string>
+    <string name="file_transfer_unknown_size">اندازهٔ فایل از منبع اعلام نشده است.</string>
+    <string name="file_transfer_destination_picker">در حال باز کردن محل ذخیره‌سازی…</string>
 </resources>

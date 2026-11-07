@@ -17,6 +17,9 @@ import com.peyvand.app.presentation.connection.PeerConnectionViewModel
 import com.peyvand.app.presentation.connection.PeerConnectionViewModelFactory
 import com.peyvand.app.presentation.MainViewModelFactory
 import com.peyvand.app.presentation.PeyvandApp
+import com.peyvand.app.presentation.transfer.FileTransferViewModel
+import com.peyvand.app.presentation.transfer.FileTransferViewModelFactory
+import com.peyvand.app.presentation.transfer.FileTransferPhase
 import com.peyvand.app.presentation.files.ShareSelectionViewModel
 import com.peyvand.app.presentation.files.ShareSelectionViewModelFactory
 import com.peyvand.app.presentation.StartupErrorScreen
@@ -42,6 +45,7 @@ class MainActivity : AppCompatActivity() {
             val networkEnvironmentViewModel: NetworkEnvironmentViewModel,
             val shareSelectionViewModel: ShareSelectionViewModel,
             val peerConnectionViewModel: PeerConnectionViewModel,
+            val fileTransferViewModel: FileTransferViewModel,
         ) : StartupState
     }
 
@@ -70,6 +74,7 @@ class MainActivity : AppCompatActivity() {
                         networkEnvironmentViewModel = state.networkEnvironmentViewModel,
                         shareSelectionViewModel = state.shareSelectionViewModel,
                         peerConnectionViewModel = state.peerConnectionViewModel,
+                        fileTransferViewModel = state.fileTransferViewModel,
                     )
                 }
             }
@@ -91,7 +96,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        discoveryRepository.stopMonitoring()
+        // ACTION_CREATE_DOCUMENT temporarily backgrounds this Activity while the
+        // receiver waits to finish publication and return the integrity receipt.
+        val transferPhase = (startupState as? StartupState.Ready)
+            ?.fileTransferViewModel
+            ?.state
+            ?.value
+            ?.phase
+        if (transferPhase != FileTransferPhase.AWAITING_DESTINATION) {
+            discoveryRepository.stopMonitoring()
+        }
         networkEnvironmentRepository.stopMonitoring()
         super.onStop()
     }
@@ -139,12 +153,21 @@ class MainActivity : AppCompatActivity() {
                     ),
                 )[ShareSelectionViewModel::class.java]
 
+                val peerConnectivityRepository =
+                    (application as PeyvandApplication).peerConnectionRepository
                 val peerConnectionViewModel = ViewModelProvider(
                     this@MainActivity,
-                    PeerConnectionViewModelFactory(
-                        (application as PeyvandApplication).peerConnectionRepository,
-                    ),
+                    PeerConnectionViewModelFactory(peerConnectivityRepository),
                 )[PeerConnectionViewModel::class.java]
+
+                val fileTransferViewModel = ViewModelProvider(
+                    this@MainActivity,
+                    FileTransferViewModelFactory(
+                        connectivityRepository = peerConnectivityRepository,
+                        storageRepository = (application as PeyvandApplication)
+                            .transferFileStorageRepository,
+                    ),
+                )[FileTransferViewModel::class.java]
 
                 startupState = StartupState.Ready(
                     languageViewModel = languageViewModel,
@@ -152,6 +175,7 @@ class MainActivity : AppCompatActivity() {
                     networkEnvironmentViewModel = networkEnvironmentViewModel,
                     shareSelectionViewModel = shareSelectionViewModel,
                     peerConnectionViewModel = peerConnectionViewModel,
+                    fileTransferViewModel = fileTransferViewModel,
                 )
             } catch (cancellation: CancellationException) {
                 throw cancellation
