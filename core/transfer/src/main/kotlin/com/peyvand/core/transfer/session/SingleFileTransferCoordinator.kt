@@ -6,6 +6,7 @@ import com.peyvand.core.domain.files.ShareItem
 import com.peyvand.core.domain.files.ShareSource
 import com.peyvand.core.domain.transfer.TransferFileStorageRepository
 import com.peyvand.core.transfer.manifest.TransferManifestItem
+import java.io.InputStream
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -72,6 +73,8 @@ class SingleFileTransferCoordinator(
     private var selectedItem: ShareItem? = null
     @Volatile
     private var authenticatedChannel: AuthenticatedPeerChannel? = null
+    @Volatile
+    private var activeSourceStream: InputStream? = null
     private var transferJob: Job? = null
 
     @Volatile
@@ -218,10 +221,13 @@ class SingleFileTransferCoordinator(
                     sizeBytes = metadata.sizeBytes,
                 )
                 val protocol = SingleFileTransferProtocol(Long.MAX_VALUE)
-                val outcome = protocol.sendOne(
+                val outcome = try {
+                    protocol.sendOne(
                         sessionId = channel.sessionId,
                         manifest = manifest,
-                        openSource = transferSource::openStream,
+                        openSource = {
+                            transferSource.openStream().also { activeSourceStream = it }
+                        },
                         channelInput = channel.inputStream,
                         channelOutput = channel.outputStream,
                         onWaitingForReceiverConsent = {
@@ -259,6 +265,9 @@ class SingleFileTransferCoordinator(
                             }
                         },
                     )
+                } finally {
+                    activeSourceStream = null
+                }
                 applyOutcome(outcome, operation)
             }
         } catch (cancellation: CancellationException) {
@@ -445,6 +454,12 @@ class SingleFileTransferCoordinator(
     }
 
     private fun closeTransport() {
+        // Closing the current source stream interrupts a blocking ContentResolver read
+        // before the transfer job is cancelled. Coroutine cancellation alone does not
+        // reliably unblock a platform InputStream read.
+        val source = activeSourceStream
+        activeSourceStream = null
+        runCatching { source?.close() }
         val channel = authenticatedChannel
         authenticatedChannel = null
         runCatching { channel?.close() }
