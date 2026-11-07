@@ -9,6 +9,7 @@ import com.peyvand.core.transfer.manifest.BatchTransferManifest
 import com.peyvand.core.transfer.manifest.TransferManifestItem
 import com.peyvand.core.transfer.protocol.BatchItemOutcome
 import com.peyvand.core.transfer.protocol.BatchItemOutcomeStatus
+import com.peyvand.core.transfer.protocol.BatchOffer
 import com.peyvand.core.transfer.protocol.TransferFrameCodec
 import com.peyvand.core.transfer.protocol.TransferFrameType
 import java.io.IOException
@@ -32,6 +33,7 @@ enum class TransferSessionPhase {
     READY_TO_SEND,
     WAITING_FOR_INCOMING,
     WAITING_FOR_CONSENT,
+    AWAITING_BATCH_OFFER_CONSENT,
     AWAITING_BATCH_CONSENT,
     AWAITING_DESTINATION_TREE,
     TRANSFERRING,
@@ -114,6 +116,8 @@ class SingleFileTransferCoordinator(
 
     @Volatile
     private var destinationDecision: CompletableDeferred<String?>? = null
+    @Volatile
+    private var batchOfferConsentDecision: CompletableDeferred<Boolean>? = null
     @Volatile
     private var batchConsentDecision: CompletableDeferred<Set<UUID>?>? = null
     @Volatile
@@ -223,7 +227,12 @@ class SingleFileTransferCoordinator(
 
     fun rejectIncoming() {
         consentDecision?.complete(false)
+        batchOfferConsentDecision?.complete(false)
         batchConsentDecision?.complete(emptySet())
+    }
+
+    fun acceptBatchOffer() {
+        batchOfferConsentDecision?.complete(true)
     }
 
     fun toggleBatchConsentItem(itemId: String) {
@@ -286,6 +295,7 @@ class SingleFileTransferCoordinator(
         }
         consentDecision?.complete(false)
         destinationDecision?.complete(null)
+        batchOfferConsentDecision?.complete(false)
         batchConsentDecision?.complete(null)
         destinationTreeDecision?.complete(null)
         batchCancellationRequests?.close()
@@ -429,7 +439,7 @@ class SingleFileTransferCoordinator(
                 ?: throw IOException("Authenticated peer closed before sending a transfer manifest")
             when (firstFrame.type) {
                 TransferFrameType.MANIFEST -> receiveSingleWithFirstFrame(channel, operation, firstFrame)
-                TransferFrameType.BATCH_MANIFEST -> receiveBatch(channel, operation, firstFrame)
+                TransferFrameType.BATCH_OFFER -> receiveBatch(channel, operation, firstFrame)
                 else -> throw IOException("The first application frame is not a supported manifest")
             }
         } catch (cancellationException: CancellationException) {
@@ -557,7 +567,28 @@ class SingleFileTransferCoordinator(
         try {
             val result = batchTransferCoordinator.receive(
                 channel = channel,
-                firstManifestFrame = firstFrame,
+                firstOfferFrame = firstFrame,
+                acquireOfferConsent = { offer ->
+                    update(operation) {
+                        it.copy(
+                            phase = TransferSessionPhase.AWAITING_BATCH_OFFER_CONSENT,
+                            isBatch = true,
+                            items = emptyList(),
+                            displayName = null,
+                            mimeType = null,
+                            totalSizeBytes = null,
+                            transferredBytes = 0L,
+                            error = null,
+                        )
+                    }
+                    val decision = CompletableDeferred<Boolean>()
+                    batchOfferConsentDecision = decision
+                    try {
+                        withTimeout(USER_CONSENT_TIMEOUT_MILLIS) { decision.await() }
+                    } finally {
+                        if (batchOfferConsentDecision === decision) batchOfferConsentDecision = null
+                    }
+                },
                 cancellationRequests = cancellation,
                 isCancelledBeforeStart = { itemId -> itemId in cancelledBeforeStart },
                 onManifest = { manifestItems ->
@@ -650,7 +681,13 @@ class SingleFileTransferCoordinator(
                     updateBatchOutcome(operation, emptyMap(), outcome)
                 },
             )
-            completeBatch(operation, result)
+            if (result == null) {
+                update(operation) {
+                    it.copy(phase = TransferSessionPhase.REJECTED, items = emptyList(), error = null)
+                }
+            } else {
+                completeBatch(operation, result)
+            }
         } catch (cancellationException: CancellationException) {
             update(operation) { current ->
                 if (current.phase.isTerminal()) current
