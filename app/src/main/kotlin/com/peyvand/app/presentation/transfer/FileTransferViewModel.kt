@@ -29,6 +29,8 @@ class FileTransferViewModel(
 
     fun rejectIncoming() = coordinator.rejectIncoming()
 
+    fun acceptBatchOffer() = coordinator.acceptBatchOffer()
+
     fun toggleBatchConsentItem(itemId: String) = coordinator.toggleBatchConsentItem(itemId)
 
     fun acceptBatchIncoming() = coordinator.acceptBatchIncoming()

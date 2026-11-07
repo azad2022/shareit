@@ -207,6 +207,30 @@ fun FileTransferSessionScreen(
                     }
                 }
 
+                if (state.phase == TransferSessionPhase.AWAITING_BATCH_OFFER_CONSENT) {
+                    Text(
+                        text = stringResource(R.string.file_transfer_batch_offer_explanation),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = viewModel::rejectIncoming,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(R.string.file_transfer_reject))
+                        }
+                        Button(
+                            onClick = viewModel::acceptBatchOffer,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(R.string.file_transfer_show_batch_manifest))
+                        }
+                    }
+                }
+
                 if (state.phase == TransferSessionPhase.AWAITING_BATCH_CONSENT) {
                     Text(
                         text = stringResource(R.string.file_transfer_batch_consent_explanation),
@@ -309,6 +333,7 @@ private fun phaseLabel(phase: TransferSessionPhase, isSender: Boolean): Int = wh
     } else {
         R.string.file_transfer_waiting_consent_receiver
     }
+    TransferSessionPhase.AWAITING_BATCH_OFFER_CONSENT -> R.string.file_transfer_batch_offer_title
     TransferSessionPhase.AWAITING_BATCH_CONSENT -> R.string.file_transfer_batch_consent_title
     TransferSessionPhase.AWAITING_DESTINATION_TREE -> R.string.file_transfer_destination_tree_picker
     TransferSessionPhase.TRANSFERRING -> R.string.file_transfer_transferring
