@@ -96,14 +96,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        // ACTION_CREATE_DOCUMENT temporarily backgrounds this Activity while the
-        // receiver waits to finish publication and return the integrity receipt.
+        // SAF document and directory pickers temporarily background this Activity
+        // while the receiver waits to publish items and return verified receipts.
         val transferPhase = (startupState as? StartupState.Ready)
             ?.fileTransferViewModel
             ?.state
             ?.value
             ?.phase
-        if (transferPhase != TransferSessionPhase.AWAITING_DESTINATION) {
+        if (transferPhase != TransferSessionPhase.AWAITING_DESTINATION &&
+            transferPhase != TransferSessionPhase.AWAITING_DESTINATION_TREE
+        ) {
             discoveryRepository.stopMonitoring()
         }
         networkEnvironmentRepository.stopMonitoring()
