@@ -3,9 +3,9 @@
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
-- **Current checkpoint:** CP-003 — Secure one-to-one generic file transfer
+- **Current checkpoint:** CP-004 — Multi-item one-to-one transfer
 - **Current branch:** `feature/secure-file-transfer` (stacked on the owner-updated CP-002 discovery branch; PR #3 remains open as Draft and is not merged)
-- **Last updated:** 2026-11-07 (CP-003C functional file transfer owner-confirmed; exact-head CI passed; repeatable physical-device evidence package remains incomplete)
+- **Last updated:** 2026-11-07 (CP-004 started; CP-003C basic one-file smoke and exact-head CI recorded)
 
 ## Milestones
 
@@ -236,3 +236,16 @@ This section supersedes earlier status bullets in this document that said the li
 
 The ordering is a proposed dependency-aware plan, not authorization to skip architecture/security review. Keep each checkpoint independently scoped with acceptance criteria and evidence. This section supersedes older top-level summaries only where they conflict with the 2026-11-07 validation update.
 
+
+
+## CP-004 — Multi-item one-to-one transfer (2026-11-07)
+
+- CP-004 starts on the isolated branch `feature/cp-004-multi-item-transfer`, based on `7237115e1ce04ab225cbad223fad77e9ed8d344f`. The base contains only the latest CP-003 documentation updates beyond the CI-validated code SHA `0bb8d6582d860a45ded777ac9432d617c2106f55`.
+- PR #3 remains open, Draft and unmerged. CP-004 is not being developed by modifying or merging PR #3.
+- The scope is one sender, one receiver and 2–32 ordered generic `content://` files. A single selected file retains the existing version-1 implementation. Batch sessions use a separate, version-2 protocol.
+- ADR-0009 records the batch-level consent model with per-item selection, immutable manifest order, item-scoped receipts and outcomes, serial resource ownership, and one receiver-selected SAF destination tree.
+- The receiver may reject individual items at the single batch-consent step. Only accepted items reach ITEM_START/ITEM_READY; source InputStreams and private stages are not opened/created before their respective authorization/readiness.
+- Files are processed sequentially with the existing 64 KiB chunk and maximum four-chunk/256 KiB flow-control caps. Item-local recoverable failures/cancellations are isolated; malformed protocol, channel or authentication failures terminate the batch.
+- Durable queue restoration, resume/process-death recovery, group transfer, multiple senders and APK/split-APK remain explicitly out of scope.
+- CP-004 source implementation, tests, lint, Debug build, artifact and physical-device evidence are pending. Checkpoint status is `IN_PROGRESS`; no CP-004 acceptance criterion is marked passed.
+- See `docs/checkpoints/CP-004-MULTI-ITEM-ONE-TO-ONE-TRANSFER.md` and `docs/decisions/ADR-0009-MULTI-ITEM-ONE-TO-ONE-TRANSFER.md`.
