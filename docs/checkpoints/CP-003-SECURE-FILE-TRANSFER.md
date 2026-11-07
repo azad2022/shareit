@@ -187,3 +187,18 @@ This entry supersedes the earlier CP-003B notes above that stated no file data p
 - This is required because coroutine cancellation alone does not guarantee that a blocking platform `InputStream.read()` is interrupted.
 - `ContentUriTransferFileSource` now wraps the provider stream so closure clears its stored reference; closing it from the cancellation path and later disposing the source handle does not close the same provider stream twice.
 - Added a JVM coordinator test with a deliberately blocking source stream. It waits until the source is opened, cancels the transfer, and asserts the source stream and authenticated channel are closed and the transfer state is `CANCELLED`.
+
+
+### 2026-11-07 — Owner-confirmed real file-transfer smoke acceptance
+
+- **Product-owner report:** on 2026-11-07, the owner explicitly confirmed that file transfer in the app was successful. This is recorded as owner-reported physical functional smoke evidence and supersedes earlier entries saying that no real file transfer had yet been reported.
+- **Substage result:** the basic CP-003C one-file transfer path is accepted by the product owner for functional operation: `PASSED` (owner-reported smoke acceptance).
+- **Evidence boundary:** the confirmation did not include a test log identifying handset model, Android/API/build, APK SHA-256 installed on each phone, sender/receiver direction, file name/type/size, destination provider, number of repetitions, or the exact test cases performed. Do not infer these details or claim they were covered.
+- **Exact-head CI:** GitHub Actions run [42392698691](https://github.com/azad2022/shareit/actions/runs/42392698691) completed with `success` on source SHA `0bb8d6582d860a45ded777ac9432d617c2106f55`. All three jobs succeeded:
+  - Build, unit tests, and lint — job `128463492116`.
+  - Android Keystore mutual-TLS loopback — API 26, job `128463492015`.
+  - Android Keystore mutual-TLS loopback — API 36, job `128463492195`.
+- **Debug APK:** workflow artifact `13581694883` (`peyvand-debug-apk`); ZIP artifact size 13,387,717 bytes; extracted `app-debug.apk` size 14,221,658 bytes. Extracted APK SHA-256: `bd279275f25554a374e04398d1aa9aab38f0b1f7d041653b10605769505661d0`. Artifact ZIP digest: `sha256:d7823624ae18034e132eeade96f3fd34d1b27e1983294675d919dd575a67e704`. The APK archive was validated after extraction.
+- **Overall checkpoint status remains `IN_PROGRESS`:** acceptance criterion 11 requires repeatable physical tests on both Samsung Galaxy A12 (SM-A125F) and ASUS X017DA, with exact OS/API/build and installed APK digest recorded. The owner's confirmation proves a successful functional smoke test, but the data needed to establish that full repeatable device matrix is not present in the report. Rejection, cancellation, zero-byte, large-file, unknown-MIME, SAF-provider failure/cleanup, source-permission revocation, and integrity-mismatch cases also remain without recorded physical evidence.
+- **No scope expansion is implied:** CP-003 still covers one sender, one receiver, one file per authenticated session. Multi-file queues, group transfer, resume/background guarantees, APK/split-APK transfer and final visual redesign remain separate checkpoints.
+
