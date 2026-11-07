@@ -172,3 +172,10 @@ This entry supersedes the earlier CP-003B notes above that stated no file data p
 - This prevents a peer with a valid authenticated session from splitting a large payload into many tiny chunks and forcing excessive staging syncs/ACK operations. The receiver continues to enforce item identity, contiguous offsets, maximum file size and four-chunk in-flight count.
 - Added a JVM regression test that sends a malformed one-byte chunk followed by another data chunk, and asserts the receiver fails closed, deletes staging, and has not issued a durability sync/ACK for that malformed window.
 - Protocol detail is recorded in ADR-0007. CP-003 remains `IN_PROGRESS` pending exact-head CI and physical file-transfer validation.
+
+
+### 2026-11-07 — Source descriptor lifecycle
+
+- Sender now passes a source-stream factory into the protocol instead of opening the URI stream before sending the manifest. The actual `ContentResolver.openInputStream()` call happens only after an authenticated receiver `ACCEPT`.
+- Rejection, consent timeout or cancellation before acceptance therefore leaves the file content stream unopened and avoids holding a provider descriptor while the receiver considers the manifest.
+- The protocol rejection test now asserts both zero source-open calls and zero source reads when the receiver rejects the manifest.
