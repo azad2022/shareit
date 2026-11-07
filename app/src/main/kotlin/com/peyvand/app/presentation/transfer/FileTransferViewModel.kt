@@ -29,7 +29,15 @@ class FileTransferViewModel(
 
     fun rejectIncoming() = coordinator.rejectIncoming()
 
+    fun toggleBatchConsentItem(itemId: String) = coordinator.toggleBatchConsentItem(itemId)
+
+    fun acceptBatchIncoming() = coordinator.acceptBatchIncoming()
+
     fun provideDestination(uri: String?) = coordinator.provideDestination(uri)
+
+    fun provideDestinationTree(uri: String?) = coordinator.provideDestinationTree(uri)
+
+    fun cancelItem(itemId: String) = coordinator.cancelItem(itemId)
 
     fun cancelTransfer() = coordinator.cancelTransfer()
 
