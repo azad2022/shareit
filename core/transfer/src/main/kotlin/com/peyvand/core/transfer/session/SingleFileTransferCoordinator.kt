@@ -131,29 +131,31 @@ class SingleFileTransferCoordinator(
         val operation = ++operationId
 
         if (isSender) {
-            val item = selectedItems.singleOrNull()
-            if (item == null) {
+            if (selectedItems.isEmpty()) {
                 update(operation) {
-                    it.copy(
-                        phase = TransferSessionPhase.FAILED,
-                        isSender = true,
-                        error = TransferSessionError.SELECTION_REQUIRED,
-                    )
+                    it.copy(phase = TransferSessionPhase.FAILED, isSender = true,
+                        error = TransferSessionError.SELECTION_REQUIRED)
                 }
                 return
             }
-            if (item.source !is ShareSource.ContentUri) {
+            if (selectedItems.size > BatchTransferManifest.MAX_ITEMS) {
                 update(operation) {
-                    it.copy(
-                        phase = TransferSessionPhase.FAILED,
-                        isSender = true,
-                        displayName = item.displayName,
-                        error = TransferSessionError.UNSUPPORTED_SOURCE,
-                    )
+                    it.copy(phase = TransferSessionPhase.FAILED, isSender = true,
+                        error = TransferSessionError.BATCH_LIMIT_EXCEEDED)
                 }
                 return
             }
-            selectedItem = item
+            if (selectedItems.any { it.source !is ShareSource.ContentUri } ||
+                selectedItems.map { it.id }.distinct().size != selectedItems.size
+            ) {
+                update(operation) {
+                    it.copy(phase = TransferSessionPhase.FAILED, isSender = true,
+                        error = TransferSessionError.UNSUPPORTED_SOURCE)
+                }
+                return
+            }
+            selectedBatchItems = selectedItems.toList()
+            if (selectedBatchItems.size == 1) selectedItem = selectedBatchItems.single()
         }
 
         val channel = connectivityRepository.claimAuthenticatedChannel()
