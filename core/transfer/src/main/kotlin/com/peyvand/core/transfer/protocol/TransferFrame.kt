@@ -27,7 +27,29 @@ enum class TransferFrameType(
     ERROR(8, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
     SESSION_CLOSE(9, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES),
     CHUNK_ACK(10, TransferFrameCodec.CHUNK_ACK_PAYLOAD_BYTES, TransferFrameCodec.CHUNK_ACK_PAYLOAD_BYTES),
-    PAIRING_APPROVED(11, 0, 0);
+    PAIRING_APPROVED(11, 0, 0),
+    BATCH_MANIFEST(12, TransferFrameCodec.MAX_CONTROL_PAYLOAD_BYTES, 16 + 2),
+    BATCH_DECISION(13, 16 + 32 + 4, 16 + 32 + 4),
+    BATCH_ITEM_START(14, 32, 32),
+    BATCH_ITEM_READY(15, 32, 32),
+    BATCH_DATA_CHUNK(
+        16,
+        16 + 16 + 8 + TransferFrameCodec.MAX_DATA_CHUNK_BYTES,
+        16 + 16 + 8 + 1,
+    ),
+    BATCH_CHUNK_ACK(17, 16 + 16 + 8, 16 + 16 + 8),
+    BATCH_ITEM_COMPLETE(18, 16 + 16 + 8 + 32, 16 + 16 + 8 + 32),
+    BATCH_ITEM_VERIFIED(19, 16 + 16 + 8 + 32, 16 + 16 + 8 + 32),
+    BATCH_ITEM_FAILED(20, 33, 33),
+    BATCH_ITEM_ABORT(21, 33, 33),
+    BATCH_ITEM_FAILED_REQUEST(22, 33, 33),
+    BATCH_ITEM_FAILED_ACK(23, 33, 33),
+    BATCH_ITEM_CANCEL_REQUEST(24, 32, 32),
+    BATCH_ITEM_CANCELLED(25, 32, 32),
+    BATCH_ITEM_CANCELLED_ACK(26, 32, 32),
+    BATCH_COMPLETE(27, 16 + 4 + 32, 16 + 4 + 32),
+    BATCH_RECEIPT(28, 16 + 4 + 32, 16 + 4 + 32),
+    BATCH_ABORT(29, 32, 32);
 
     companion object {
         internal fun fromWireCode(code: Int): TransferFrameType =
@@ -74,6 +96,7 @@ class TransferFrame(
 
 object TransferFrameCodec {
     const val CURRENT_PROTOCOL_VERSION = 1
+    const val BATCH_PROTOCOL_VERSION = 2
     const val HEADER_BYTES = 26
     const val MAX_CONTROL_PAYLOAD_BYTES = 16 * 1024
     const val MAX_DATA_CHUNK_BYTES = 64 * 1024
@@ -115,11 +138,12 @@ object TransferFrameCodec {
         }
 
         val version = headerBuffer.get().toInt() and 0xff
-        if (version != CURRENT_PROTOCOL_VERSION) {
+        if (version !in CURRENT_PROTOCOL_VERSION..BATCH_PROTOCOL_VERSION) {
             throw TransferProtocolException("Unsupported protocol version: $version")
         }
 
         val frameType = TransferFrameType.fromWireCode(headerBuffer.get().toInt() and 0xff)
+        validateTypeVersion(frameType, version)
         val sessionId = UUID(headerBuffer.long, headerBuffer.long)
         val payloadLength = headerBuffer.int
         validatePayloadLength(frameType, payloadLength)
@@ -131,12 +155,22 @@ object TransferFrameCodec {
     }
 
     private fun validate(frame: TransferFrame) {
-        if (frame.protocolVersion != CURRENT_PROTOCOL_VERSION) {
+        validateTypeVersion(frame.type, frame.protocolVersion)
+        validatePayloadLength(frame.type, frame.payloadSize)
+    }
+
+    private fun validateTypeVersion(type: TransferFrameType, version: Int) {
+        val isBatchFrame = type.wireCode >= TransferFrameType.BATCH_MANIFEST.wireCode
+        if (version == CURRENT_PROTOCOL_VERSION && isBatchFrame ||
+            version == BATCH_PROTOCOL_VERSION && !isBatchFrame
+        ) {
             throw TransferProtocolException(
-                "Unsupported protocol version: ${frame.protocolVersion}",
+                "Frame type ${type.name} is not valid for protocol version $version",
             )
         }
-        validatePayloadLength(frame.type, frame.payloadSize)
+        if (version !in CURRENT_PROTOCOL_VERSION..BATCH_PROTOCOL_VERSION) {
+            throw TransferProtocolException("Unsupported protocol version: $version")
+        }
     }
 
     private fun validatePayloadLength(type: TransferFrameType, length: Int) {
