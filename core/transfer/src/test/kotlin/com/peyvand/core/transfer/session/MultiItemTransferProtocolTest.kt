@@ -6,6 +6,8 @@ import com.peyvand.core.domain.transfer.TransferStagingSink
 import com.peyvand.core.transfer.manifest.BatchTransferManifest
 import com.peyvand.core.transfer.manifest.TransferManifestItem
 import com.peyvand.core.transfer.protocol.BatchItemOutcomeStatus
+import com.peyvand.core.transfer.protocol.BatchOffer
+import com.peyvand.core.transfer.protocol.BatchOfferCodec
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -29,17 +31,20 @@ class MultiItemTransferProtocolTest {
         val firstBytes = ByteArray(150_123) { (it * 17).toByte() }
         val secondBytes = byteArrayOf()
         val thirdBytes = "متن آزمایشی پیوند".toByteArray(Charsets.UTF_8)
+        val fourthBytes = "pdf payload".toByteArray(Charsets.UTF_8)
         val batchId = UUID.randomUUID()
         val items = listOf(
             manifest("large.bin", "application/octet-stream", firstBytes.size.toLong()),
             manifest("empty", "application/octet-stream", 0L),
             manifest("یادداشت.txt", "text/plain", thirdBytes.size.toLong()),
+            manifest("گزارش نهایی.pdf", "application/pdf", fourthBytes.size.toLong()),
         )
         val manifest = BatchTransferManifest(batchId, items)
         val sourceBytes = mapOf(
             items[0].itemId to firstBytes,
             items[1].itemId to secondBytes,
             items[2].itemId to thirdBytes,
+            items[3].itemId to fourthBytes,
         )
         val senderInput = PipedInputStream(512 * 1024)
         val receiverOutput = PipedOutputStream(senderInput)
@@ -57,17 +62,18 @@ class MultiItemTransferProtocolTest {
             val receiving = async(Dispatchers.IO) {
                 receiver.receiveBatch(
                     sessionId = batchId,
-                    firstManifestFrame = com.peyvand.core.transfer.protocol.TransferFrame(
+                    firstOfferFrame = com.peyvand.core.transfer.protocol.TransferFrame(
                         2,
-                        com.peyvand.core.transfer.protocol.TransferFrameType.BATCH_MANIFEST,
+                        com.peyvand.core.transfer.protocol.TransferFrameType.BATCH_OFFER,
                         batchId,
-                        com.peyvand.core.transfer.manifest.BatchTransferManifestCodec.encode(manifest),
+                        BatchOfferCodec.encode(BatchOffer(batchId)),
                     ),
+                    acquireOfferConsent = { offer -> offer.batchId == batchId },
                     channelInput = receiverInput,
                     channelOutput = receiverOutput,
                     acquireSelection = {
                         BatchReceiverSelection(
-                            acceptedItemIds = setOf(items[0].itemId, items[1].itemId),
+                            acceptedItemIds = setOf(items[0].itemId, items[1].itemId, items[2].itemId),
                             destinationTreeUri = "content://tree/peyvand",
                         )
                     },
@@ -107,7 +113,7 @@ class MultiItemTransferProtocolTest {
             val sent = withTimeout(15_000L) { sending.await() }
             val receivedResult = withTimeout(15_000L) { receiving.await() }
 
-            assertEquals(2, sent.completedCount)
+            assertEquals(3, sent.completedCount)
             assertEquals(1, sent.rejectedCount)
             assertEquals(0, sent.failedCount)
             assertEquals(sent.outcomes, receivedResult.outcomes)
@@ -117,7 +123,8 @@ class MultiItemTransferProtocolTest {
             ) })
             assertArrayEquals(firstBytes, received[items[0].itemId])
             assertArrayEquals(secondBytes, received[items[1].itemId])
-            assertTrue(items[2].itemId !in received)
+            assertArrayEquals(thirdBytes, received[items[2].itemId])
+            assertTrue(items[3].itemId !in received)
             assertEquals(1, peakStages)
             assertEquals(0, activeStages)
         } finally {

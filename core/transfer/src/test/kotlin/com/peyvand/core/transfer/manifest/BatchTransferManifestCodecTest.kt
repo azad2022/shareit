@@ -1,5 +1,7 @@
 package com.peyvand.core.transfer.manifest
 
+import com.peyvand.core.transfer.protocol.BatchOffer
+import com.peyvand.core.transfer.protocol.BatchOfferCodec
 import com.peyvand.core.transfer.protocol.TransferProtocolException
 import java.util.UUID
 import org.junit.Assert.assertEquals
@@ -8,6 +10,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BatchTransferManifestCodecTest {
+
+    @Test
+    fun metadataFreeOfferContainsOnlyTheRandomBatchIdentifier() {
+        val offer = BatchOffer(UUID.randomUUID())
+        val payload = BatchOfferCodec.encode(offer)
+
+        assertEquals(BatchOfferCodec.PAYLOAD_BYTES, payload.size)
+        assertEquals(offer, BatchOfferCodec.decode(payload))
+        assertTrue(runCatching { BatchOfferCodec.decode(payload + byteArrayOf(0)) }.isFailure)
+    }
+
     @Test
     fun roundTripsThirtyTwoItemsAndPreservesUnicodeAndOrder() {
         val items = (0 until 32).map { index ->
