@@ -128,6 +128,7 @@ class SingleFileTransferCoordinator(
     ) {
         if (prepared) return
         prepared = true
+        cancelledBeforeStart.clear()
         val operation = ++operationId
 
         if (isSender) {
@@ -567,10 +568,11 @@ class SingleFileTransferCoordinator(
         operation: Long,
         firstFrame: com.peyvand.core.transfer.protocol.TransferFrame,
     ) {
+        val maximumBytes = storageRepository.maximumReceiveSizeBytes()
         val cancellation = Channel<UUID>(Channel.UNLIMITED)
         batchCancellationRequests = cancellation
         try {
-            val result = MultiItemTransferProtocol(Long.MAX_VALUE).receiveBatch(
+            val result = MultiItemTransferProtocol(maximumBytes).receiveBatch(
                 sessionId = channel.sessionId,
                 firstManifestFrame = firstFrame,
                 channelInput = channel.inputStream,
@@ -1062,6 +1064,7 @@ class SingleFileTransferCoordinator(
 
     private fun TransferSessionPhase.isTerminal(): Boolean = when (this) {
         TransferSessionPhase.COMPLETED,
+        TransferSessionPhase.PARTIALLY_COMPLETED,
         TransferSessionPhase.REJECTED,
         TransferSessionPhase.CANCELLED,
         TransferSessionPhase.FAILED,
