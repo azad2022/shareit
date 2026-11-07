@@ -399,6 +399,15 @@ fun FileSelectionScreen(
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
+                    if (selectedItems.size != 1 ||
+                        selectedItems.singleOrNull()?.source !is ShareSource.ContentUri
+                    ) {
+                        Text(
+                            text = stringResource(R.string.file_transfer_selection_required),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),

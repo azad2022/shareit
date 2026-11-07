@@ -7,11 +7,9 @@ import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.domain.files.ShareItem
 import com.peyvand.core.domain.files.ShareSource
 import com.peyvand.core.domain.transfer.TransferFileStorageRepository
-import com.peyvand.core.domain.transfer.TransferStagingSink
 import com.peyvand.core.transfer.manifest.TransferManifestItem
 import com.peyvand.core.transfer.session.SingleFileTransferProtocol
 import com.peyvand.core.transfer.session.TransferSessionOutcome
-import java.io.IOException
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -290,7 +288,8 @@ class FileTransferViewModel(
                     if (!accepted) {
                         null
                     } else {
-                        val staging = storageRepository.createPrivateStaging(maximumBytes)
+                        val stagingLimit = manifest.sizeBytes ?: maximumBytes
+                        val staging = storageRepository.createPrivateStaging(stagingLimit)
                         update(operation) {
                             it.copy(phase = FileTransferPhase.TRANSFERRING)
                         }

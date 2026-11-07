@@ -63,6 +63,7 @@
     <string name="file_selected_size">حجم موارد انتخاب‌شده: %1$s</string>
     <string name="file_selected_unknown_size">اندازهٔ بعضی موارد از سوی ارائه‌دهندهٔ فایل اعلام نشده است؛ جمع بالا فقط شامل اندازه‌های قابل‌دسترسی است.</string>
     <string name="file_selection_clear">پاک کردن انتخاب</string>
+    <string name="file_transfer_selection_required">برای این مرحله دقیقاً یک فایل با منبع قابل‌دسترسی انتخاب کنید. ارسال چند فایل و APK هنوز فعال نیست.</string>
     <plurals name="file_selected_count">
         <item quantity="one">%d مورد انتخاب شده</item>
         <item quantity="other">%d مورد انتخاب شده</item>

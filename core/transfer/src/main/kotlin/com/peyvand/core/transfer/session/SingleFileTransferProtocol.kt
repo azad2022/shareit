@@ -105,7 +105,7 @@ class SingleFileTransferProtocol(
                 context.ensureActive()
                 if (!window.hasCapacity) {
                     output.flush()
-                    receiveAcknowledgement(input, sessionId, window)
+                    onProgress(receiveAcknowledgement(input, sessionId, window))
                 }
 
                 val count = readChunk(source, chunkBuffer)
@@ -134,11 +134,10 @@ class SingleFileTransferProtocol(
                 )
                 digest.update(chunkBytes)
                 totalBytes += countLong
-                onProgress(totalBytes)
 
                 if (!window.hasCapacity) {
                     output.flush()
-                    receiveAcknowledgement(input, sessionId, window)
+                    onProgress(receiveAcknowledgement(input, sessionId, window))
                 }
             }
 
@@ -150,7 +149,7 @@ class SingleFileTransferProtocol(
             output.flush()
             while (window.inFlightChunkCount > 0) {
                 context.ensureActive()
-                receiveAcknowledgement(input, sessionId, window)
+                onProgress(receiveAcknowledgement(input, sessionId, window))
             }
 
             val senderCompletion = TransferCompletionRecord(
@@ -323,7 +322,7 @@ class SingleFileTransferProtocol(
         input: InputStream,
         sessionId: UUID,
         window: TransferSendWindow,
-    ) {
+    ): Long {
         val frame = readSessionFrame(input, sessionId)
         if (frame.type == TransferFrameType.ERROR) {
             throw TransferProtocolException("Receiver rejected a data chunk")
@@ -333,6 +332,7 @@ class SingleFileTransferProtocol(
         }
         val acknowledgement = TransferChunkAcknowledgementCodec.decode(frame.payloadBytes())
         window.acknowledge(acknowledgement)
+        return window.acknowledgedOffsetBytes
     }
 
     private suspend fun readChunk(source: InputStream, buffer: ByteArray): Int {
