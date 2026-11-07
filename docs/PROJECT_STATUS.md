@@ -4,8 +4,8 @@
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-003 — Secure one-to-one generic file transfer
-- **Current branch:** `feature/secure-file-transfer` (stacked on owner-updated CP-002 discovery branch; PR #2 remains open and unmerged)
-- **Last updated:** 2026-11-07 (CP-003C single-file transfer runtime integrated; exact-head CI and physical file-transfer validation pending)
+- **Current branch:** `feature/secure-file-transfer` (stacked on the owner-updated CP-002 discovery branch; PR #3 remains open as Draft and is not merged)
+- **Last updated:** 2026-11-07 (CP-003C functional file transfer owner-confirmed; exact-head CI passed; repeatable physical-device evidence package remains incomplete)
 
 ## Milestones
 
@@ -215,3 +215,24 @@ This section supersedes earlier status bullets in this document that said the li
 - Both peers preserve an explicit `VERIFYING` state while the final ACK and authenticated receipt/publication steps finish.
 - SAF publication uses bounded, cancellation-aware copy and read-back digest loops. Provider deletion is best-effort; a provider that will not confirm deletion cannot be treated as a successful cleanup.
 - Exact-head CI and the owner’s physical file-transfer test remain required. CP-003 is still `IN_PROGRESS`; no physical real-file transfer is recorded yet.
+
+
+## 2026-11-07 — Latest authoritative CP-003C acceptance update
+
+- The product owner explicitly confirmed that file transfer is successful. Record the basic one-file, one-to-one functional smoke acceptance as `PASSED` based on that owner report.
+- The exact source head is `0bb8d6582d860a45ded777ac9432d617c2106f55` on `feature/secure-file-transfer`. Exact-head GitHub Actions run [42392698691](https://github.com/azad2022/shareit/actions/runs/42392698691) completed successfully. All 3 jobs passed: build/unit-tests/lint; Android Keystore mTLS loopback on API 26; and Android Keystore mTLS loopback on API 36.
+- Debug APK artifact `13581694883` was produced. Extracted APK size: 14,221,658 bytes. SHA-256: `bd279275f25554a374e04398d1aa9aab38f0b1f7d041653b10605769505661d0`. Artifact ZIP digest: `sha256:d7823624ae18034e132eeade96f3fd34d1b27e1983294675d919dd575a67e704`.
+- **CP-003 overall remains `IN_PROGRESS`**, not `PASSED`: the owner confirmation does not include the exact handset/API/build, installed APK hash, sender/receiver direction, payload characteristics, repeat count, or coverage of the full acceptance matrix required by criterion 11. The earlier notes that said no physical transfer had been reported are superseded by this update; they remain historical statements about the earlier state.
+- This update does not assert that zero-byte/large/unknown-MIME files, all SAF providers, rejection/cancellation, cleanup, source-permission revocation, hash mismatch, resume, group transfer, APK/split APK, or background operation have been physically validated.
+- PR #3 remains open and Draft. Do not merge it without explicit owner authorization.
+
+### Recommended next checkpoint sequence (planning only)
+
+1. **CP-004 — Multi-item one-to-one transfer:** selection of multiple arbitrary user-authorized files, a stable queue/manifest model, per-item consent/status, deterministic order, per-item integrity receipts, cancellation/failure isolation, and queue recovery tests. Preserve the current secure single-file path.
+2. **CP-005 — Android application-package transfer:** PackageManager visibility review, supported extraction of base and required split APKs, package/signing metadata, compatibility checks, and user-approved PackageInstaller handoff. Do not imply transfer of private app data or silent installation.
+3. **CP-006 — One-sender-to-many group transfer:** independent consent, progress, cancellation, failure, integrity and completion per receiver; enforce bounded concurrency/backpressure and document that radio throughput is shared. No multi-sender group mode.
+4. **CP-007 — Durable resume and long-running transfer reliability:** durable checkpoints, authenticated resume negotiation, source/destination identity validation, interrupted process/reconnect behavior, lifecycle/background policy, cleanup and transfer history.
+5. **CP-008 — Product-wide UX and release hardening:** PEYVAND design system, all relevant UI states, accessibility, RTL/LTR and localization, purposeful motion, physical-device compatibility matrix, performance/thermal/battery measurements and distribution-policy review.
+
+The ordering is a proposed dependency-aware plan, not authorization to skip architecture/security review. Keep each checkpoint independently scoped with acceptance criteria and evidence. This section supersedes older top-level summaries only where they conflict with the 2026-11-07 validation update.
+
