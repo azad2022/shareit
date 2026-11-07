@@ -214,13 +214,17 @@ class SingleFileTransferProtocol(
         ) -> Boolean,
         onProgress: (Long) -> Unit = {},
         onVerifying: () -> Unit = {},
+        firstManifestFrame: TransferFrame? = null,
     ): TransferSessionOutcome {
         val input = BufferedInputStream(channelInput, IO_BUFFER_BYTES)
         val output = BufferedOutputStream(channelOutput, IO_BUFFER_BYTES)
         val context = currentCoroutineContext()
-        val manifestFrame = readSessionFrame(input, sessionId)
-        if (manifestFrame.type != TransferFrameType.MANIFEST) {
-            throw TransferProtocolException("Expected a file manifest")
+        val manifestFrame = firstManifestFrame ?: readSessionFrame(input, sessionId)
+        if (manifestFrame.sessionId != sessionId ||
+            manifestFrame.protocolVersion != TransferFrameCodec.CURRENT_PROTOCOL_VERSION ||
+            manifestFrame.type != TransferFrameType.MANIFEST
+        ) {
+            throw TransferProtocolException("Expected a version-1 file manifest for this session")
         }
         val manifest = com.peyvand.core.transfer.manifest.TransferManifestCodec
             .decode(manifestFrame.payloadBytes())
