@@ -43,6 +43,10 @@ import com.peyvand.app.presentation.home.DeviceDiscoveryScreen
 import com.peyvand.app.presentation.home.MainHomeScreen
 import com.peyvand.app.presentation.language.LanguageSelectionScreen
 import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
+import com.peyvand.app.presentation.transfer.FileTransferViewModel
+import com.peyvand.app.presentation.transfer.FileTransferSessionScreen
+import com.peyvand.core.domain.connection.SecureSessionStatus
+import com.peyvand.core.domain.connection.PeerConnectionStatus
 import com.peyvand.core.domain.discovery.DiscoveryRole
 
 private enum class HomeDestination {
@@ -52,6 +56,7 @@ private enum class HomeDestination {
     RECEIVE_DISCOVERY,
     FILES,
     ACTIVITY,
+    TRANSFER,
 }
 
 @Composable
@@ -61,14 +66,48 @@ fun PeyvandApp(
     networkEnvironmentViewModel: NetworkEnvironmentViewModel,
     shareSelectionViewModel: ShareSelectionViewModel,
     peerConnectionViewModel: PeerConnectionViewModel,
+    fileTransferViewModel: FileTransferViewModel,
 ) {
     val uiState by languageViewModel.uiState.collectAsStateWithLifecycle()
+    val connectionState by peerConnectionViewModel.state.collectAsStateWithLifecycle()
+    val secureSession by peerConnectionViewModel.secureSession.collectAsStateWithLifecycle()
+    val selectionState by shareSelectionViewModel.state.collectAsStateWithLifecycle()
+    val selectedItems = selectionState.selectedItems.values.toList()
     var destination by rememberSaveable { mutableStateOf(HomeDestination.HOME) }
+
+    LaunchedEffect(
+        destination,
+        secureSession.status,
+        connectionState.status,
+        connectionState.locallyInitiated,
+        selectedItems,
+    ) {
+        val isDiscoveryRoute = destination == HomeDestination.SEND_DISCOVERY ||
+            destination == HomeDestination.RECEIVE_DISCOVERY
+        if (isDiscoveryRoute && secureSession.status == SecureSessionStatus.AUTHENTICATED) {
+            destination = HomeDestination.TRANSFER
+        } else if (
+            destination == HomeDestination.TRANSFER &&
+            secureSession.status == SecureSessionStatus.AUTHENTICATED &&
+            connectionState.status == PeerConnectionStatus.GROUP_FORMED
+        ) {
+            fileTransferViewModel.prepareSession(
+                isSender = connectionState.locallyInitiated,
+                selectedItems = selectedItems,
+            )
+        }
+    }
 
     BackHandler(
         enabled = uiState is MainUiState.Home && destination != HomeDestination.HOME,
     ) {
-        if (destination == HomeDestination.SEND_DISCOVERY ||
+        if (destination == HomeDestination.TRANSFER) {
+            fileTransferViewModel.cancelTransfer()
+            fileTransferViewModel.leaveSession()
+            shareSelectionViewModel.clearSelection()
+            peerConnectionViewModel.disconnect()
+        } else if (
+            destination == HomeDestination.SEND_DISCOVERY ||
             destination == HomeDestination.RECEIVE_DISCOVERY
         ) {
             peerConnectionViewModel.disconnect()
@@ -79,6 +118,7 @@ fun PeyvandApp(
             HomeDestination.RECEIVE_DISCOVERY,
             HomeDestination.FILES,
             HomeDestination.ACTIVITY,
+            HomeDestination.TRANSFER,
             -> HomeDestination.HOME
             HomeDestination.HOME -> HomeDestination.HOME
         }
@@ -152,6 +192,16 @@ fun PeyvandApp(
 
                 HomeDestination.ACTIVITY -> TransferActivityScreen(
                     onBack = { destination = HomeDestination.HOME },
+                )
+
+                HomeDestination.TRANSFER -> FileTransferSessionScreen(
+                    viewModel = fileTransferViewModel,
+                    onBack = {
+                        fileTransferViewModel.leaveSession()
+                        shareSelectionViewModel.clearSelection()
+                        peerConnectionViewModel.disconnect()
+                        destination = HomeDestination.HOME
+                    },
                 )
             }
         }
