@@ -202,11 +202,26 @@ class MultiItemTransferProtocol(
                 val sourceStream = try {
                     source.openStream()
                 } catch (cancellation: CancellationException) {
-                    runCatching { source.close() }
+                    try {
+                        source.close()
+                    } catch (closeFailure: Throwable) {
+                        cancellation.addSuppressed(closeFailure)
+                    }
                     throw cancellation
-                } catch (_: Exception) {
-                    runCatching { source.close() }
-                    val outcome = abortItem(reader, output, sessionId, reference, BatchItemFailureCode.SOURCE_UNAVAILABLE)
+                } catch (sourceFailure: Exception) {
+                    try {
+                        source.close()
+                    } catch (closeFailure: Throwable) {
+                        sourceFailure.addSuppressed(closeFailure)
+                        throw sourceFailure
+                    }
+                    val outcome = abortItem(
+                        reader,
+                        output,
+                        sessionId,
+                        reference,
+                        BatchItemFailureCode.SOURCE_UNAVAILABLE,
+                    )
                     addOutcome(outcomes, outcome, onItemOutcome)
                     return@forEachIndexed
                 }
@@ -227,7 +242,19 @@ class MultiItemTransferProtocol(
                     )
                 } finally {
                     onActiveSourceChanged(item.itemId, null)
-                    source.close()
+                    var closeFailure: Throwable? = null
+                    try {
+                        sourceStream.close()
+                    } catch (failure: Throwable) {
+                        closeFailure = failure
+                    }
+                    try {
+                        source.close()
+                    } catch (failure: Throwable) {
+                        if (closeFailure == null) closeFailure = failure
+                        else closeFailure.addSuppressed(failure)
+                    }
+                    closeFailure?.let { throw it }
                 }
                 addOutcome(outcomes, outcome, onItemOutcome)
             }
