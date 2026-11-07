@@ -39,7 +39,7 @@
 
     <string name="file_selection_title">انتخاب فایل‌ها</string>
     <string name="file_manager_title">فایل‌های دستگاه</string>
-    <string name="file_selection_subtitle">در این مرحله یک فایل را انتخاب کنید. انتقال دسته‌ای و ارسال برنامه‌ها در مرحله‌های بعدی اضافه می‌شوند.</string>
+    <string name="file_selection_subtitle">یک تا ۳۲ فایل دلخواه را برای یک نوبت انتقال انتخاب کنید. ترتیب انتخاب شما حفظ می‌شود؛ ارسال برنامه‌ها در مرحلهٔ جداگانه فعال خواهد شد.</string>
     <string name="file_category_music">موسیقی</string>
     <string name="file_category_photos">عکس</string>
     <string name="file_category_apps">برنامه‌ها</string>
@@ -215,4 +215,23 @@
     <string name="file_transfer_progress">دادهٔ منتقل‌شده: %1$s</string>
     <string name="file_transfer_unknown_size">اندازهٔ فایل از منبع اعلام نشده است.</string>
     <string name="file_transfer_destination_picker">در حال باز کردن محل ذخیره‌سازی…</string>
+
+    <string name="file_transfer_batch_consent_title">بررسی و انتخاب فایل‌های دریافتی</string>
+    <string name="file_transfer_batch_consent_explanation">فهرست زیر از دستگاه فرستنده دریافت شده است. فقط فایل‌هایی را که می‌خواهید دریافت کنید علامت بزنید؛ محتوای فایل‌ها تا تأیید و انتخاب محل ذخیره ارسال نمی‌شود.</string>
+    <string name="file_transfer_accept_selected">دریافت فایل‌های انتخاب‌شده</string>
+    <string name="file_transfer_destination_tree_picker">یک پوشه برای ذخیره فایل‌های پذیرفته‌شده انتخاب کنید…</string>
+    <string name="file_transfer_partially_completed">انتقال پایان یافت، اما نتیجهٔ همهٔ فایل‌ها یکسان نیست. وضعیت هر فایل را جداگانه بررسی کنید.</string>
+    <string name="file_transfer_error_batch_limit">در هر نوبت حداکثر ۳۲ فایل قابل انتخاب است.</string>
+    <string name="file_transfer_batch_items_count">فهرست انتقال (%1$d فایل)</string>
+    <string name="file_transfer_item_progress">%1$s از %2$s</string>
+    <string name="file_transfer_cancel_item">لغو این فایل</string>
+    <string name="file_transfer_item_queued">در صف</string>
+    <string name="file_transfer_item_waiting">در انتظار تأیید گیرنده</string>
+    <string name="file_transfer_item_transferring">در حال انتقال</string>
+    <string name="file_transfer_item_verifying">در حال بررسی صحت</string>
+    <string name="file_transfer_item_publishing">در حال ذخیره‌سازی</string>
+    <string name="file_transfer_item_completed">تکمیل و تأیید شد</string>
+    <string name="file_transfer_item_rejected">رد شد</string>
+    <string name="file_transfer_item_cancelled">لغو شد</string>
+    <string name="file_transfer_item_failed">ناموفق</string>
 </resources>
