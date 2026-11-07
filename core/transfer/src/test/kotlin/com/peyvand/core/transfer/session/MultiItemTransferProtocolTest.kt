@@ -211,6 +211,162 @@ class MultiItemTransferProtocolTest {
         }
     }
 
+
+    @Test
+    fun cancellingTheActiveItemKeepsTheNextItemTransferable() = runBlocking {
+        val firstBytes = ByteArray(3 * 1024 * 1024) { (it * 13).toByte() }
+        val secondBytes = "second item remains valid".toByteArray(Charsets.UTF_8)
+        val batchId = UUID.randomUUID()
+        val items = listOf(
+            manifest("large-first.bin", "application/octet-stream", firstBytes.size.toLong()),
+            manifest("بعدی.txt", "text/plain", secondBytes.size.toLong()),
+        )
+        val manifest = BatchTransferManifest(batchId, items)
+        val bytesById = mapOf(items[0].itemId to firstBytes, items[1].itemId to secondBytes)
+        val senderInput = PipedInputStream(512 * 1024)
+        val receiverOutput = PipedOutputStream(senderInput)
+        val receiverInput = PipedInputStream(512 * 1024)
+        val senderOutput = PipedOutputStream(receiverInput)
+        val senderCancellation = Channel<UUID>(Channel.UNLIMITED)
+        val receiverCancellation = Channel<UUID>(Channel.UNLIMITED)
+        val cancellationRequested = java.util.concurrent.atomic.AtomicBoolean(false)
+        val received = mutableMapOf<UUID, ByteArray>()
+
+        try {
+            val receiving = async(Dispatchers.IO) {
+                MultiItemTransferProtocol(4L * 1024L * 1024L).receiveBatch(
+                    sessionId = batchId,
+                    firstOfferFrame = offerFrame(batchId),
+                    channelInput = receiverInput,
+                    channelOutput = receiverOutput,
+                    acquireOfferConsent = { true },
+                    acquireSelection = {
+                        BatchReceiverSelection(items.map { it.itemId }.toSet(), "content://tree/peyvand")
+                    },
+                    acquireStaging = { MemoryStage {} },
+                    publishVerified = { item, staging, _, completion ->
+                        val content = staging.openVerifiedInputStream().use { it.readBytes() }
+                        assertEquals(item.itemId, completion.itemId)
+                        received[item.itemId] = content
+                        true
+                    },
+                    cancellationRequests = receiverCancellation,
+                )
+            }
+            val sending = async(Dispatchers.IO) {
+                MultiItemTransferProtocol(4L * 1024L * 1024L).sendBatch(
+                    sessionId = batchId,
+                    manifest = manifest,
+                    channelInput = senderInput,
+                    channelOutput = senderOutput,
+                    openSource = { TestSource(it, requireNotNull(bytesById[it.itemId])) },
+                    cancellationRequests = senderCancellation,
+                    onItemProgress = { itemId, bytes ->
+                        if (itemId == items[0].itemId && bytes > 0L &&
+                            cancellationRequested.compareAndSet(false, true)
+                        ) {
+                            senderCancellation.trySend(itemId)
+                        }
+                    },
+                )
+            }
+
+            val sent = withTimeout(20_000L) { sending.await() }
+            val receivedResult = requireNotNull(withTimeout(20_000L) { receiving.await() })
+            assertTrue(cancellationRequested.get())
+            assertEquals(BatchItemOutcomeStatus.CANCELLED, sent.outcomes[0].status)
+            assertEquals(BatchItemOutcomeStatus.COMPLETED, sent.outcomes[1].status)
+            assertEquals(sent.outcomes, receivedResult.outcomes)
+            assertTrue(items[0].itemId !in received)
+            assertArrayEquals(secondBytes, received[items[1].itemId])
+        } finally {
+            senderCancellation.close()
+            receiverCancellation.close()
+            runCatching { senderInput.close() }
+            runCatching { senderOutput.close() }
+            runCatching { receiverInput.close() }
+            runCatching { receiverOutput.close() }
+        }
+    }
+
+    @Test
+    fun destinationFailureIsScopedToItsItemAndNextItemCompletes() = runBlocking {
+        val firstBytes = "destination must reject this item".toByteArray(Charsets.UTF_8)
+        val secondBytes = "the next item can still be published".toByteArray(Charsets.UTF_8)
+        val batchId = UUID.randomUUID()
+        val items = listOf(
+            manifest("first.txt", "text/plain", firstBytes.size.toLong()),
+            manifest("second.txt", "text/plain", secondBytes.size.toLong()),
+        )
+        val manifest = BatchTransferManifest(batchId, items)
+        val bytesById = mapOf(items[0].itemId to firstBytes, items[1].itemId to secondBytes)
+        val senderInput = PipedInputStream(128 * 1024)
+        val receiverOutput = PipedOutputStream(senderInput)
+        val receiverInput = PipedInputStream(128 * 1024)
+        val senderOutput = PipedOutputStream(receiverInput)
+        val senderCancellation = Channel<UUID>(Channel.UNLIMITED)
+        val receiverCancellation = Channel<UUID>(Channel.UNLIMITED)
+        val published = mutableSetOf<UUID>()
+
+        try {
+            val receiving = async(Dispatchers.IO) {
+                MultiItemTransferProtocol(1024 * 1024L).receiveBatch(
+                    sessionId = batchId,
+                    firstOfferFrame = offerFrame(batchId),
+                    channelInput = receiverInput,
+                    channelOutput = receiverOutput,
+                    acquireOfferConsent = { true },
+                    acquireSelection = {
+                        BatchReceiverSelection(items.map { it.itemId }.toSet(), "content://tree/peyvand")
+                    },
+                    acquireStaging = { MemoryStage {} },
+                    publishVerified = { item, staging, _, _ ->
+                        if (item.itemId == items[0].itemId) {
+                            false
+                        } else {
+                            val content = staging.openVerifiedInputStream().use { it.readBytes() }
+                            assertArrayEquals(secondBytes, content)
+                            published += item.itemId
+                            true
+                        }
+                    },
+                    cancellationRequests = receiverCancellation,
+                )
+            }
+            val sending = async(Dispatchers.IO) {
+                MultiItemTransferProtocol(1024 * 1024L).sendBatch(
+                    sessionId = batchId,
+                    manifest = manifest,
+                    channelInput = senderInput,
+                    channelOutput = senderOutput,
+                    openSource = { TestSource(it, requireNotNull(bytesById[it.itemId])) },
+                    cancellationRequests = senderCancellation,
+                )
+            }
+
+            val sent = withTimeout(15_000L) { sending.await() }
+            val receivedResult = requireNotNull(withTimeout(15_000L) { receiving.await() })
+            assertEquals(BatchItemOutcomeStatus.FAILED, sent.outcomes[0].status)
+            assertEquals(BatchItemOutcomeStatus.COMPLETED, sent.outcomes[1].status)
+            assertEquals(sent.outcomes, receivedResult.outcomes)
+            assertEquals(setOf(items[1].itemId), published)
+        } finally {
+            senderCancellation.close()
+            receiverCancellation.close()
+            runCatching { senderInput.close() }
+            runCatching { senderOutput.close() }
+            runCatching { receiverInput.close() }
+            runCatching { receiverOutput.close() }
+        }
+    }
+
+    private fun offerFrame(batchId: UUID) = com.peyvand.core.transfer.protocol.TransferFrame(
+        2,
+        com.peyvand.core.transfer.protocol.TransferFrameType.BATCH_OFFER,
+        batchId,
+        BatchOfferCodec.encode(BatchOffer(batchId)),
+    )
+
     private fun manifest(name: String, mime: String, size: Long): TransferManifestItem =
         TransferManifestItem(UUID.randomUUID(), name, mime, size)
 
