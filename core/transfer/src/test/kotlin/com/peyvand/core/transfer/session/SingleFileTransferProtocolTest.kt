@@ -2,6 +2,14 @@ package com.peyvand.core.transfer.session
 
 import com.peyvand.core.domain.transfer.TransferStagingSink
 import com.peyvand.core.transfer.manifest.TransferManifestItem
+import com.peyvand.core.transfer.manifest.TransferManifestCodec
+import com.peyvand.core.transfer.protocol.TransferFrame
+import com.peyvand.core.transfer.protocol.TransferFrameCodec
+import com.peyvand.core.transfer.protocol.TransferFrameType
+import com.peyvand.core.transfer.protocol.TransferDataChunk
+import com.peyvand.core.transfer.protocol.TransferDataChunkCodec
+import com.peyvand.core.transfer.protocol.TransferCompletionRecord
+import com.peyvand.core.transfer.protocol.TransferCompletionCodec
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -129,6 +137,70 @@ class SingleFileTransferProtocolTest {
     }
 
     @Test
+    fun receiverRejectsUndersizedNonFinalChunkBeforeAdditionalDiskSyncs() = runBlocking {
+        val sessionId = UUID.randomUUID()
+        val itemId = UUID.randomUUID()
+        val manifest = TransferManifestItem(
+            itemId = itemId,
+            displayName = "malformed.bin",
+            mimeType = "application/octet-stream",
+            sizeBytes = 2L,
+        )
+        val wire = ByteArrayOutputStream()
+        TransferFrameCodec.write(
+            TransferFrame(
+                TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+                TransferFrameType.MANIFEST,
+                sessionId,
+                TransferManifestCodec.encode(manifest),
+            ),
+            wire,
+        )
+        val firstChunk = TransferDataChunk(itemId, 0L, byteArrayOf(0x01))
+        val secondChunk = TransferDataChunk(itemId, 1L, byteArrayOf(0x02))
+        listOf(firstChunk, secondChunk).forEach { chunk ->
+            TransferFrameCodec.write(
+                TransferFrame(
+                    TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+                    TransferFrameType.DATA_CHUNK,
+                    sessionId,
+                    TransferDataChunkCodec.encodePayload(chunk),
+                ),
+                wire,
+            )
+        }
+        val completion = TransferCompletionRecord(
+            itemId = itemId,
+            actualSizeBytes = 2L,
+            sha256Hex = "0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        TransferFrameCodec.write(
+            TransferFrame(
+                TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+                TransferFrameType.ITEM_COMPLETE,
+                sessionId,
+                TransferCompletionCodec.encode(completion),
+            ),
+            wire,
+        )
+
+        val staging = MemoryStagingSink()
+        val result = runCatching {
+            SingleFileTransferProtocol(1024L).receiveOne(
+                sessionId = sessionId,
+                channelInput = ByteArrayInputStream(wire.toByteArray()),
+                channelOutput = ByteArrayOutputStream(),
+                acquireConsentAndStaging = { staging },
+                publishVerified = { _, _, _ -> false },
+            )
+        }
+
+        assertTrue(result.isFailure)
+        assertTrue(staging.deleted)
+        assertTrue(staging.bytes().contentEquals(byteArrayOf(0x01)))
+    }
+
+    @Test
     fun emptyFileProducesValidSha256Receipt() = runBlocking {
         val sessionId = UUID.randomUUID()
         val manifest = TransferManifestItem(
@@ -195,6 +267,8 @@ class SingleFileTransferProtocolTest {
             check(sealed)
             return ByteArrayInputStream(output.toByteArray())
         }
+
+        fun bytes(): ByteArray = output.toByteArray()
 
         override fun delete() {
             deleted = true
