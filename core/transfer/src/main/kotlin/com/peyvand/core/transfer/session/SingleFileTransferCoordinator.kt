@@ -217,12 +217,11 @@ class SingleFileTransferCoordinator(
                     mimeType = metadata.mimeType,
                     sizeBytes = metadata.sizeBytes,
                 )
-                transferSource.openStream().use { sourceStream ->
-                    val protocol = SingleFileTransferProtocol(Long.MAX_VALUE)
-                    val outcome = protocol.sendOne(
+                val protocol = SingleFileTransferProtocol(Long.MAX_VALUE)
+                val outcome = protocol.sendOne(
                         sessionId = channel.sessionId,
                         manifest = manifest,
-                        source = sourceStream,
+                        openSource = transferSource::openStream,
                         channelInput = channel.inputStream,
                         channelOutput = channel.outputStream,
                         onWaitingForReceiverConsent = {
@@ -260,8 +259,7 @@ class SingleFileTransferCoordinator(
                             }
                         },
                     )
-                    applyOutcome(outcome, operation)
-                }
+                applyOutcome(outcome, operation)
             }
         } catch (cancellation: CancellationException) {
             throw cancellation
