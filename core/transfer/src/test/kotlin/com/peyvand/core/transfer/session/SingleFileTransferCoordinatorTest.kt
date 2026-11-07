@@ -31,7 +31,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -226,7 +225,7 @@ class SingleFileTransferCoordinatorTest {
             expectedSha256Hex: String,
         ): Boolean {
             require(destinationUri.startsWith("content://"))
-            val actualBytes = staging.openVerifiedInputStream().use(InputStream::readBytes)
+            val actualBytes = staging.openVerifiedInputStream().use { it.readBytes() }
             val expectedBytes = expectedPublishedBytes ?: error("No receiver expectation was configured")
             check(actualBytes.contentEquals(expectedBytes)) { "Published bytes differ from source bytes" }
             check(actualBytes.size.toLong() == expectedSizeBytes) { "Published byte count is incorrect" }
