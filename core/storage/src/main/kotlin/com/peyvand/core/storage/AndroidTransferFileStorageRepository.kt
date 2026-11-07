@@ -197,20 +197,26 @@ class AndroidTransferFileStorageRepository(
                 throw IOException("New destination document failed read-back integrity verification")
             }
 
-            runCatching { staging.delete() }
+            // A successful SAF publication is not considered complete while the
+            // private stage remains. Cleanup failure rolls back the new destination.
+            staging.delete()
             true
         } catch (exception: Exception) {
             val destinationRemoved = deletePartialDestination(destination)
-            runCatching { staging.delete() }
-            if (!destinationRemoved) {
+            var stagingRemoved = false
+            try {
+                staging.delete()
+                stagingRemoved = true
+            } catch (cleanupFailure: Exception) {
+                exception.addSuppressed(cleanupFailure)
+            }
+            if (!destinationRemoved || !stagingRemoved) {
                 throw IOException(
-                    "Tree publication failed and the provider did not confirm removal of the partial document",
+                    "Tree publication failed and cleanup of the destination or private stage was not confirmed",
                     exception,
                 )
             }
             throw exception
-        } finally {
-            runCatching { staging.close() }
         }
     }
 
