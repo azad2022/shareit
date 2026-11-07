@@ -19,7 +19,7 @@ import com.peyvand.app.presentation.MainViewModelFactory
 import com.peyvand.app.presentation.PeyvandApp
 import com.peyvand.app.presentation.transfer.FileTransferViewModel
 import com.peyvand.app.presentation.transfer.FileTransferViewModelFactory
-import com.peyvand.app.presentation.transfer.FileTransferPhase
+import com.peyvand.core.transfer.session.TransferSessionPhase
 import com.peyvand.app.presentation.files.ShareSelectionViewModel
 import com.peyvand.app.presentation.files.ShareSelectionViewModelFactory
 import com.peyvand.app.presentation.StartupErrorScreen
@@ -103,7 +103,7 @@ class MainActivity : AppCompatActivity() {
             ?.state
             ?.value
             ?.phase
-        if (transferPhase != FileTransferPhase.AWAITING_DESTINATION) {
+        if (transferPhase != TransferSessionPhase.AWAITING_DESTINATION) {
             discoveryRepository.stopMonitoring()
         }
         networkEnvironmentRepository.stopMonitoring()
