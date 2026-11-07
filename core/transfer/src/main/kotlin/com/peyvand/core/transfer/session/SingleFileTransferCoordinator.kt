@@ -24,6 +24,7 @@ enum class TransferSessionPhase {
     WAITING_FOR_INCOMING,
     WAITING_FOR_CONSENT,
     TRANSFERRING,
+    VERIFYING,
     AWAITING_DESTINATION,
     PUBLISHING,
     COMPLETED,
@@ -241,6 +242,11 @@ class SingleFileTransferCoordinator(
                                 it.copy(phase = TransferSessionPhase.TRANSFERRING)
                             }
                         },
+                        onWaitingForVerification = {
+                            update(operation) {
+                                it.copy(phase = TransferSessionPhase.VERIFYING)
+                            }
+                        },
                         onProgress = { bytes ->
                             update(operation) {
                                 it.copy(
@@ -351,6 +357,11 @@ class SingleFileTransferCoordinator(
                             phase = TransferSessionPhase.TRANSFERRING,
                             transferredBytes = bytes,
                         )
+                    }
+                },
+                onVerifying = {
+                    update(operation) {
+                        it.copy(phase = TransferSessionPhase.VERIFYING)
                     }
                 },
             )
