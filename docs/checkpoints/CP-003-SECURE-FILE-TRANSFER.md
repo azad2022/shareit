@@ -164,3 +164,11 @@ This entry supersedes the earlier CP-003B notes above that stated no file data p
 - The coordinator integration test now asserts the 900,123-byte transfer uses four bounded batch syncs plus the final stage seal sync, instead of syncing every one of its fourteen data chunks.
 - Progress callbacks preserve `VERIFYING` while final ACKs are drained; they cannot regress the UI to `TRANSFERRING` after the sender has finished reading its source or after the receiver has begun validating/publishing.
 - The four-chunk window is a protocol cap, not a throughput guarantee. Physical performance must be measured on the target phones.
+
+
+### 2026-11-07 — Receive-window shape hardening
+
+- Receiver now rejects any data chunk shorter than 64 KiB if a later data chunk follows it. For CP-003, only the terminal chunk may be short; zero-byte files have no data chunks. The official sender fills each non-final chunk before sending, so this does not reject compliant streams.
+- This prevents a peer with a valid authenticated session from splitting a large payload into many tiny chunks and forcing excessive staging syncs/ACK operations. The receiver continues to enforce item identity, contiguous offsets, maximum file size and four-chunk in-flight count.
+- Added a JVM regression test that sends a malformed one-byte chunk followed by another data chunk, and asserts the receiver fails closed, deletes staging, and has not issued a durability sync/ACK for that malformed window.
+- Protocol detail is recorded in ADR-0007. CP-003 remains `IN_PROGRESS` pending exact-head CI and physical file-transfer validation.
