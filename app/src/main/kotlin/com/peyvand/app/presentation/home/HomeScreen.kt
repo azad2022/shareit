@@ -74,7 +74,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.peyvand.app.R
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
+import com.peyvand.app.presentation.connection.PeerConnectionViewModel
 import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
+import com.peyvand.core.domain.connection.P2pTcpChannelFailure
+import com.peyvand.core.domain.connection.SecureSessionFailure
+import com.peyvand.core.domain.connection.SecureSessionStatus
+import com.peyvand.core.domain.connection.P2pTcpChannelStatus
+import com.peyvand.core.domain.connection.PeerConnectionFailure
+import com.peyvand.core.domain.connection.PeerConnectionStatus
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DiscoveryOperation
 import com.peyvand.core.domain.discovery.DiscoveryRole
@@ -96,8 +103,12 @@ fun DeviceDiscoveryScreen(
     subtitle: String,
     role: DiscoveryRole,
     onBack: () -> Unit,
+    peerConnectionViewModel: PeerConnectionViewModel,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val connection by peerConnectionViewModel.state.collectAsStateWithLifecycle()
+    val tcpChannel by peerConnectionViewModel.tcpChannel.collectAsStateWithLifecycle()
+    val secureSession by peerConnectionViewModel.secureSession.collectAsStateWithLifecycle()
     val networkEnvironment by networkEnvironmentViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = context as? Activity
@@ -171,9 +182,13 @@ fun DeviceDiscoveryScreen(
         userStoppedDiscovery,
         state.availability,
         state.status,
+        connection.status,
         role,
     ) {
-        if (WifiDirectDiscoveryAutoStartPolicy.shouldAutoStart(
+        val connectionActive = connection.status == PeerConnectionStatus.CONNECTING ||
+            connection.status == PeerConnectionStatus.GROUP_FORMED ||
+            connection.status == PeerConnectionStatus.DISCONNECTING
+        if (!connectionActive && WifiDirectDiscoveryAutoStartPolicy.shouldAutoStart(
                 isResumed = isScreenResumed,
                 userStopped = userStoppedDiscovery,
                 hasPermission = hasPermission,
@@ -400,7 +415,16 @@ fun DeviceDiscoveryScreen(
                 )
 
                 state.peers.forEach { peer ->
-                    PeerCard(peer = peer)
+                    PeerCard(
+                        peer = peer,
+                        onConnect = if (role == DiscoveryRole.BROWSE_ONLY) {
+                            { peerConnectionViewModel.connectToPeer(peer.id) }
+                        } else {
+                            null
+                        },
+                        isConnectEnabled = connection.status == PeerConnectionStatus.IDLE ||
+                            connection.status == PeerConnectionStatus.FAILED,
+                    )
                 }
             }
         } else if (state.status == DiscoveryStatus.DISCOVERING) {
@@ -409,6 +433,226 @@ fun DeviceDiscoveryScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+
+        if (connection.status != PeerConnectionStatus.IDLE) {
+            val connectionMessage = when (connection.status) {
+                PeerConnectionStatus.IDLE -> R.string.connection_idle
+                PeerConnectionStatus.CONNECTING -> R.string.connection_connecting
+                PeerConnectionStatus.GROUP_FORMED -> R.string.connection_group_formed
+                PeerConnectionStatus.DISCONNECTING -> R.string.connection_disconnecting
+                PeerConnectionStatus.FAILED -> when (connection.failure) {
+                    PeerConnectionFailure.INVALID_DISCOVERY_CANDIDATE ->
+                        R.string.connection_error_stale_peer
+                    PeerConnectionFailure.PERMISSION_DENIED ->
+                        R.string.connection_error_permission
+                    PeerConnectionFailure.BUSY ->
+                        R.string.connection_error_busy
+                    PeerConnectionFailure.CONNECTION_TIMEOUT ->
+                        R.string.connection_error_timeout
+                    PeerConnectionFailure.DISCONNECT_TIMEOUT ->
+                        R.string.connection_error_disconnect_timeout
+                    PeerConnectionFailure.UNSUPPORTED ->
+                        R.string.connection_error_unsupported
+                    PeerConnectionFailure.PLATFORM_ERROR,
+                    null,
+                    -> R.string.connection_error_generic
+                }
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = stringResource(connectionMessage),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (connection.status == PeerConnectionStatus.FAILED) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    if (connection.status == PeerConnectionStatus.GROUP_FORMED &&
+                        secureSession.status != SecureSessionStatus.AUTHENTICATED
+                    ) {
+                        Text(
+                            text = stringResource(R.string.connection_group_security_notice),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (connection.status == PeerConnectionStatus.CONNECTING ||
+                        connection.status == PeerConnectionStatus.GROUP_FORMED ||
+                        connection.status == PeerConnectionStatus.FAILED
+                    ) {
+                        OutlinedButton(
+                            onClick = peerConnectionViewModel::disconnect,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.connection_cancel))
+                        }
+                    }
+                }
+            }
+        }
+
+        if (secureSession.status != SecureSessionStatus.IDLE) {
+            val sessionMessage = when (secureSession.status) {
+                SecureSessionStatus.IDLE -> R.string.secure_session_title
+                SecureSessionStatus.BOOTSTRAPPING -> R.string.secure_session_bootstrapping
+                SecureSessionStatus.WAITING_FOR_SAS_APPROVAL -> R.string.secure_session_waiting_approval
+                SecureSessionStatus.TLS_HANDSHAKING -> R.string.secure_session_tls
+                SecureSessionStatus.AUTHENTICATED -> R.string.secure_session_authenticated
+                SecureSessionStatus.REJECTED -> R.string.secure_session_rejected
+                SecureSessionStatus.FAILED -> when (secureSession.failure) {
+                    SecureSessionFailure.KEYSTORE_ERROR -> R.string.secure_session_error_keystore
+                    SecureSessionFailure.INVALID_PEER_CERTIFICATE -> R.string.secure_session_error_certificate
+                    SecureSessionFailure.PARTICIPANT_ROLE_MISMATCH -> R.string.secure_session_error_role
+                    SecureSessionFailure.BOOTSTRAP_TIMEOUT,
+                    SecureSessionFailure.USER_APPROVAL_TIMEOUT -> R.string.secure_session_error_timeout
+                    SecureSessionFailure.TLS_UNAVAILABLE,
+                    SecureSessionFailure.TLS_HANDSHAKE_FAILED -> R.string.secure_session_error_tls
+                    SecureSessionFailure.MISSING_TRANSFER_ROLE,
+                    SecureSessionFailure.PROTOCOL_ERROR,
+                    SecureSessionFailure.IO_ERROR,
+                    null -> R.string.secure_session_error
+                }
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (secureSession.status == SecureSessionStatus.FAILED ||
+                        secureSession.status == SecureSessionStatus.REJECTED
+                    ) MaterialTheme.colorScheme.errorContainer
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = stringResource(R.string.secure_session_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(sessionMessage),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (secureSession.status == SecureSessionStatus.FAILED ||
+                            secureSession.status == SecureSessionStatus.REJECTED
+                        ) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (secureSession.status == SecureSessionStatus.WAITING_FOR_SAS_APPROVAL) {
+                        Text(
+                            text = stringResource(R.string.secure_session_sas_label),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = secureSession.sasCode.orEmpty(),
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        OutlinedButton(
+                            onClick = peerConnectionViewModel::approvePairing,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.secure_session_approve))
+                        }
+                        TextButton(
+                            onClick = peerConnectionViewModel::rejectPairing,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.secure_session_reject))
+                        }
+                    }
+                }
+            }
+        }
+
+        if (tcpChannel.status != P2pTcpChannelStatus.IDLE) {
+            val channelMessage = when (tcpChannel.status) {
+                P2pTcpChannelStatus.IDLE -> R.string.tcp_channel_idle
+                P2pTcpChannelStatus.RESOLVING_INTERFACE -> R.string.tcp_channel_resolving
+                P2pTcpChannelStatus.LISTENING -> R.string.tcp_channel_listening
+                P2pTcpChannelStatus.CONNECTING -> R.string.tcp_channel_connecting
+                P2pTcpChannelStatus.CONNECTED -> R.string.tcp_channel_connected
+                P2pTcpChannelStatus.FAILED -> when (tcpChannel.failure) {
+                    P2pTcpChannelFailure.GROUP_INFO_UNAVAILABLE ->
+                        R.string.tcp_channel_error_group_info
+                    P2pTcpChannelFailure.GROUP_ROLE_MISMATCH ->
+                        R.string.tcp_channel_error_group_role
+                    P2pTcpChannelFailure.INTERFACE_UNAVAILABLE,
+                    P2pTcpChannelFailure.INTERFACE_DOWN,
+                    -> R.string.tcp_channel_error_interface
+                    P2pTcpChannelFailure.LOCAL_IPV4_UNAVAILABLE ->
+                        R.string.tcp_channel_error_local_address
+                    P2pTcpChannelFailure.OWNER_ADDRESS_UNAVAILABLE ->
+                        R.string.tcp_channel_error_owner_address
+                    P2pTcpChannelFailure.OWNER_OUTSIDE_P2P_SUBNET ->
+                        R.string.tcp_channel_error_subnet
+                    P2pTcpChannelFailure.LISTENER_BIND_FAILED ->
+                        R.string.tcp_channel_error_bind
+                    P2pTcpChannelFailure.ACCEPT_TIMEOUT ->
+                        R.string.tcp_channel_error_accept_timeout
+                    P2pTcpChannelFailure.CONNECT_TIMEOUT ->
+                        R.string.tcp_channel_error_connect_timeout
+                    P2pTcpChannelFailure.CONNECTION_REJECTED ->
+                        R.string.tcp_channel_error_rejected
+                    P2pTcpChannelFailure.PERMISSION_DENIED ->
+                        R.string.tcp_channel_error_permission
+                    P2pTcpChannelFailure.IO_ERROR,
+                    null,
+                    -> R.string.tcp_channel_error_generic
+                }
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.tcp_channel_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(channelMessage),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (tcpChannel.status == P2pTcpChannelStatus.FAILED) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                    if (tcpChannel.status == P2pTcpChannelStatus.CONNECTED &&
+                        secureSession.status != SecureSessionStatus.AUTHENTICATED
+                    ) {
+                        Text(
+                            text = stringResource(R.string.tcp_channel_security_notice),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
         }
 
         if (state.status != DiscoveryStatus.IDLE) {
@@ -712,6 +956,8 @@ private fun AvailabilityCard(
 @Composable
 private fun PeerCard(
     peer: NearbyPeer,
+    onConnect: (() -> Unit)?,
+    isConnectEnabled: Boolean,
 ) {
     val rawName = peer.displayName
         ?.takeIf { it.isNotBlank() }
@@ -774,6 +1020,16 @@ private fun PeerCard(
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
+                if (onConnect != null) {
+                    Button(
+                        onClick = onConnect,
+                        enabled = isConnectEnabled &&
+                            peer.metadataStatus != DiscoveryMetadataStatus.INCOMPATIBLE,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.connection_connect))
+                    }
+                }
             }
         }
     }

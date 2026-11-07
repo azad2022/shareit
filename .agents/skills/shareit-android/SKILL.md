@@ -13,9 +13,9 @@ PEYVAND competes in the same product category as SHAREit and may use blue-and-wh
 
 ### Current repository state and implementation authorization
 
-- The master product specifications are maintained on main; active Android implementation is on feature/foundation-bootstrap.
+- The master product specifications are maintained on main. The currently active implementation branch is `feature/secure-file-transfer`, stacked on `feature/reliable-bidirectional-discovery`; the active checkpoint is CP-003.
 - The product owner explicitly authorized implementation on 2026-11-01. This authorization is already recorded in CP-001/CP-002 and must not be treated as an unanswered permission question.
-- Continue work on feature/foundation-bootstrap unless the owner explicitly selects another branch. Before repository work, read the latest skill and relevant product documents from main, then inspect the active branch and exact current file contents.
+- Continue work on the explicitly selected active branch `feature/secure-file-transfer` for CP-003; do not silently switch to another branch. Before repository work, read the latest skill and relevant product documents from main, then inspect the active branch and exact current file contents.
 - The existing authorization covers the agreed PEYVAND Android scope. It does not silently approve an unreviewed fallback transport, public backend/cloud dependency, release signing setup, or unrelated feature expansion.
 - Discussion and planning alone do not authorize additional implementation. For already authorized scope, do not ask the owner to repeat the 2026-11-01 implementation authorization.
 - Never claim that a feature works, a test passed, a build succeeded, or a device is supported without direct evidence from repository state or test output.
@@ -556,5 +556,5 @@ Before a language/UI milestone is marked PASSED, verify: all visible strings are
 
 Before a motion milestone is marked PASSED, verify: the animation is tied to a real state; it reflects actual transfer/connection data; interruptions and lifecycle changes are safe; reduced motion is supported; controls remain usable; frame stability and resource use are acceptable on the supported device matrix; and the animation does not misrepresent transfer completion.
 
-Refer to `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md` for the expanded product identity, localization, RTL, motion, and acceptance specification. Refer to `docs/PRODUCT_REQUIREMENTS.md` for the current confirmed scope. Implementation was explicitly authorized by the product owner on 2026-11-01 and is active on feature/foundation-bootstrap; future scope expansions still require explicit approval.
+Refer to `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md` for the expanded product identity, localization, RTL, motion, and acceptance specification. Refer to `docs/PRODUCT_REQUIREMENTS.md` for the current confirmed scope. CP-001/CP-002 implementation was authorized by the product owner on 2026-11-01. The owner separately authorized CP-003 on 2026-11-04; its active branch is `feature/secure-file-transfer`. The current CP-003B substage implements a P2P-interface-bound raw TCP channel under ADR-0008. Future scope expansions still require explicit approval.
 

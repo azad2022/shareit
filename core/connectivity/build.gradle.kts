@@ -8,6 +8,7 @@ android {
 
     defaultConfig {
         minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     sourceSets {
@@ -16,6 +17,9 @@ android {
         }
         named("test") {
             kotlin.directories.add("src/test/kotlin")
+        }
+        named("androidTest") {
+            kotlin.directories.add("src/androidTest/kotlin")
         }
     }
 
@@ -27,5 +31,8 @@ android {
 
 dependencies {
     implementation(project(":core:domain"))
+    implementation(project(":core:transfer"))
     implementation(libs.androidx.core.ktx)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }

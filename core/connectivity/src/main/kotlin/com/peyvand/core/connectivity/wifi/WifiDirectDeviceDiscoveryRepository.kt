@@ -18,6 +18,10 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.UUID
+import com.peyvand.core.domain.connection.AuthenticatedPeerChannel
+import com.peyvand.core.domain.connection.PeerConnectivityRepository
+import com.peyvand.core.domain.connection.SecureSessionSnapshot
+import kotlinx.coroutines.flow.StateFlow
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
 import com.peyvand.core.domain.discovery.DiscoveryCandidateRegistry
@@ -42,7 +46,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class WifiDirectDeviceDiscoveryRepository(
     context: Context,
-) : DeviceDiscoveryRepository {
+) : DeviceDiscoveryRepository, PeerConnectivityRepository {
 
     private val appContext = context.applicationContext
     private val packageManager = appContext.packageManager
@@ -54,13 +58,71 @@ class WifiDirectDeviceDiscoveryRepository(
     private val mutableSnapshot = MutableStateFlow(DeviceDiscoverySnapshot())
     override val snapshot = mutableSnapshot.asStateFlow()
 
+    @Volatile
     private var channel: WifiP2pManager.Channel? = null
+    @Volatile
     private var monitoring = false
     private var receiverRegistered = false
     private var p2pEnabled: Boolean? = null
     private var generation = 0L
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val connectionController by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        WifiDirectPeerConnectionController(
+            mainHandler = mainHandler,
+            managerProvider = { wifiP2pManager },
+            channelProvider = { channel },
+            discoverySnapshotProvider = { mutableSnapshot.value },
+            isMonitoring = { monitoring },
+            isReceiverRegistered = { receiverRegistered },
+            hasRequiredRuntimePermission = ::hasRequiredRuntimePermission,
+            onGroupFormed = { snapshot ->
+                stopDiscovery()
+                tcpChannelController.value.start(snapshot)
+                secureSessionController.value.start(snapshot)
+            },
+            onGroupEnded = {
+                if (secureSessionController.isInitialized()) {
+                    secureSessionController.value.stop()
+                }
+                if (tcpChannelController.isInitialized()) {
+                    tcpChannelController.value.stop()
+                }
+            },
+        )
+    }
+
+    private val secureSessionController = lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        WifiDirectSecureSessionController(
+            tcpChannelProvider = { tcpChannelController.value.tcpChannel },
+            rawSocketProvider = { tcpChannelController.value.connectedSocketForSecurityUpgrade() },
+        )
+    }
+
+    private val tcpChannelController = lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        WifiDirectTcpChannelController(
+            managerProvider = { wifiP2pManager },
+            channelProvider = { channel },
+            isMonitoring = { monitoring },
+            hasRequiredRuntimePermission = ::hasRequiredRuntimePermission,
+        )
+    }
+
+    override val connection
+        get() = connectionController.connection
+
+    override val tcpChannel
+        get() = tcpChannelController.value.tcpChannel
+
+    override val secureSession: StateFlow<SecureSessionSnapshot>
+        get() = secureSessionController.value.secureSession
+
+    override fun approvePairing() = secureSessionController.value.approvePairing()
+
+    override fun rejectPairing() = secureSessionController.value.rejectPairing()
+
+    override fun claimAuthenticatedChannel(): AuthenticatedPeerChannel? =
+        secureSessionController.value.claimAuthenticatedChannel()
     private var p2pStateQueryInFlight = false
     private var p2pStateQueryFailed = false
     private var p2pStateQueryGeneration = 0L
@@ -185,6 +247,7 @@ class WifiDirectDeviceDiscoveryRepository(
             restartRoleAfterCleanup = null
             cleanupCallbacksRemaining = 0
             channel = if (wasMonitoring) initializeChannel() else null
+            connectionController.reset()
 
             mutableSnapshot.value = mutableSnapshot.value.copy(
                 availability = if (!wasMonitoring || channel == null) {
@@ -213,11 +276,18 @@ class WifiDirectDeviceDiscoveryRepository(
 
     private val p2pStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION) {
-                serviceDiscoveryLifecycle.onDiscoveryStateBroadcast(intent)
-                return
+            when (intent.action) {
+                WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION -> {
+                    serviceDiscoveryLifecycle.onDiscoveryStateBroadcast(intent)
+                    return
+                }
+                WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
+                    connectionController.onConnectionChanged()
+                    return
+                }
+                WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION -> Unit
+                else -> return
             }
-            if (intent.action != WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION) return
 
             invalidateP2pStateQuery()
             p2pEnabled = intent.getIntExtra(
@@ -226,6 +296,7 @@ class WifiDirectDeviceDiscoveryRepository(
             ) == WifiP2pManager.WIFI_P2P_STATE_ENABLED
 
             if (p2pEnabled == false) {
+                connectionController.reset()
                 serviceDiscoveryLifecycle.cancelPendingWork()
                 serviceDiscoveryStartInFlight = false
                 val wasDiscovering = mutableSnapshot.value.status.let {
@@ -278,6 +349,7 @@ class WifiDirectDeviceDiscoveryRepository(
         val filter = IntentFilter().apply {
             addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
             addAction(WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION)
+            addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
         }
         try {
             val stickyIntent = ContextCompat.registerReceiver(
@@ -303,6 +375,7 @@ class WifiDirectDeviceDiscoveryRepository(
     override fun stopMonitoring() {
         if (!monitoring && !receiverRegistered) return
 
+        connectionController.disconnect()
         stopDiscovery()
         monitoring = false
         invalidateP2pStateQuery()
@@ -341,6 +414,7 @@ class WifiDirectDeviceDiscoveryRepository(
             registerP2pStateReceiverIfPermitted()
             requestP2pStateIfNeeded()
         } else {
+            connectionController.disconnect()
             invalidateP2pStateQuery()
             p2pEnabled = null
             unregisterP2pStateReceiver()
@@ -391,6 +465,10 @@ class WifiDirectDeviceDiscoveryRepository(
             if (wasDiscovering) releaseDiscoveryRegistrations()
         }
     }
+
+    override fun connectToPeer(peerId: String) = connectionController.connectToPeer(peerId)
+
+    override fun disconnect() = connectionController.disconnect()
 
     @SuppressLint("MissingPermission")
     override fun startDiscovery(role: DiscoveryRole) {

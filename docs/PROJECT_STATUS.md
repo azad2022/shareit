@@ -3,9 +3,9 @@
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
-- **Current checkpoint:** CP-002 — Wi-Fi Direct service discovery
-- **Current branch:** `feature/reliable-bidirectional-discovery` (bidirectional DNS-SD and foreground-session recovery; draft PR #2 targets `feature/foundation-bootstrap`)
-- **Last updated:** 2026-11-04 (bidirectional DNS-SD and foreground-session recovery committed; exact-head CI and physical retest pending)
+- **Current checkpoint:** CP-003 — Secure one-to-one generic file transfer
+- **Current branch:** `feature/secure-file-transfer` (stacked on the owner-updated CP-002 discovery branch; PR #3 remains open as Draft and is not merged)
+- **Last updated:** 2026-11-07 (CP-003C functional file transfer owner-confirmed; exact-head CI passed; repeatable physical-device evidence package remains incomplete)
 
 ## Milestones
 
@@ -146,3 +146,93 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - Source review also identified a foreground-resume gap: the discovery screen used a one-shot auto-start flag that survives Activity backgrounding while `MainActivity.onStop()` stops monitoring/discovery. The follow-up gates automatic start on Activity RESUMED, platform readiness, IDLE status, permission, and absence of an explicit user stop.
 - The all-Bonjour wildcard request did not resolve the reported ordering failure on the owner's installed build; the follow-up restores the typed PEYVAND service request.
 - These are source-level corrections, not physical acceptance evidence. CP-002 remains `IN_PROGRESS`; repeatability on both physical test devices is mandatory.
+
+## Owner validation update — discovery currently operational (2026-11-04)
+
+- The owner reports that the two phones now find one another easily across several manual operating scenarios after the bidirectional DNS-SD and foreground-restart changes on commit `690b932d4a6305fa04544ad0b93d2eb4fbe066b1`.
+- The earlier discovery order-dependency and repeated-session symptoms are considered currently resolved in the owner's tested environment. This is not a universal OEM/API support claim.
+- The latest report did not include a full device/API/build matrix, exact trial count, time-to-first-peer or repeatability evidence for every required case. CP-002 therefore remains `IN_PROGRESS`; see `docs/checkpoints/CP-002-WIFI-DIRECT-DISCOVERY.md` for the precise remaining matrix.
+- Do not treat discovery as connection, authentication, consent, or transfer. The `NearbyPeer` identifier remains transient and untrusted.
+
+## CP-003 — Secure one-to-one generic file transfer
+
+- CP-003 is active on `feature/secure-file-transfer`, stacked on the owner-updated CP-002 discovery branch. Draft PR #3 remains open and unmerged.
+- ADR-0007 defines the first transfer milestone: one-to-one, one arbitrary user-selected file, Wi-Fi Direct only, session pairing, mutually authenticated TLS, receiver consent, bounded streaming, SHA-256 verification and SAF publication. ADR-0008 defines the network-channel substage: one raw TCP socket bound exclusively to the active P2P interface.
+- CP-003A protocol/streaming primitives are implemented in `:core:transfer`: bounded versioned frames, format-agnostic manifest, filename sanitation, pairing SAS transcript derivation, transfer state policy, bounded streaming with inline SHA-256, contiguous chunk validation, cumulative ACK model and a four-chunk/256 KiB sender window. The ACK/window models are not yet wired to an Android socket/staging data plane.
+- CP-003B initial Wi-Fi Direct connection slice is implemented: a focused controller reuses the discovery adapter's manager/channel/receiver; sender selection is limited to a currently discovered compatible peer; group formation is confirmed only after the P2P connection broadcast and `requestConnectionInfo()`; the local Group Owner does not depend on Android's potentially anonymized local owner address; a minimal Persian connection-status UI is wired. Disconnect uses `removeGroup()`, can clear state from a connection-change notification, and now has a 10-second watchdog with an explicit timeout failure and best-effort cleanup. A delayed success/broadcast can still resolve a timeout; a late failure callback cannot overwrite a removal already confirmed by platform state. The pure pending-state policy is unit-tested, but dedicated framework-level tests and physical disconnect verification remain outstanding.
+- The P2P-scoped raw TCP channel is now implemented in `:core:connectivity`: the Group Owner binds a listener only to the IPv4 address of the `WifiP2pGroup.getInterface()` interface; the Group Client binds its source address to its P2P interface and connects to the Group Owner address from Android. Both sides enforce same-subnet private IPv4, one peer at a time, finite timeouts/retry and socket cleanup on lifecycle/group teardown. The UI receives only state, not socket addresses or streams.
+- A raw TCP socket is not authentication and carries no application data yet. Still not implemented: Android Keystore ephemeral identity, SAS exchange and user approval, pinned mutual TLS, receiver consent handshake, ContentResolver source streaming, private receiving staging, SAF publication and authenticated integrity receipt.
+- CI run `41838844163` succeeded on source HEAD `f519e508792d3d495976b802091f66edddb3b646`: 88 unit tests passed (0 failures/errors/skips), configured lint completed with 9 warnings and 0 errors, and `:app:assembleDebug` succeeded. Validation evidence: https://github.com/azad2022/shareit/actions/runs/41838844163.
+- Debug APK artifact `13327953810`: 14,010,025 bytes; SHA-256 `820b5064883b19defa8b2ee525800bf46c9483826ef4bb042af6da702886de89`. This is a connection-stage Debug build, not a file-transfer-ready release.
+- Owner-reported physical smoke test (2026-11-04): two devices discover one another, the UI reports `Wi-Fi Direct group formed`, and a disconnect action is visible. Device/API/build details, group-owner role matrix, repeat count, APK SHA-256, and an observed disconnect result were not supplied. This is not a PASSED interoperability or teardown test.
+- All end-to-end transfer tests remain outstanding. CP-003 stays `IN_PROGRESS`.
+- Local TCP permission policy is recorded in ADR-0008 and `docs/architecture/FOUNDATION.md`: `INTERNET` is used only for direct local socket APIs, not public Internet. The app targets SDK 36 and does not declare `ACCESS_LOCAL_NETWORK`; Android 16 opt-in restrictions must be tested with `NEARBY_WIFI_DEVICES`, and target-SDK-37 permission handling remains a separate compatibility gate.
+- Channel architecture decision: `docs/decisions/ADR-0008-WIFI-DIRECT-TCP-CHANNEL.md`.
+- Checkpoint: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`.
+
+## Current module boundaries
+
+- `:app`: Android entry point, lifecycle, ViewModels and Compose presentation.
+- `:core:domain`: Android-free shared product models and policies.
+- `:core:data`: language persistence.
+- `:core:connectivity`: Wi-Fi Direct discovery and (in CP-003B) connection lifecycle adapters.
+- `:core:storage`: URI-based MediaStore/SAF catalog and (in CP-003C) source/staging/publication adapters.
+- `:core:transfer`: bounded transport-independent wire protocol and streaming core introduced during CP-003A.
+- `:core:designsystem`: PEYVAND semantic palette and Compose theme.
+
+
+## 2026-11-04 — CP-003B secure-session implementation update
+
+- Active branch: `feature/secure-file-transfer`; draft PR #3 remains open and unmerged.
+- Source commit: `848fb054d3e55de7fc797db5dcf318c9a32f29a5` (session pairing, Android Keystore ephemeral identity, SAS approval, pinned mutual TLS, UI state and bounded stale-key cleanup).
+- The current implementation is a security-session substage, not a completed file-transfer feature. It does not yet exchange a file manifest, obtain per-file receiver consent, read a selected ContentResolver URI, stream bytes, stage/publish a destination, or return a verified completion receipt.
+- GitHub Actions run `41896531270` completed successfully on exact branch-head `d25028b4a21e0f06f91bd02d1c9b56935d03e07c`: 98 JVM unit tests passed (0 failures/errors/skips), configured lint completed with 10 warnings and 0 errors, and `:app:assembleDebug` succeeded.
+- Debug APK artifact `13355498653` is 14,109,243 bytes; extracted APK SHA-256 is `c2ab089c117d00fd80c5261783718ca62217dfb883d72ae7d07389730cddfd93`.
+- The lint report includes a `CustomX509TrustManager` warning in `:core:connectivity`; complete a focused trust-manager security review and physical Keystore/SAS/TLS tests before treating session authentication as accepted. CI did not run Android instrumentation or physical-device tests.
+- Successful build/test results do not imply end-to-end transfer. Receiver consent, socket manifest exchange, streaming, staging, SAF publication and authenticated integrity receipt remain unimplemented.
+- No physical pairing or TLS interoperability evidence is recorded yet. CP-003 remains `IN_PROGRESS`.
+
+
+## 2026-11-07 — CP-003C single-file transfer runtime integrated
+
+- **Current source branch:** `feature/secure-file-transfer`; CP-003 remains `IN_PROGRESS`.
+- **Source implementation:** the mutually authenticated TLS channel is now exclusively claimed by `SingleFileTransferCoordinator` and passed to `SingleFileTransferProtocol`. The app has a direct `:core:transfer` dependency.
+- **One-to-one file path:** user-selected `content://` source → bounded manifest → explicit receiver consent → 64 KiB binary chunks with four-chunk cumulative ACK window → private app staging with sync-before-ACK → SHA-256/byte-count verification → SAF destination copy and read-back verification → authenticated completion receipt.
+- **UI states:** sender ready/consent wait/transferring/verifying/completed; receiver waiting/consent/transferring/verifying/destination selection/publishing/completed; reject/cancel/failure are distinct. Failure copy warns the user to remove any incomplete destination artifact that a provider could not delete.
+- **Storage boundary:** only content URIs are supported by this first transfer slice. The transfer data plane is format-agnostic; installed package sources are intentionally rejected until APK-set transfer has its own checkpoint. SAF provider atomicity varies; the app does not promise atomic publication.
+- **Tests added:** JVM coordinator orchestration test over a paired full-duplex stream, plus existing protocol, streaming, frame, flow-control, manifest, integrity and state tests. The coordinator test is not a replacement for hardware or Android DocumentProvider tests.
+- **Build correction:** initial CP-003C integration CI run `42389254385` failed because `:app` did not depend directly on `:core:transfer`. The direct dependency and stale lifecycle phase type were corrected. That failed run is not passing evidence. See the latest exact-head CI link in the PR before downloading an APK.
+- **Physical evidence:** owner reported matching SAS and successful TLS between ASUS and Galaxy A12 (SM-A125F). No real file transfer using the new CP-003C runtime has yet been reported; CP-003 cannot be marked `PASSED`.
+- **Known remaining gates:** exact-head CI and APK checksum, repeated real-file tests both directions, SAF provider failure/cleanup behavior, large and zero-byte files, rejection/cancellation, source permission revocation and integrity mismatch.
+- **Deferred:** multi-file queue, group transfer, resume, background guarantees, APK/split-APK flow, discovery speed optimization and final design pass.
+
+
+### CP-003C implementation refinement — 2026-11-07
+
+This section supersedes earlier status bullets in this document that said the live transfer control/data path or SAF publication had not yet been implemented. Those statements are historical snapshots from before the CP-003C integration commits.
+
+- The live sender/receiver path uses a maximum four-chunk/256 KiB receive window. The receiver writes the window to private staging, calls `sync()`, commits the contiguous offset, then sends one cumulative ACK. The final partial window is synced after the sender sends its completion record. The coordinator test checks four batch syncs plus the final staging seal for a 900,123-byte test payload.
+- Both peers preserve an explicit `VERIFYING` state while the final ACK and authenticated receipt/publication steps finish.
+- SAF publication uses bounded, cancellation-aware copy and read-back digest loops. Provider deletion is best-effort; a provider that will not confirm deletion cannot be treated as a successful cleanup.
+- Exact-head CI and the owner’s physical file-transfer test remain required. CP-003 is still `IN_PROGRESS`; no physical real-file transfer is recorded yet.
+
+
+## 2026-11-07 — Latest authoritative CP-003C acceptance update
+
+- The product owner explicitly confirmed that file transfer is successful. Record the basic one-file, one-to-one functional smoke acceptance as `PASSED` based on that owner report.
+- The exact source head is `0bb8d6582d860a45ded777ac9432d617c2106f55` on `feature/secure-file-transfer`. Exact-head GitHub Actions run [42392698691](https://github.com/azad2022/shareit/actions/runs/42392698691) completed successfully. All 3 jobs passed: build/unit-tests/lint; Android Keystore mTLS loopback on API 26; and Android Keystore mTLS loopback on API 36.
+- Debug APK artifact `13581694883` was produced. Extracted APK size: 14,221,658 bytes. SHA-256: `bd279275f25554a374e04398d1aa9aab38f0b1f7d041653b10605769505661d0`. Artifact ZIP digest: `sha256:d7823624ae18034e132eeade96f3fd34d1b27e1983294675d919dd575a67e704`.
+- **CP-003 overall remains `IN_PROGRESS`**, not `PASSED`: the owner confirmation does not include the exact handset/API/build, installed APK hash, sender/receiver direction, payload characteristics, repeat count, or coverage of the full acceptance matrix required by criterion 11. The earlier notes that said no physical transfer had been reported are superseded by this update; they remain historical statements about the earlier state.
+- This update does not assert that zero-byte/large/unknown-MIME files, all SAF providers, rejection/cancellation, cleanup, source-permission revocation, hash mismatch, resume, group transfer, APK/split APK, or background operation have been physically validated.
+- PR #3 remains open and Draft. Do not merge it without explicit owner authorization.
+
+### Recommended next checkpoint sequence (planning only)
+
+1. **CP-004 — Multi-item one-to-one transfer:** selection of multiple arbitrary user-authorized files, a stable queue/manifest model, per-item consent/status, deterministic order, per-item integrity receipts, cancellation/failure isolation, and queue recovery tests. Preserve the current secure single-file path.
+2. **CP-005 — Android application-package transfer:** PackageManager visibility review, supported extraction of base and required split APKs, package/signing metadata, compatibility checks, and user-approved PackageInstaller handoff. Do not imply transfer of private app data or silent installation.
+3. **CP-006 — One-sender-to-many group transfer:** independent consent, progress, cancellation, failure, integrity and completion per receiver; enforce bounded concurrency/backpressure and document that radio throughput is shared. No multi-sender group mode.
+4. **CP-007 — Durable resume and long-running transfer reliability:** durable checkpoints, authenticated resume negotiation, source/destination identity validation, interrupted process/reconnect behavior, lifecycle/background policy, cleanup and transfer history.
+5. **CP-008 — Product-wide UX and release hardening:** PEYVAND design system, all relevant UI states, accessibility, RTL/LTR and localization, purposeful motion, physical-device compatibility matrix, performance/thermal/battery measurements and distribution-policy review.
+
+The ordering is a proposed dependency-aware plan, not authorization to skip architecture/security review. Keep each checkpoint independently scoped with acceptance criteria and evidence. This section supersedes older top-level summaries only where they conflict with the 2026-11-07 validation update.
+

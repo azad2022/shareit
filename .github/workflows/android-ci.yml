@@ -57,7 +57,15 @@ jobs:
             :core:domain:lintDebug \
             :core:connectivity:lintDebug \
             :core:storage:lintDebug \
+            :core:transfer:testDebugUnitTest \
+            :core:transfer:lintDebug \
             :app:assembleDebug
+
+      - name: Compute debug APK SHA-256
+        if: success()
+        run: |
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.sha256
 
       - name: Upload validation reports
         if: always()
@@ -76,6 +84,68 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: peyvand-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/app-debug.apk.sha256
           if-no-files-found: error
           retention-days: 7
+
+  secure-tls-instrumented:
+    name: Android Keystore mTLS loopback (API ${{ matrix.api-level }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 36]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install compile SDK
+        run: |
+          sdkmanager "platforms;android-37.0"
+          if [ -d "$ANDROID_HOME/platforms/android-37.0" ] && [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+          fi
+          test -d "$ANDROID_HOME/platforms/android-37"
+
+      - name: Validate Gradle wrapper and build
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Android Keystore mTLS loopback tests
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: ./gradlew --no-daemon --stacktrace :core:connectivity:connectedDebugAndroidTest
+
+      - name: Upload instrumented test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: secure-tls-instrumented-api-${{ matrix.api-level }}
+          path: |
+            core/connectivity/build/outputs/androidTest-results/**
+            core/connectivity/build/reports/androidTests/**
+          if-no-files-found: ignore
+          retention-days: 14

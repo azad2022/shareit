@@ -8,7 +8,7 @@ The repository contains the native Android foundation and the first connectivity
 - CP-002: Wi-Fi Direct runtime capability checks, version-aware permissions and PEYVAND Bonjour/DNS-SD service discovery.
 - App-default network diagnostics: observes whether the network Android selects for the PEYVAND app UID is VPN-backed and shows a non-blocking warning. This diagnostic is not a local peer reachability test.
 
-CP-002 discovers PEYVAND service advertisements. It does **not** connect peers, authenticate peers, create sockets or transfer files. A discovery advertisement is untrusted input and is not proof of identity.
+CP-002 discovery itself only finds PEYVAND service advertisements. CP-003B contains an initial selected-peer Wi-Fi Direct group-connection implementation. The owner reports a physical smoke test in which two devices discover one another and the UI reports that a group formed; exact handset/API/build/role details and a confirmed disconnect result remain unrecorded. Neither discovery nor a formed P2P group authenticates the peer, creates a secure session, or transfers files.
 
 ## Project modules
 
@@ -21,10 +21,11 @@ CP-002 discovers PEYVAND service advertisements. It does **not** connect peers, 
 ```
 
 - `:app`: Android entry point, Compose presentation, lifecycle ownership and explicit composition.
-- `:core:domain`: Android-free language, discovery and network-diagnostic models/policies. It exposes `StateFlow` in repository contracts and must not import Android or Compose APIs.
+- `:core:domain`: Android-free language, discovery, peer-connection and network-diagnostic models/policies. It exposes `StateFlow` in repository contracts and must not import Android or Compose APIs.
 - `:core:data`: Preferences DataStore and AppCompat per-app locale adapter.
-- `:core:connectivity`: Android `WifiP2pManager` adapter, P2P state receiver, DNS-SD advertisement/discovery, runtime capability reporting and app-default network diagnostics through `ConnectivityManager`. It does not depend on app presentation.
+- `:core:connectivity`: Android `WifiP2pManager` adapter, one shared P2P channel/receiver, DNS-SD advertisement/discovery, `WifiDirectPeerConnectionController`, runtime capability reporting and app-default network diagnostics through `ConnectivityManager`. It does not depend on app presentation.
 - `:core:designsystem`: PEYVAND semantic colors and Compose theme.
+- `:core:transfer`: transport-independent, bounded transfer frames, manifest validation, pairing transcript/SAS derivation, lifecycle policy, and streaming/hash primitives. It must not import Android UI or Wi-Fi P2P framework types.
 
 Keep the project graph acyclic. Add security, transfer, storage and package-sharing modules only when their contracts and ownership are defined in ADRs.
 
@@ -63,4 +64,33 @@ The app observes its own default network and checks whether it carries `TRANSPOR
 
 ## Deferred responsibilities
 
-No peer connection, pairing, TLS, local socket, transfer protocol, file selection, streaming, integrity verification, resume, APK extraction, PackageInstaller or background transfer is implemented in CP-002. These responsibilities require later ADRs, threat review and physical-device interoperability tests.
+CP-002 discovery does not own peer connection, pairing, TLS, local sockets, transfer protocol, streaming, integrity verification, resume, APK extraction, PackageInstaller or background transfer. The initial CP-003B group-connection slice is implemented in a separate controller but remains unvalidated on physical devices. Pairing, TLS, sockets, receiver consent and file transfer still require later implementation, threat review and physical-device interoperability tests.
+
+## CP-003 transfer boundary
+
+- `:core:connectivity` owns Wi-Fi Direct group connection lifecycle and the platform-specific group-owner/client socket endpoint binding.
+- `:core:transfer` owns transport-neutral protocol contracts, strict frame parsing, pairing transcript rules, transfer state policy, bounded streaming and SHA-256 computation. It does not own Android sockets, ContentResolver, Compose, or Activity lifecycle.
+- `:core:storage` owns ContentResolver-backed source access, private staging, and SAF destination publication. It must not accept a remote filesystem path.
+- `:app` composes repositories/use cases and renders observable transfer state. It does not own network streams, file descriptors, TLS trust policy, or transfer state transitions.
+- Session authentication and TLS credentials are a separate security responsibility to be implemented and reviewed before any file bytes are sent. DNS-SD markers and transient P2P addresses are never trusted identities.
+- The first vertical slice is one-to-one and one arbitrary byte stream. Group transfer, resume, APK sets, background execution and final product-wide visual design remain separate checkpoints.
+
+## CP-003B — selected-peer P2P group connection (implementation in progress)
+
+- `:core:domain` defines `PeerConnectionRepository`, immutable connection state and pure candidate/group-state policies.
+- `:core:connectivity` uses `WifiDirectPeerConnectionController` to request connection to a currently discovered candidate and confirm formation only after `WIFI_P2P_CONNECTION_CHANGED_ACTION` plus `requestConnectionInfo()`.
+- The controller receives the existing manager/channel from the discovery repository. It does not initialize another channel or register a competing receiver.
+- A formed group exposes only the ephemeral owner/client role and, on the client, the remote Group Owner endpoint for the current session. Android may anonymize the local Group Owner address on the owner device; the owner must host its listener without depending on that local address. This state must not be treated as peer identity or authentication.
+- A 30-second formation timeout and group cleanup on user disconnect, Activity foreground teardown, permission loss, P2P disable and channel loss are implemented. User disconnect calls `removeGroup()`, also accepts a disconnected connection-info broadcast as confirmation, and has a 10-second watchdog that reports a failure rather than silently remaining in `DISCONNECTING`; a best-effort group removal follows timeout. A later platform confirmation can resolve the timeout, while a stale failure callback cannot overwrite a confirmed removal. The owner reports that the disconnect action is visible, but has not confirmed its result in the latest test report. Physical callback ordering, teardown and OEM behavior remain to be tested.
+- The Compose discovery flow exposes sender-side candidate selection and displays connection status. Group formation is explicitly labelled as unauthenticated; no file metadata or bytes are sent at this stage.
+- The raw TCP channel is implemented as a separate connectivity responsibility: resolve the group interface using `requestGroupInfo()`, select IPv4 addresses only from that interface, bind the Group Owner's listener to its exact local P2P address, and bind the Group Client's source socket to its P2P address before connecting to the Group Owner. It rejects non-private/out-of-subnet endpoints and has bounded timeouts, retry, single-peer acceptance and teardown.
+- Not implemented: ephemeral Keystore certificate, SAS exchange and confirmation, pinned mutual TLS, receiver consent, storage streaming/staging/publication or physical file transfer.
+- The owner-reported group-formation observation is a smoke test only; it does not replace a recorded handset/API/APK/role matrix or a successful disconnect/reconnect cycle.
+- Transport decision: `docs/decisions/ADR-0008-WIFI-DIRECT-TCP-CHANNEL.md`.
+- Checkpoint and validation evidence: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`.
+
+## Transfer permission gate
+
+- The CP-003B raw TCP channel uses `INTERNET` only for direct local socket APIs; no public Internet host, backend, relay or external route is used or configured. It binds to the exact P2P interface address and does not use wildcard binding or fallback to the default Wi-Fi/VPN route.
+- Current target SDK 36 does not add `ACCESS_LOCAL_NETWORK`. Android 16 opt-in local-network restrictions must be tested using the existing `NEARBY_WIFI_DEVICES` permission path. Before target SDK 37, add and test runtime `ACCESS_LOCAL_NETWORK` handling as a separate compatibility gate.
+- Generic user documents are accessed through SAF/content URIs; do not add broad storage permissions for the transfer engine.
