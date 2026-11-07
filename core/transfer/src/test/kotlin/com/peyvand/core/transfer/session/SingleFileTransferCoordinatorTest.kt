@@ -13,9 +13,15 @@ import com.peyvand.core.domain.transfer.TransferFileSource
 import com.peyvand.core.domain.transfer.TransferFileStorageRepository
 import com.peyvand.core.domain.transfer.TransferSourceMetadata
 import com.peyvand.core.domain.transfer.TransferStagingSink
+import com.peyvand.core.transfer.protocol.TransferFrame
+import com.peyvand.core.transfer.protocol.TransferFrameCodec
+import com.peyvand.core.transfer.protocol.TransferFrameType
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.FilterInputStream
+import java.io.IOException
 import java.io.InputStream
+import java.io.OutputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.security.MessageDigest
@@ -133,6 +139,67 @@ class SingleFileTransferCoordinatorTest {
         }
     }
 
+    @Test
+    fun cancellationClosesBlockingSourceStreamAndAuthenticatedChannel() = runBlocking {
+        val sessionId = UUID.randomUUID()
+        val acceptFrame = ByteArrayOutputStream().apply {
+            TransferFrameCodec.write(
+                TransferFrame(
+                    protocolVersion = TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+                    type = TransferFrameType.ACCEPT,
+                    sessionId = sessionId,
+                    payload = byteArrayOf(),
+                ),
+                this,
+            )
+        }.toByteArray()
+        val channel = TestAuthenticatedPeerChannel(
+            sessionId = sessionId,
+            inputStream = ByteArrayInputStream(acceptFrame),
+            outputStream = ByteArrayOutputStream(),
+        )
+        val connectivity = TestPeerConnectivityRepository(channel)
+        val blockingStream = BlockingSourceInputStream()
+        val storage = InMemoryTransferStorageRepository(
+            sourceBytes = byteArrayOf(0x01),
+            sourceStreamFactory = { blockingStream },
+        )
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val coordinator = SingleFileTransferCoordinator(
+            scope = scope,
+            connectivityRepository = connectivity,
+            storageRepository = storage,
+        )
+        val item = ShareItem(
+            id = "document:content://source/cancellable",
+            category = ShareCategory.FILES,
+            displayName = "cancel-test.bin",
+            mimeType = "application/octet-stream",
+            sizeBytes = 1L,
+            modifiedAtEpochMillis = null,
+            source = ShareSource.ContentUri("content://source/cancellable"),
+        )
+
+        try {
+            coordinator.prepareSession(isSender = true, selectedItems = listOf(item))
+            coordinator.startSending()
+            withTimeout(10_000L) {
+                while (!storage.sourceStreamOpened) delay(1L)
+            }
+
+            coordinator.cancelTransfer()
+
+            withTimeout(10_000L) {
+                while (!storage.sourceStreamClosed || !connectivity.disconnected) delay(1L)
+            }
+            assertTrue(blockingStream.isClosed)
+            assertEquals(TransferSessionPhase.CANCELLED, coordinator.state.value.phase)
+        } finally {
+            coordinator.close()
+            scope.cancel()
+        }
+    }
+
     private class TestPeerConnectivityRepository(
         private val channel: AuthenticatedPeerChannel,
     ) : PeerConnectivityRepository {
@@ -181,7 +248,7 @@ class SingleFileTransferCoordinatorTest {
     private class TestAuthenticatedPeerChannel(
         override val sessionId: UUID,
         override val inputStream: InputStream,
-        override val outputStream: PipedOutputStream,
+        override val outputStream: OutputStream,
     ) : AuthenticatedPeerChannel {
         override fun close() {
             runCatching { inputStream.close() }
@@ -192,9 +259,18 @@ class SingleFileTransferCoordinatorTest {
     private class InMemoryTransferStorageRepository(
         private val sourceBytes: ByteArray? = null,
         private val expectedPublishedBytes: ByteArray? = null,
+        private val sourceStreamFactory: (() -> InputStream)? = null,
     ) : TransferFileStorageRepository {
         @Volatile
         var publishedBytes: ByteArray? = null
+            private set
+
+        @Volatile
+        var sourceStreamOpened: Boolean = false
+            private set
+
+        @Volatile
+        var sourceStreamClosed: Boolean = false
             private set
 
         @Volatile
@@ -217,7 +293,17 @@ class SingleFileTransferCoordinatorTest {
                 override fun openStream(): InputStream {
                     check(!opened) { "The test source may be opened only once" }
                     opened = true
-                    return ByteArrayInputStream(bytes)
+                    sourceStreamOpened = true
+                    val stream = sourceStreamFactory?.invoke() ?: ByteArrayInputStream(bytes)
+                    return object : FilterInputStream(stream) {
+                        override fun close() {
+                            try {
+                                super.close()
+                            } finally {
+                                sourceStreamClosed = true
+                            }
+                        }
+                    }
                 }
 
                 override fun close() = Unit
@@ -249,6 +335,35 @@ class SingleFileTransferCoordinatorTest {
             publishedBytes = actualBytes
             staging.delete()
             return true
+        }
+    }
+
+    private class BlockingSourceInputStream : InputStream() {
+        private val monitor = java.lang.Object()
+
+        @Volatile
+        var isClosed: Boolean = false
+            private set
+
+        override fun read(): Int {
+            synchronized(monitor) {
+                while (!isClosed) {
+                    try {
+                        monitor.wait()
+                    } catch (interrupted: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw IOException("Blocking source read was interrupted", interrupted)
+                    }
+                }
+            }
+            throw IOException("Blocking source stream was closed")
+        }
+
+        override fun close() {
+            synchronized(monitor) {
+                isClosed = true
+                monitor.notifyAll()
+            }
         }
     }
 
