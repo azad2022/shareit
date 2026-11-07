@@ -171,7 +171,7 @@ class SingleFileTransferCoordinator(
         }
 
         authenticatedChannel = channel
-        if (isSender) {
+        if (isSender && selectedBatchItems.size == 1) {
             val item = selectedItem ?: return
             mutableState.value = TransferSessionSnapshot(
                 phase = TransferSessionPhase.READY_TO_SEND,
@@ -180,13 +180,22 @@ class SingleFileTransferCoordinator(
                 mimeType = item.mimeType,
                 totalSizeBytes = item.sizeBytes,
             )
+        } else if (isSender) {
+            mutableState.value = TransferSessionSnapshot(
+                phase = TransferSessionPhase.READY_TO_SEND,
+                isSender = true,
+                isBatch = true,
+                items = selectedBatchItems.map { item ->
+                    TransferItemSnapshot(item.id, item.displayName, item.mimeType, item.sizeBytes)
+                },
+            )
         } else {
             mutableState.value = TransferSessionSnapshot(
                 phase = TransferSessionPhase.WAITING_FOR_INCOMING,
                 isSender = false,
             )
             transferJob = scope.launch(Dispatchers.IO) {
-                receiveOne(channel, operation)
+                receiveIncoming(channel, operation)
             }
         }
     }
@@ -194,10 +203,16 @@ class SingleFileTransferCoordinator(
     fun startSending() {
         if (mutableState.value.phase != TransferSessionPhase.READY_TO_SEND) return
         val channel = authenticatedChannel ?: return
-        val item = selectedItem ?: return
         val operation = operationId
-        transferJob = scope.launch(Dispatchers.IO) {
-            sendOne(channel, item, operation)
+        if (mutableState.value.isBatch) {
+            transferJob = scope.launch(Dispatchers.IO) {
+                sendBatch(channel, selectedBatchItems, operation)
+            }
+        } else {
+            val item = selectedItem ?: return
+            transferJob = scope.launch(Dispatchers.IO) {
+                sendOne(channel, item, operation)
+            }
         }
     }
 
