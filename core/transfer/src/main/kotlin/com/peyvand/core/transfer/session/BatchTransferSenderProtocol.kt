@@ -108,7 +108,7 @@ internal class BatchTransferSenderProtocol(
             if (decisionFrame.type == TransferFrameType.BATCH_ABORT) {
                 val reference = BatchItemReferenceCodec.decode(decisionFrame.payloadBytes())
                 requireBatchReference(reference, manifest.batchId, BATCH_ABORT_ITEM_ID)
-                return rejectedResult(manifest)
+                return cancelledResult(manifest)
             }
             requireType(decisionFrame, TransferFrameType.BATCH_DECISION)
             val decision = BatchConsentDecisionCodec.decode(decisionFrame.payloadBytes(), manifest)
