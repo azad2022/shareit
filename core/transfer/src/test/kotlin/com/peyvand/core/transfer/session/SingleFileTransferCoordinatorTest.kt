@@ -26,6 +26,7 @@ import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -339,36 +340,30 @@ class SingleFileTransferCoordinatorTest {
     }
 
     private class BlockingSourceInputStream : InputStream() {
-        private val monitor = java.lang.Object()
+        private val readStartedLatch = CountDownLatch(1)
+        private val closedLatch = CountDownLatch(1)
 
         @Volatile
         var isClosed: Boolean = false
             private set
 
-        @Volatile
-        var readStarted: Boolean = false
-            private set
+        val readStarted: Boolean
+            get() = readStartedLatch.count == 0L
 
         override fun read(): Int {
-            readStarted = true
-            synchronized(monitor) {
-                while (!isClosed) {
-                    try {
-                        monitor.wait()
-                    } catch (interrupted: InterruptedException) {
-                        Thread.currentThread().interrupt()
-                        throw IOException("Blocking source read was interrupted", interrupted)
-                    }
-                }
+            readStartedLatch.countDown()
+            try {
+                closedLatch.await()
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw IOException("Blocking source read was interrupted", interrupted)
             }
             throw IOException("Blocking source stream was closed")
         }
 
         override fun close() {
-            synchronized(monitor) {
-                isClosed = true
-                monitor.notifyAll()
-            }
+            isClosed = true
+            closedLatch.countDown()
         }
     }
 
