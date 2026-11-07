@@ -16,6 +16,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
+import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -300,14 +301,25 @@ class AndroidTransferFileStorageRepository(
 
         override fun openStream(): InputStream {
             check(openedStream == null) { "A transfer source can be opened only once" }
-            return (resolver.openInputStream(uri)
-                ?: throw FileNotFoundException("The selected source URI could not be opened"))
-                .also { openedStream = it }
+            val source = resolver.openInputStream(uri)
+                ?: throw FileNotFoundException("The selected source URI could not be opened")
+            val managed = object : FilterInputStream(source) {
+                override fun close() {
+                    try {
+                        super.close()
+                    } finally {
+                        if (openedStream === this) openedStream = null
+                    }
+                }
+            }
+            openedStream = managed
+            return managed
         }
 
         override fun close() {
-            openedStream?.close()
+            val stream = openedStream
             openedStream = null
+            stream?.close()
         }
     }
 
