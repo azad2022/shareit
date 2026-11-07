@@ -46,6 +46,7 @@ dependencies {
     implementation(project(":core:connectivity"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:storage"))
+    implementation(project(":core:transfer"))
 
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.compose)
