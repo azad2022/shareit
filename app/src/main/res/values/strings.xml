@@ -193,6 +193,7 @@
     <string name="file_transfer_waiting_consent_sender">اطلاعات فایل ارسال شد. در انتظار پذیرش صریح گیرنده هستیم؛ هنوز محتوای فایل ارسال نمی‌شود.</string>
     <string name="file_transfer_waiting_consent_receiver">درخواست دریافت فایل رسیده است. پیش از پذیرش، نام و اطلاعات فایل را بررسی کنید.</string>
     <string name="file_transfer_transferring">در حال انتقال فایل از طریق کانال رمزنگاری‌شده…</string>
+    <string name="file_transfer_verifying">ارسال داده پایان یافت؛ در حال بررسی SHA-256 و دریافت تأیید نهایی گیرنده…</string>
     <string name="file_transfer_awaiting_destination">انتقال و بررسی SHA-256 انجام شد. اکنون محل ذخیره‌سازی فایل را انتخاب کنید.</string>
     <string name="file_transfer_publishing">در حال ذخیره و بررسی مجدد فایل در مقصد انتخاب‌شده…</string>
     <string name="file_transfer_completed">فایل ذخیره شد و صحت داده‌ها تأیید شد.</string>
