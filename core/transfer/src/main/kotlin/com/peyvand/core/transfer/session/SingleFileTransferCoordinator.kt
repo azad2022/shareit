@@ -222,10 +222,59 @@ class SingleFileTransferCoordinator(
 
     fun rejectIncoming() {
         consentDecision?.complete(false)
+        batchConsentDecision?.complete(emptySet())
+    }
+
+    fun toggleBatchConsentItem(itemId: String) {
+        mutableState.update { current ->
+            if (current.phase != TransferSessionPhase.AWAITING_BATCH_CONSENT) current
+            else current.copy(items = current.items.map { item ->
+                if (item.id == itemId) item.copy(isSelectedForConsent = !item.isSelectedForConsent)
+                else item
+            })
+        }
+    }
+
+    fun acceptBatchIncoming() {
+        val selected = mutableState.value.items
+            .filter { it.isSelectedForConsent }
+            .mapNotNull { runCatching { UUID.fromString(it.id) }.getOrNull() }
+            .toSet()
+        if (selected.isNotEmpty()) batchConsentDecision?.complete(selected)
     }
 
     fun provideDestination(uri: String?) {
         destinationDecision?.complete(uri)
+    }
+
+    fun provideDestinationTree(uri: String?) {
+        destinationTreeDecision?.complete(uri)
+    }
+
+    fun cancelItem(itemId: String) {
+        val current = mutableState.value
+        if (!current.isBatch || current.phase.isTerminal()) return
+        val item = current.items.firstOrNull { it.id == itemId } ?: return
+        if (item.phase in setOf(
+                TransferItemPhase.COMPLETED,
+                TransferItemPhase.REJECTED,
+                TransferItemPhase.CANCELLED,
+                TransferItemPhase.FAILED,
+            )
+        ) return
+        val transferId = if (current.isSender) {
+            batchTransferIdsBySourceId[item.id]
+        } else {
+            runCatching { UUID.fromString(item.id) }.getOrNull()
+        } ?: return
+
+        if (item.phase == TransferItemPhase.QUEUED ||
+            item.phase == TransferItemPhase.WAITING_FOR_RECEIVER
+        ) {
+            cancelledBeforeStart.add(transferId)
+        } else {
+            batchCancellationRequests?.trySend(transferId)
+        }
     }
 
     fun cancelTransfer() {
