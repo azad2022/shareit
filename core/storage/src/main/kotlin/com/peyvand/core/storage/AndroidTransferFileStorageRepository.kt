@@ -124,7 +124,7 @@ class AndroidTransferFileStorageRepository(
         } catch (exception: Exception) {
             val destinationRemoved = deletePartialDestination(target)
             runCatching { staging.delete() }
-            if (exception is CancellationException) throw exception
+            if (exception is CancellationException && destinationRemoved) throw exception
             if (!destinationRemoved) {
                 throw IOException(
                     "Publication failed and the document provider did not confirm partial-file removal",
