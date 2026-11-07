@@ -5,14 +5,14 @@
 - **Base:** `feature/secure-file-transfer` at `7237115e1ce04ab225cbad223fad77e9ed8d344f` (includes the latest documentation-only updates after CI-validated code `0bb8d6582d860a45ded777ac9432d617c2106f55`)
 - **PR #3:** remains open, Draft and unmerged. CP-004 must not change or merge PR #3.
 - **Objective:** send an ordered batch of 2–32 arbitrary user-authorized content files from one sender to one receiver over the already authenticated Wi-Fi Direct/mTLS session. A one-item selection must retain the existing v1 transfer path.
-- **Architecture decision:** see [ADR-0009](../decisions/ADR-0009-MULTI-ITEM-ONE-TO-ONE-TRANSFER.md). Receiver consent is one batch-level selection with explicit per-item inclusion/exclusion; transfer and integrity remain independent per item. Version-2 batch frames are separate from the existing v1 one-file wire contract.
-- **Current implementation status:** planning baseline recorded. No CP-004 source changes or tests have been committed yet.
+- **Architecture decision:** see [ADR-0009](../decisions/ADR-0009-MULTI-ITEM-ONE-TO-ONE-TRANSFER.md). Receiver first authorizes metadata disclosure through a metadata-free offer handshake, then chooses explicit per-item inclusion/exclusion in one batch-level content decision; transfer and integrity remain independent per item. Version-2 batch frames are separate from the existing v1 one-file wire contract.
+- **Current implementation status:** implementation is in progress. Version-2 batch codecs, metadata-free offer consent, sequential protocol orchestration, SAF tree publication adapter, UI state, and initial JVM tests have been committed. The branch still requires CI compile/test/lint verification, failure-path coverage, final hardening and physical-device testing; no CP-004 gate is marked passed.
 
 ## Scope
 
 Included:
 - Select 2–32 generic files from approved SAF/ContentResolver URIs, in a deterministic user-selected order.
-- Version-2 bounded batch manifest, batch/item IDs, receiver selection decision, per-item start/readiness, data/ACK, completion/integrity receipt, error/cancel outcome and terminal batch receipt.
+- Version-2 metadata-free batch offer/approval, bounded batch manifest, batch/item IDs, receiver selection decision, per-item start/readiness, data/ACK, completion/integrity receipt, error/cancel outcome and terminal batch receipt.
 - Sequential queue with independent immutable item states and actual acknowledged-byte progress.
 - Single receiver-selected SAF destination tree, with per-item document create, copy and read-back verification.
 - Item-local recoverable failure/cancellation isolation and continuation; fatal protocol/session errors stop the batch.
@@ -27,7 +27,7 @@ Excluded:
 ## Acceptance criteria
 
 1. The sender selects 2–32 `content://` files in a stable order; installed-package sources and invalid/duplicate items are rejected.
-2. The receiver sees a bounded manifest only inside the authenticated TLS session and explicitly chooses the items to accept in one consent interaction. No source InputStream is opened and no staging file is allocated before the batch decision and per-item readiness.
+2. The receiver first receives only a metadata-free batch offer. The sender must not send names, MIME types, sizes or item count until the receiver approves manifest disclosure. After the manifest is displayed, the receiver explicitly selects items and a destination tree. No source InputStream is opened and no staging file is allocated before the item-specific readiness exchange.
 3. Protocol codecs enforce version, session ID, batch ID, item ID, frame bounds, manifest count, unique IDs, exact lengths, order and valid state transitions before processing data.
 4. Items transfer serially with at most one source stream, one staging sink and one publication operation active. Chunks are at most 64 KiB, the receive window is at most four chunks/256 KiB, and ACKs follow durable stage sync.
 5. Every item has independent QUEUED/WAITING/TRANSFERRING/VERIFYING/PUBLISHING/COMPLETED/REJECTED/CANCELLED/FAILED state, actual progress, and an authenticated byte-count/SHA-256 receipt when completed.

@@ -22,16 +22,16 @@ The existing source adapter is URI-only. `openSource()` obtains metadata without
 
 ### 2. Receiver-consent policy
 
-1. Use one batch-level consent interaction with an explicit per-item selection list. The received manifest is displayed only inside the already SAS-approved, mutually authenticated TLS session. The receiver can deselect any item; only the explicitly accepted item IDs may proceed. “Accept selected” with an empty selection is invalid; “Reject all” is a distinct action.
-2. This model avoids a repeated consent dialog for every file while preserving item-level user choice. It is not implicit consent to every item: selected IDs are explicit and immutable for the operation.
+1. Use two explicit receiver authorization steps. First, the sender transmits a metadata-free `BATCH_OFFER` containing only a random batch UUID. Before the manifest is sent, the receiver must approve disclosure of the file list. Only after a matching `BATCH_OFFER_ACCEPTED` does the sender send the manifest. The receiver then sees a batch-level consent screen with explicit per-item checkboxes. Only selected item IDs may proceed; an empty selection cannot be accepted, and rejecting the list is a distinct action.
+2. The first decision protects metadata confidentiality; the second decision authorizes content transfer for the explicitly selected items. This avoids repeated per-file dialogs while keeping the receiver in control. Permission to view metadata is not consent to receive any file.
 3. The decision is bound to the session ID, random batch ID, exact manifest digest and manifest order. The sender validates the batch ID/digest and rejects duplicate, unknown or out-of-range item selections. Unselected items are marked REJECTED and never receive an ITEM_START.
-4. A manifest contains only bounded display metadata (item ID, sanitized display name, normalized MIME type and optional declared size). It contains no source URI, filesystem path, content bytes or precomputed digest. No source InputStream is opened and no private receiving stage is created until that individual item has passed the batch decision and the receiver has accepted its item start.
+4. A manifest contains only bounded display metadata (item ID, sanitized display name, normalized MIME type and optional declared size). It contains no source URI, filesystem path, content bytes or precomputed digest. No manifest field is disclosed before the first metadata-consent decision. No source InputStream is opened and no private receiving stage is created until the second content-consent decision and the per-item readiness exchange.
 5. A consent timeout, picker cancellation or rejection produces a non-success terminal result and closes the batch cleanly; it must not silently turn into acceptance.
 
 ### 3. Versioned batch control/data protocol
 
-1. Keep version 1 frame meanings and the existing `SingleFileTransferProtocol` implementation intact. Add an explicitly versioned version-2 frame family for batch manifest/decision, item start/readiness, item data/ACK, item completion/verified receipt, item failure/cancellation and batch completion/receipt.
-2. The receiver dispatches the first authenticated application frame by its version and type. A version-1 MANIFEST is handed to the existing single-file receiver; a version-2 BATCH_MANIFEST is handed to the batch receiver. The first frame must not be lost or read twice. No v1 message is reinterpreted as a batch message.
+1. Keep version 1 frame meanings and the existing `SingleFileTransferProtocol` implementation intact. Add an explicitly versioned version-2 frame family for metadata-free batch offer/approval, batch manifest/decision, item start/readiness, item data/ACK, item completion/verified receipt, item failure/cancellation and batch completion/receipt.
+2. The receiver dispatches the first authenticated application frame by its version and type. A version-1 MANIFEST is handed to the existing single-file receiver; a version-2 BATCH_OFFER is handed to the batch receiver. The first frame must not be lost or read twice. No v1 message is reinterpreted as a batch message. The offer contains only a random batch UUID; the manifest follows only after the receiver's matching approval frame.
 3. A batch manifest carries a cryptographically random batch UUID and 2–32 ordered, uniquely identified item manifests. Its exact encoded bytes are SHA-256 hashed. The receiver's decision echoes the batch UUID and manifest digest and includes the selected item IDs (or a bounded bitmap whose bit positions are the immutable manifest order). The codec rejects duplicate IDs, invalid counts, malformed lengths, trailing bytes and oversized frames.
 4. Every version-2 control message and batch data/ACK message is bound to the session ID and batch ID. Every item-scoped message also carries its item ID. Data chunks retain explicit contiguous offsets; ACKs identify the batch, item and next durably committed offset.
 5. For each selected item, the order is: sender ITEM_START → receiver creates one bounded private stage → receiver ITEM_READY → sender opens that item's URI stream and sends bounded chunks → receiver syncs each maximum-four-chunk window before cumulative ACK → sender sends the authenticated actual-length/SHA-256 completion record → receiver verifies and seals staging → receiver publishes into the user-selected SAF tree and reads back the exact bytes → receiver sends the item's authenticated integrity receipt. No later item starts until the current item has reached a terminal outcome.
@@ -65,14 +65,15 @@ The existing source adapter is URI-only. `openSource()` obtains metadata without
 ## Consequences
 
 - Two-file and larger batches require both devices to run a version-2-capable build. Single-file transfers retain the existing version-1 wire contract and code path.
-- The receiver makes one informed consent decision while retaining independent selection and terminal status per item.
+- The receiver explicitly authorizes metadata disclosure before seeing filenames, then makes one batch-level content decision with per-item selection and independent terminal status.
 - A chosen SAF directory avoids repeated save dialogs but is subject to document-provider limitations and Android's system-enforced directory restrictions.
 - Sequential processing reduces memory, descriptor and disk-pressure risk. It does not claim parallel-file throughput.
 - The version-2 dispatcher and all codecs require negative tests for malformed manifests, duplicate IDs, cross-batch/item frames, invalid decisions, out-of-order items and truncation.
 
 ## Validation gates
 
-- Codec tests: count 2/32/33, exact 16 KiB boundary, malformed UTF-8, duplicate IDs, malformed lengths, duplicate/unknown selections, manifest digest mismatch, unknown item IDs, wrong batch/session binding and trailing bytes.
+- Codec tests: metadata-free offer exact length/roundtrip, count 2/32/33, exact 16 KiB boundary, malformed UTF-8, duplicate IDs, malformed lengths, duplicate/unknown selections, manifest digest mismatch, unknown item IDs, wrong batch/session binding and trailing bytes.
+- Consent-order tests: receiver rejection sends no metadata approval; sender does not transmit a manifest before a matching offer approval; item contents do not begin before explicit per-item acceptance and ITEM_READY.
 - Protocol tests: version-1 sender/receiver regression; version-2 two/32 item flows; mixed MIME; arbitrary binary; zero-byte; large item; unknown length; Persian/Unicode names; extensionless names; item receipts and terminal batch receipt.
 - Consent tests: no source stream or stage before consent; selected subset only; reject all; timeout; destination-tree cancellation.
 - Item isolation: provider-open/read failure, low storage, stage/write/sync failure, destination creation/write/read-back failure, active/queued cancellation, cleanup and subsequent-item continuation.
