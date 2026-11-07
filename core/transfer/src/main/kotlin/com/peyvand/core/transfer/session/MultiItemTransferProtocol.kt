@@ -148,9 +148,19 @@ class MultiItemTransferProtocol(
                         return@forEachIndexed
                     }
                     TransferFrameType.BATCH_ITEM_READY -> requireReference(ready, reference)
-                    TransferFrameType.BATCH_ITEM_CANCELLED_ACK -> {
+                    TransferFrameType.BATCH_ITEM_CANCELLED -> {
                         requireReference(ready, reference)
-                        addOutcome(outcomes, BatchItemOutcome(item.itemId, BatchItemOutcomeStatus.CANCELLED), onItemOutcome)
+                        writeReference(
+                            output,
+                            sessionId,
+                            TransferFrameType.BATCH_ITEM_CANCELLED_ACK,
+                            reference,
+                        )
+                        addOutcome(
+                            outcomes,
+                            BatchItemOutcome(item.itemId, BatchItemOutcomeStatus.CANCELLED),
+                            onItemOutcome,
+                        )
                         return@forEachIndexed
                     }
                     else -> throw TransferProtocolException("Expected batch item readiness")
