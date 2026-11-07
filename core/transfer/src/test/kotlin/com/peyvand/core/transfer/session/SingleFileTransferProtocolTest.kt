@@ -1,8 +1,7 @@
 package com.peyvand.core.transfer.session
 
+import com.peyvand.core.domain.transfer.TransferStagingSink
 import com.peyvand.core.transfer.manifest.TransferManifestItem
-import com.peyvand.core.transfer.protocol.TransferCompletionCodec
-import com.peyvand.core.transfer.protocol.TransferCompletionRecord
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -52,7 +51,7 @@ class SingleFileTransferProtocolTest {
                 publishVerified = { receivedManifest, receipt, staged ->
                     assertEquals(manifest.itemId, receivedManifest.itemId)
                     assertEquals(bytes.size.toLong(), receipt.actualSizeBytes)
-                    assertTrue(bytes.contentEquals(staged.openVerifiedInputStream().use(InputStream::readBytes)))
+                    assertTrue(bytes.contentEquals(staged.openVerifiedInputStream().use { it.readBytes() }))
                     publishCalled = true
                     true
                 },

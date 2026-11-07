@@ -1,9 +1,9 @@
 package com.peyvand.core.transfer.session
 
+import com.peyvand.core.domain.transfer.TransferStagingSink
 import com.peyvand.core.transfer.integrity.TransferIntegrityVerifier
 import com.peyvand.core.transfer.integrity.VerifiedTransferReceipt
 import com.peyvand.core.transfer.manifest.TransferManifestItem
-import com.peyvand.core.transfer.protocol.TransferChunkAcknowledgement
 import com.peyvand.core.transfer.protocol.TransferChunkAcknowledgementCodec
 import com.peyvand.core.transfer.protocol.TransferChunkSequenceValidator
 import com.peyvand.core.transfer.protocol.TransferCompletionCodec
@@ -19,7 +19,6 @@ import com.peyvand.core.transfer.protocol.TransferSendWindow
 import com.peyvand.core.transfer.stream.TransferStreamResult
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
-import java.io.Closeable
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -27,22 +26,6 @@ import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-
-/**
- * Private, app-owned staging target used by the receiver. Implementations must not
- * expose the partial artifact to user-visible destinations before [seal] succeeds.
- */
-interface TransferStagingSink : Closeable {
-    fun write(bytes: ByteArray, offset: Int, length: Int)
-    /** Flushes data to the durability level required before a cumulative ACK is sent. */
-    fun sync()
-    /** Closes the write side after the final byte has been received. */
-    fun seal()
-    /** Opens the sealed private artifact for publication. */
-    fun openVerifiedInputStream(): InputStream
-    /** Deletes an uncommitted private artifact. */
-    fun delete()
-}
 
 sealed interface TransferSessionOutcome {
     data class Completed(
@@ -76,6 +59,8 @@ class SingleFileTransferProtocol(
         channelInput: InputStream,
         channelOutput: OutputStream,
         onProgress: (Long) -> Unit = {},
+        onWaitingForReceiverConsent: () -> Unit = {},
+        onConsentAccepted: () -> Unit = {},
     ): TransferSessionOutcome {
         require(manifest.sizeBytes == null || manifest.sizeBytes <= maximumFileSizeBytes) {
             "Manifest size exceeds the configured sender limit"
@@ -98,6 +83,7 @@ class SingleFileTransferProtocol(
             TransferFrameType.MANIFEST,
             com.peyvand.core.transfer.manifest.TransferManifestCodec.encode(manifest),
         )
+        onWaitingForReceiverConsent()
 
         try {
             val decision = readSessionFrame(input, sessionId)
@@ -113,6 +99,7 @@ class SingleFileTransferProtocol(
                 TransferFrameType.ACCEPT -> requireEmptyPayload(decision)
                 else -> throw TransferProtocolException("Expected receiver consent response")
             }
+            onConsentAccepted()
 
             while (true) {
                 context.ensureActive()
@@ -201,6 +188,9 @@ class SingleFileTransferProtocol(
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             runCatching { writeFrame(output, sessionId, TransferFrameType.CANCEL, byteArrayOf()) }
             throw cancelled
+        } catch (exception: Exception) {
+            runCatching { writeError(output, sessionId) }
+            throw exception
         }
     }
 
@@ -231,14 +221,16 @@ class SingleFileTransferProtocol(
             return TransferSessionOutcome.Rejected(manifest)
         }
 
-        val sink = acquireConsentAndStaging(manifest)
-        if (sink == null) {
-            writeFrame(output, sessionId, TransferFrameType.REJECT, byteArrayOf())
-            return TransferSessionOutcome.Rejected(manifest)
-        }
-
+        var sink: TransferStagingSink? = null
         var published = false
         try {
+            val staged = acquireConsentAndStaging(manifest)
+            if (staged == null) {
+                writeFrame(output, sessionId, TransferFrameType.REJECT, byteArrayOf())
+                return TransferSessionOutcome.Rejected(manifest)
+            }
+            sink = staged
+
             writeFrame(output, sessionId, TransferFrameType.ACCEPT, byteArrayOf())
             val validator = TransferChunkSequenceValidator(
                 expectedItemId = manifest.itemId,
@@ -255,8 +247,8 @@ class SingleFileTransferProtocol(
                         val chunk = TransferDataChunkCodec.decodePayload(frame.payloadBytes())
                         validator.validate(chunk)
                         val bytes = chunk.bytes()
-                        sink.write(bytes, 0, bytes.size)
-                        sink.sync()
+                        staged.write(bytes, 0, bytes.size)
+                        staged.sync()
                         val acknowledgement = validator.commit(chunk)
                         digest.update(bytes)
                         totalBytes += bytes.size.toLong()
@@ -280,10 +272,10 @@ class SingleFileTransferProtocol(
                             localStreamResult = localResult,
                             remoteRecord = senderCompletion,
                         )
-                        sink.seal()
-                        if (!publishVerified(manifest, receipt, sink)) {
-                            writeError(output, sessionId)
-                            sink.delete()
+                        staged.seal()
+                        if (!publishVerified(manifest, receipt, staged)) {
+                            writeFrame(output, sessionId, TransferFrameType.CANCEL, byteArrayOf())
+                            staged.delete()
                             return TransferSessionOutcome.Cancelled(manifest)
                         }
                         published = true
@@ -303,7 +295,7 @@ class SingleFileTransferProtocol(
 
                     TransferFrameType.CANCEL -> {
                         requireEmptyPayload(frame)
-                        sink.delete()
+                        staged.delete()
                         return TransferSessionOutcome.Cancelled(manifest)
                     }
 
@@ -315,15 +307,15 @@ class SingleFileTransferProtocol(
                 }
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
-            if (!published) runCatching { sink.delete() }
+            if (!published) runCatching { sink?.delete() }
             runCatching { writeFrame(output, sessionId, TransferFrameType.CANCEL, byteArrayOf()) }
             throw cancelled
         } catch (exception: Exception) {
-            if (!published) runCatching { sink.delete() }
+            if (!published) runCatching { sink?.delete() }
             runCatching { writeError(output, sessionId) }
             throw exception
         } finally {
-            runCatching { sink.close() }
+            runCatching { sink?.close() }
         }
     }
 
