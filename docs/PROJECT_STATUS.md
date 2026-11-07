@@ -236,3 +236,15 @@ This section supersedes earlier status bullets in this document that said the li
 
 The ordering is a proposed dependency-aware plan, not authorization to skip architecture/security review. Keep each checkpoint independently scoped with acceptance criteria and evidence. This section supersedes older top-level summaries only where they conflict with the 2026-11-07 validation update.
 
+
+
+## 2026-11-07 — CP-004 opened: multi-item one-to-one transfer
+
+- CP-004 work is isolated on `feature/multi-item-transfer`, created from the exact prior branch head `7237115e1ce04ab225cbad223fad77e9ed8d344f`. The CP-003 branch and PR #3 were not modified; PR #3 remains open, Draft and unmerged.
+- CP-003C validated implementation SHA remains `0bb8d6582d860a45ded777ac9432d617c2106f55`; exact-head workflow [42392698691](https://github.com/azad2022/shareit/actions/runs/42392698691) succeeded on that code SHA. The branch head after documentation-only commits is `7237115e1ce04ab225cbad223fad77e9ed8d344f`.
+- CP-004 starts `IN_PROGRESS`. Its initial scope is one sender, one authenticated receiver, multiple user-selected arbitrary `content://` files, sequential ordered processing, independent per-item state/consent/integrity receipts, and failure isolation.
+- Current CP-003 coordinator is explicitly single-item (`selectedItems.singleOrNull()`) and owns one authenticated channel, one source stream, one consent decision and one destination decision. The protocol and state machine are also single-item. CP-004 will use a separate batch orchestration boundary rather than wrapping the existing protocol in a loop.
+- ADR-0008 records the proposed protocol and consent policy: an aggregate-only batch offer is shown after authenticated TLS; batch consent is required before any item metadata; after batch acceptance each item manifest is introduced in stable order and requires its own explicit consent before its ContentResolver stream is opened. Per-item rejection/failure may continue only at a validated terminal item boundary; channel/protocol desynchronization aborts the batch.
+- The CP-004 queue is sequential and in-memory. At most one item, source descriptor and bounded data window are active. Durable recovery after process death remains CP-007.
+- Checkpoint file: [CP-004](checkpoints/CP-004-MULTI-ITEM-TRANSFER.md). Architecture decision: [ADR-0008](decisions/ADR-0008-MULTI-ITEM-ONE-TO-ONE-BATCH-TRANSFER.md).
+- No CP-004 application source code, tests, lint, Debug build, APK or physical-device validation is claimed by this documentation update. CP-004 remains `IN_PROGRESS`.
