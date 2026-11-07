@@ -5,7 +5,13 @@ import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.domain.files.ShareItem
 import com.peyvand.core.domain.files.ShareSource
 import com.peyvand.core.domain.transfer.TransferFileStorageRepository
+import com.peyvand.core.transfer.manifest.BatchTransferManifest
 import com.peyvand.core.transfer.manifest.TransferManifestItem
+import com.peyvand.core.transfer.protocol.BatchItemOutcome
+import com.peyvand.core.transfer.protocol.BatchItemOutcomeStatus
+import com.peyvand.core.transfer.protocol.TransferFrameCodec
+import com.peyvand.core.transfer.protocol.TransferFrameType
+import java.io.IOException
 import java.io.InputStream
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -18,17 +24,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.channels.Channel
+import java.util.concurrent.ConcurrentHashMap
 
 enum class TransferSessionPhase {
     PREPARING,
     READY_TO_SEND,
     WAITING_FOR_INCOMING,
     WAITING_FOR_CONSENT,
+    AWAITING_BATCH_CONSENT,
+    AWAITING_DESTINATION_TREE,
     TRANSFERRING,
     VERIFYING,
     AWAITING_DESTINATION,
     PUBLISHING,
     COMPLETED,
+    PARTIALLY_COMPLETED,
     REJECTED,
     CANCELLED,
     FAILED,
@@ -36,11 +47,24 @@ enum class TransferSessionPhase {
 
 enum class TransferSessionError {
     SELECTION_REQUIRED,
+    BATCH_LIMIT_EXCEEDED,
     UNSUPPORTED_SOURCE,
     CHANNEL_UNAVAILABLE,
     INSUFFICIENT_STORAGE,
     TRANSFER_FAILED,
 }
+
+enum class TransferItemPhase { QUEUED, WAITING_FOR_RECEIVER, TRANSFERRING, VERIFYING, PUBLISHING, COMPLETED, REJECTED, CANCELLED, FAILED }
+
+data class TransferItemSnapshot(
+    val id: String,
+    val displayName: String,
+    val mimeType: String,
+    val totalSizeBytes: Long?,
+    val transferredBytes: Long = 0L,
+    val phase: TransferItemPhase = TransferItemPhase.QUEUED,
+    val isSelectedForConsent: Boolean = false,
+)
 
 data class TransferSessionSnapshot(
     val phase: TransferSessionPhase = TransferSessionPhase.PREPARING,
@@ -51,6 +75,9 @@ data class TransferSessionSnapshot(
     val transferredBytes: Long = 0L,
     val error: TransferSessionError? = null,
     val destinationPickerRequestId: Int = 0,
+    val destinationTreePickerRequestId: Int = 0,
+    val isBatch: Boolean = false,
+    val items: List<TransferItemSnapshot> = emptyList(),
 )
 
 /**
@@ -71,6 +98,11 @@ class SingleFileTransferCoordinator(
     private var operationId = 0L
     private var prepared = false
     private var selectedItem: ShareItem? = null
+    private var selectedBatchItems: List<ShareItem> = emptyList()
+    private var batchTransferIdsBySourceId: Map<String, UUID> = emptyMap()
+    private var batchSourceItemsByTransferId: Map<UUID, ShareItem> = emptyMap()
+    @Volatile
+    private var activeBatchItemId: UUID? = null
     @Volatile
     private var authenticatedChannel: AuthenticatedPeerChannel? = null
     @Volatile
@@ -82,6 +114,13 @@ class SingleFileTransferCoordinator(
 
     @Volatile
     private var destinationDecision: CompletableDeferred<String?>? = null
+    @Volatile
+    private var batchConsentDecision: CompletableDeferred<Set<UUID>?>? = null
+    @Volatile
+    private var destinationTreeDecision: CompletableDeferred<String?>? = null
+    @Volatile
+    private var batchCancellationRequests: Channel<UUID>? = null
+    private val cancelledBeforeStart = ConcurrentHashMap.newKeySet<UUID>()
 
     fun prepareSession(
         isSender: Boolean,
