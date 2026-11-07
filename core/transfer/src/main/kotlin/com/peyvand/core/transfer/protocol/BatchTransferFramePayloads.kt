@@ -1,3 +1,25 @@
+data class BatchOffer(val batchId: UUID)
+
+object BatchOfferCodec {
+    const val PAYLOAD_BYTES = 16
+
+    fun encode(offer: BatchOffer): ByteArray =
+        ByteBuffer.allocate(PAYLOAD_BYTES)
+            .order(ByteOrder.BIG_ENDIAN)
+            .putLong(offer.batchId.mostSignificantBits)
+            .putLong(offer.batchId.leastSignificantBits)
+            .array()
+
+    @Throws(TransferProtocolException::class)
+    fun decode(payload: ByteArray): BatchOffer {
+        if (payload.size != PAYLOAD_BYTES) {
+            throw TransferProtocolException("Invalid batch offer payload length")
+        }
+        val input = ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN)
+        return BatchOffer(UUID(input.long, input.long))
+    }
+}
+
 package com.peyvand.core.transfer.protocol
 
 import java.io.ByteArrayOutputStream

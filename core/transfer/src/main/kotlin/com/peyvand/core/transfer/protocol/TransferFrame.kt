@@ -49,7 +49,9 @@ enum class TransferFrameType(
     BATCH_ITEM_CANCELLED_ACK(26, 32, 32),
     BATCH_COMPLETE(27, 16 + 4 + 32, 16 + 4 + 32),
     BATCH_RECEIPT(28, 16 + 4 + 32, 16 + 4 + 32),
-    BATCH_ABORT(29, 32, 32);
+    BATCH_ABORT(29, 32, 32),
+    BATCH_OFFER(30, 16, 16),
+    BATCH_OFFER_ACCEPTED(31, 16, 16);
 
     companion object {
         internal fun fromWireCode(code: Int): TransferFrameType =
