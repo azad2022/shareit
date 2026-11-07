@@ -1,7 +1,5 @@
 package com.peyvand.core.transfer.manifest
 
-import com.peyvand.core.transfer.protocol.BatchConsentDecision
-import com.peyvand.core.transfer.protocol.BatchConsentDecisionCodec
 import com.peyvand.core.transfer.protocol.TransferProtocolException
 import java.util.UUID
 import org.junit.Assert.assertEquals
