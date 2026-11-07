@@ -248,15 +248,31 @@ data class BatchTransferItemSnapshot(
         require(maximumAcceptedBytes == null || maximumAcceptedBytes >= 0L)
         require(actualSizeBytes == null || actualSizeBytes >= 0L)
         require(sha256Hex == null || SHA256_HEX.matches(sha256Hex))
+        require(actualSizeBytes == null || sha256Hex != null)
+        require(sha256Hex == null || actualSizeBytes != null)
+        require(maximumAcceptedBytes == null || acknowledgedBytes <= maximumAcceptedBytes)
+        require(declaredSizeBytes == null || acknowledgedBytes <= declaredSizeBytes)
+        require(actualSizeBytes == null || acknowledgedBytes <= actualSizeBytes)
+        require(maximumAcceptedBytes == null || actualSizeBytes == null ||
+            actualSizeBytes <= maximumAcceptedBytes)
+        require(declaredSizeBytes == null || actualSizeBytes == null ||
+            actualSizeBytes == declaredSizeBytes)
         require(
             (phase == BatchTransferItemPhase.ABORTING ||
                 phase == BatchTransferItemPhase.AWAITING_TERMINAL_COMMIT) ==
                 (pendingOutcome != null),
         )
+        require(receipt == null || phase == BatchTransferItemPhase.COMPLETED)
         if (phase == BatchTransferItemPhase.COMPLETED) {
-            require(receipt != null)
-            require(actualSizeBytes == receipt.actualSizeBytes)
-            require(sha256Hex == receipt.sha256Hex)
+            val verifiedReceipt = requireNotNull(receipt)
+            require(actualSizeBytes != null)
+            require(sha256Hex != null)
+            require(acknowledgedBytes == actualSizeBytes)
+            require(verifiedReceipt.batchId == batchId)
+            require(verifiedReceipt.itemId == itemId)
+            require(verifiedReceipt.ordinal == ordinal)
+            require(actualSizeBytes == verifiedReceipt.actualSizeBytes)
+            require(sha256Hex == verifiedReceipt.sha256Hex)
         }
     }
 
