@@ -4,6 +4,7 @@ import com.peyvand.core.domain.transfer.TransferStagingSink
 import com.peyvand.core.transfer.integrity.TransferIntegrityVerifier
 import com.peyvand.core.transfer.integrity.VerifiedTransferReceipt
 import com.peyvand.core.transfer.manifest.TransferManifestItem
+import com.peyvand.core.transfer.protocol.TransferChunkAcknowledgement
 import com.peyvand.core.transfer.protocol.TransferChunkAcknowledgementCodec
 import com.peyvand.core.transfer.protocol.TransferChunkSequenceValidator
 import com.peyvand.core.transfer.protocol.TransferCompletionCodec
@@ -148,16 +149,13 @@ class SingleFileTransferProtocol(
             }
 
             output.flush()
-            while (window.inFlightChunkCount > 0) {
-                context.ensureActive()
-                onProgress(receiveAcknowledgement(input, sessionId, window))
-            }
-
             val senderCompletion = TransferCompletionRecord(
                 itemId = manifest.itemId,
                 actualSizeBytes = totalBytes,
                 sha256Hex = digest.digest().toLowerHex(),
             )
+            // Send the terminal byte count/digest before waiting for the final partial
+            // receive window. The receiver uses ITEM_COMPLETE to flush and ACK that tail.
             writeFrame(
                 output,
                 sessionId,
@@ -165,6 +163,11 @@ class SingleFileTransferProtocol(
                 TransferCompletionCodec.encode(senderCompletion),
             )
             onWaitingForVerification()
+
+            while (window.inFlightChunkCount > 0) {
+                context.ensureActive()
+                onProgress(receiveAcknowledgement(input, sessionId, window))
+            }
 
             val receiverFrame = readSessionFrame(input, sessionId)
             if (receiverFrame.type == TransferFrameType.CANCEL) {
@@ -239,7 +242,32 @@ class SingleFileTransferProtocol(
                 maximumSizeBytes = maximumFileSizeBytes,
             )
             val digest = MessageDigest.getInstance("SHA-256")
+            val pendingChunks = ArrayList<TransferDataChunk>(
+                TransferFlowControlPolicy.MAX_IN_FLIGHT_CHUNKS,
+            )
+            var receivedOffsetBytes = 0L
             var totalBytes = 0L
+
+            fun commitPendingChunks() {
+                if (pendingChunks.isEmpty()) return
+                // Persist the whole bounded receive window before advancing the
+                // validator's committed offset or acknowledging any of its bytes.
+                staged.sync()
+                var acknowledgement: TransferChunkAcknowledgement? = null
+                pendingChunks.forEach { chunk ->
+                    acknowledgement = validator.commit(chunk)
+                }
+                val committed = acknowledgement
+                    ?: throw TransferProtocolException("A non-empty receive window produced no acknowledgement")
+                writeFrame(
+                    output,
+                    sessionId,
+                    TransferFrameType.CHUNK_ACK,
+                    TransferChunkAcknowledgementCodec.encode(committed),
+                )
+                onProgress(committed.nextExpectedOffset)
+                pendingChunks.clear()
+            }
 
             while (true) {
                 context.ensureActive()
@@ -247,24 +275,36 @@ class SingleFileTransferProtocol(
                 when (frame.type) {
                     TransferFrameType.DATA_CHUNK -> {
                         val chunk = TransferDataChunkCodec.decodePayload(frame.payloadBytes())
-                        validator.validate(chunk)
+                        if (chunk.itemId != manifest.itemId) {
+                            throw TransferProtocolException("Chunk belongs to a different transfer item")
+                        }
+                        if (chunk.offsetBytes != receivedOffsetBytes) {
+                            throw TransferProtocolException(
+                                "Non-contiguous receive offset: expected ${receivedOffsetBytes}, received ${chunk.offsetBytes}",
+                            )
+                        }
+                        if (chunk.sizeBytes.toLong() > maximumFileSizeBytes - receivedOffsetBytes) {
+                            throw TransferProtocolException("Chunk exceeds receiver transfer-size limit")
+                        }
+                        if (pendingChunks.size >= TransferFlowControlPolicy.MAX_IN_FLIGHT_CHUNKS) {
+                            throw TransferProtocolException("Sender exceeded the receiver's bounded in-flight window")
+                        }
+
                         val bytes = chunk.bytes()
                         staged.write(bytes, 0, bytes.size)
-                        staged.sync()
-                        val acknowledgement = validator.commit(chunk)
                         digest.update(bytes)
                         totalBytes += bytes.size.toLong()
-                        onProgress(totalBytes)
-                        writeFrame(
-                            output,
-                            sessionId,
-                            TransferFrameType.CHUNK_ACK,
-                            TransferChunkAcknowledgementCodec.encode(acknowledgement),
-                        )
+                        receivedOffsetBytes = totalBytes
+                        pendingChunks += chunk
+
+                        if (pendingChunks.size == TransferFlowControlPolicy.MAX_IN_FLIGHT_CHUNKS) {
+                            commitPendingChunks()
+                        }
                     }
 
                     TransferFrameType.ITEM_COMPLETE -> {
                         onVerifying()
+                        commitPendingChunks()
                         val senderCompletion = TransferCompletionCodec.decode(frame.payloadBytes())
                         val localResult = TransferStreamResult(
                             bytesTransferred = totalBytes,
