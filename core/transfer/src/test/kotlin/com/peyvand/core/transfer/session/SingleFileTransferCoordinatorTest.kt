@@ -101,6 +101,7 @@ class SingleFileTransferCoordinatorTest {
             withTimeout(10_000L) {
                 receiver.state.first { it.phase == TransferSessionPhase.AWAITING_DESTINATION }
             }
+            assertEquals(TransferSessionPhase.VERIFYING, sender.state.value.phase)
 
             receiver.provideDestination("content://destination/document/1")
             withTimeout(10_000L) {
