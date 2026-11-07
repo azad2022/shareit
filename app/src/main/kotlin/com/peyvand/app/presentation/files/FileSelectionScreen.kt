@@ -60,6 +60,7 @@ import com.peyvand.app.R
 import com.peyvand.core.domain.files.ShareCategory
 import com.peyvand.core.domain.files.ShareItem
 import com.peyvand.core.domain.files.ShareSource
+import com.peyvand.core.transfer.manifest.BatchTransferManifest
 import com.peyvand.core.domain.files.SharePermission
 import com.peyvand.core.domain.files.SharePermissionPolicy
 
@@ -399,8 +400,9 @@ fun FileSelectionScreen(
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
-                    if (selectedItems.size != 1 ||
-                        selectedItems.singleOrNull()?.source !is ShareSource.ContentUri
+                    if (selectedItems.isEmpty() ||
+                        selectedItems.size > BatchTransferManifest.MAX_ITEMS ||
+                        selectedItems.any { it.source !is ShareSource.ContentUri }
                     ) {
                         Text(
                             text = stringResource(R.string.file_transfer_selection_required),
@@ -422,8 +424,8 @@ fun FileSelectionScreen(
                         }
                         Button(
                             onClick = onContinue,
-                            enabled = selectedItems.size == 1 &&
-                                selectedItems.single().source is ShareSource.ContentUri,
+                            enabled = selectedItems.size in 1..BatchTransferManifest.MAX_ITEMS &&
+                                selectedItems.all { it.source is ShareSource.ContentUri },
                             modifier = Modifier.weight(1f),
                         ) {
                             Text(stringResource(R.string.action_continue))

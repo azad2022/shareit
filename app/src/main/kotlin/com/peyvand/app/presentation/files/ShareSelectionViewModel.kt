@@ -153,7 +153,7 @@ class ShareSelectionViewModel(
 
     fun toggleSelection(item: ShareItem) {
         mutableState.update { current ->
-            val updated = current.selectedItems.toMutableMap()
+            val updated = LinkedHashMap(current.selectedItems)
             if (updated.containsKey(item.id)) {
                 updated.remove(item.id)
             } else {
@@ -169,7 +169,7 @@ class ShareSelectionViewModel(
             try {
                 val documents = repository.resolveDocuments(uriStrings)
                 mutableState.update { current ->
-                    val updated = current.selectedItems.toMutableMap()
+                    val updated = LinkedHashMap(current.selectedItems)
                     documents.forEach { document -> updated[document.id] = document }
                     current.copy(
                         items = if (current.category == ShareCategory.FILES) {
