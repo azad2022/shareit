@@ -92,6 +92,36 @@ data class BatchTransferResult(
  * at a time. The caller retains ownership of the authenticated channel.
  */
 
+data class BatchReceiverSelection(
+    val acceptedItemIds: Set<UUID>,
+    val destinationTreeUri: String?,
+) {
+    init {
+        require(acceptedItemIds.isNotEmpty() || destinationTreeUri == null)
+        require(destinationTreeUri == null || destinationTreeUri.isNotBlank())
+    }
+}
+
+data class BatchTransferResult(
+    val outcomes: List<BatchItemOutcome>,
+    val outcomeDigestHex: String,
+) {
+    val completedCount: Int
+        get() = outcomes.count { it.status == BatchItemOutcomeStatus.COMPLETED }
+
+    val rejectedCount: Int
+        get() = outcomes.count { it.status == BatchItemOutcomeStatus.REJECTED }
+
+    val cancelledCount: Int
+        get() = outcomes.count { it.status == BatchItemOutcomeStatus.CANCELLED }
+
+    val failedCount: Int
+        get() = outcomes.count { it.status == BatchItemOutcomeStatus.FAILED }
+
+    val hasPartialOutcome: Boolean
+        get() = failedCount > 0 || rejectedCount > 0 || cancelledCount > 0
+}
+
 internal class BatchFrameReader(
     input: InputStream,
     scope: CoroutineScope,
