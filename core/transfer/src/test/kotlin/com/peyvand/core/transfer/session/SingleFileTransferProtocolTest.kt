@@ -197,7 +197,7 @@ class SingleFileTransferProtocolTest {
 
         assertTrue(result.isFailure)
         assertTrue(staging.deleted)
-        assertTrue(staging.bytes().contentEquals(byteArrayOf(0x01)))
+        assertEquals(0, staging.syncCount)
     }
 
     @Test
@@ -251,13 +251,17 @@ class SingleFileTransferProtocolTest {
         private var sealed = false
         var deleted = false
             private set
+        var syncCount = 0
+            private set
 
         override fun write(bytes: ByteArray, offset: Int, length: Int) {
             check(!sealed)
             output.write(bytes, offset, length)
         }
 
-        override fun sync() = Unit
+        override fun sync() {
+            syncCount += 1
+        }
 
         override fun seal() {
             sealed = true
@@ -267,8 +271,6 @@ class SingleFileTransferProtocolTest {
             check(sealed)
             return ByteArrayInputStream(output.toByteArray())
         }
-
-        fun bytes(): ByteArray = output.toByteArray()
 
         override fun delete() {
             deleted = true
