@@ -218,7 +218,7 @@ class AndroidTransferFileStorageRepository(
         val normalized = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFC)
             .map { character ->
                 when {
-                    character == '/' || character == '\\\\' || character == ':' -> '_'
+                    character == '/' || character.code == 0x5c || character == ':' -> '_'
                     character.code < 0x20 || character.code == 0x7f -> '_'
                     else -> character
                 }
