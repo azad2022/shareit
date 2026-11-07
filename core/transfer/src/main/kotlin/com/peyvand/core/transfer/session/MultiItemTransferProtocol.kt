@@ -409,6 +409,7 @@ class MultiItemTransferProtocol(
                     return@forEach
                 }
 
+                var itemFailure: Throwable? = null
                 val outcome = try {
                     writeReference(output, sessionId, TransferFrameType.BATCH_ITEM_READY, reference)
                     receiveItem(
@@ -424,8 +425,29 @@ class MultiItemTransferProtocol(
                         onItemProgress,
                         onItemVerifying,
                     )
+                } catch (failure: Throwable) {
+                    itemFailure = failure
+                    throw failure
                 } finally {
-                    staging.close()
+                    var cleanupFailure: Throwable? = null
+                    try {
+                        // close() only closes the writer in the Android adapter. Delete
+                        // explicitly so interrupted or fatal items cannot leave staging behind.
+                        staging.delete()
+                    } catch (failure: Throwable) {
+                        cleanupFailure = failure
+                    }
+                    try {
+                        staging.close()
+                    } catch (failure: Throwable) {
+                        if (cleanupFailure == null) cleanupFailure = failure
+                        else cleanupFailure.addSuppressed(failure)
+                    }
+                    if (cleanupFailure != null) {
+                        val previousFailure = itemFailure
+                        if (previousFailure != null) previousFailure.addSuppressed(cleanupFailure)
+                        else throw cleanupFailure
+                    }
                 }
                 addOutcome(outcomes, outcome, onItemOutcome)
             }
