@@ -2,6 +2,7 @@ package com.peyvand.core.storage
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.StatFs
 import android.provider.DocumentsContract
@@ -136,6 +137,103 @@ class AndroidTransferFileStorageRepository(
         } finally {
             runCatching { staging.close() }
         }
+    }
+
+
+    override suspend fun publishVerifiedToTree(
+        staging: TransferStagingSink,
+        treeUri: String,
+        displayName: String,
+        mimeType: String,
+        expectedSizeBytes: Long,
+        expectedSha256Hex: String,
+    ): Boolean = withContext(Dispatchers.IO) {
+        require(displayName.isNotBlank())
+        require(mimeType.isNotBlank())
+        require(expectedSizeBytes >= 0L)
+        val tree = parseContentUri(treeUri)
+        if (!DocumentsContract.isTreeUri(tree)) {
+            throw IllegalArgumentException("The selected destination is not a SAF tree URI")
+        }
+        val expectedDigest = decodeSha256(expectedSha256Hex)
+
+        // ACTION_OPEN_DOCUMENT_TREE grants access only to the selected tree. Persist
+        // the read/write grant so SAF operations remain valid when the picker Activity closes.
+        resolver.takePersistableUriPermission(
+            tree,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+        )
+
+        val treeDocumentId = DocumentsContract.getTreeDocumentId(tree)
+        val parent = DocumentsContract.buildDocumentUriUsingTree(tree, treeDocumentId)
+        val safeName = sanitizeDocumentName(displayName)
+        val destination = DocumentsContract.createDocument(
+            resolver,
+            parent,
+            mimeType,
+            safeName,
+        ) ?: throw IOException("The selected document provider could not create a destination file")
+
+        try {
+            val copied = staging.openVerifiedInputStream().use { source ->
+                val output = resolver.openOutputStream(destination, "wt")
+                    ?: throw IOException("The selected document provider did not open a writable stream")
+                output.use { target ->
+                    copyAndDigest(source, target, expectedSizeBytes)
+                }
+            }
+            if (copied.first != expectedSizeBytes ||
+                !MessageDigest.isEqual(copied.second, expectedDigest)
+            ) {
+                throw IOException("New destination document differs from the verified item")
+            }
+
+            val readBack = resolver.openInputStream(destination)
+                ?: throw IOException("The selected document provider cannot read back the new file")
+            val verified = readBack.use { calculateDigest(it, expectedSizeBytes) }
+            if (verified.first != expectedSizeBytes ||
+                !MessageDigest.isEqual(verified.second, expectedDigest)
+            ) {
+                throw IOException("New destination document failed read-back integrity verification")
+            }
+
+            runCatching { staging.delete() }
+            true
+        } catch (exception: Exception) {
+            val destinationRemoved = deletePartialDestination(destination)
+            runCatching { staging.delete() }
+            if (!destinationRemoved) {
+                throw IOException(
+                    "Tree publication failed and the provider did not confirm removal of the partial document",
+                    exception,
+                )
+            }
+            throw exception
+        } finally {
+            runCatching { staging.close() }
+        }
+    }
+
+    private fun sanitizeDocumentName(value: String): String {
+        val normalized = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFC)
+            .map { character ->
+                when {
+                    character == '/' || character == '\\\\' || character == ':' -> '_'
+                    character.code < 0x20 || character.code == 0x7f -> '_'
+                    else -> character
+                }
+            }
+            .joinToString("")
+            .trim()
+            .trim('.')
+            .ifBlank { "received-file" }
+        val output = StringBuilder()
+        for (character in normalized) {
+            val candidate = output.toString() + character
+            if (candidate.toByteArray(Charsets.UTF_8).size > 255) break
+            output.append(character)
+        }
+        return output.toString().ifBlank { "received-file" }
     }
 
     private fun readMetadata(uri: Uri, fallback: ShareItem): TransferSourceMetadata {

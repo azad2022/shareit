@@ -68,4 +68,18 @@ interface TransferFileStorageRepository {
         expectedSizeBytes: Long,
         expectedSha256Hex: String,
     ): Boolean
+
+    /**
+     * Publishes one verified stage as a new child document of a user-selected SAF tree.
+     * Providers may choose a collision-safe name; implementations must never overwrite
+     * an existing document by constructing a raw filesystem path.
+     */
+    suspend fun publishVerifiedToTree(
+        staging: TransferStagingSink,
+        treeUri: String,
+        displayName: String,
+        mimeType: String,
+        expectedSizeBytes: Long,
+        expectedSha256Hex: String,
+    ): Boolean = throw UnsupportedOperationException("Tree publication is not supported by this storage adapter")
 }
