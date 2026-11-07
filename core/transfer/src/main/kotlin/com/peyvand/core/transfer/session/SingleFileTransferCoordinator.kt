@@ -286,6 +286,9 @@ class SingleFileTransferCoordinator(
         }
         consentDecision?.complete(false)
         destinationDecision?.complete(null)
+        batchConsentDecision?.complete(null)
+        destinationTreeDecision?.complete(null)
+        batchCancellationRequests?.close()
         operationId += 1L
         closeTransport()
         transferJob?.cancel()
@@ -294,11 +297,20 @@ class SingleFileTransferCoordinator(
     fun leaveSession() {
         consentDecision?.complete(false)
         destinationDecision?.complete(null)
+        batchConsentDecision?.complete(null)
+        destinationTreeDecision?.complete(null)
+        batchCancellationRequests?.close()
         operationId += 1L
         closeTransport()
         transferJob?.cancel()
         transferJob = null
         selectedItem = null
+        selectedBatchItems = emptyList()
+        batchTransferIdsBySourceId = emptyMap()
+        batchSourceItemsByTransferId = emptyMap()
+        activeBatchItemId = null
+        batchCancellationRequests = null
+        cancelledBeforeStart.clear()
         prepared = false
         mutableState.value = TransferSessionSnapshot()
     }
@@ -306,6 +318,9 @@ class SingleFileTransferCoordinator(
     override fun close() {
         consentDecision?.complete(false)
         destinationDecision?.complete(null)
+        batchConsentDecision?.complete(null)
+        destinationTreeDecision?.complete(null)
+        batchCancellationRequests?.close()
         operationId += 1L
         closeTransport()
         transferJob?.cancel()
