@@ -1,5 +1,4 @@
 package com.peyvand.core.transfer.session
-
 import com.peyvand.core.domain.transfer.TransferFileSource
 import com.peyvand.core.domain.transfer.TransferStagingSink
 import com.peyvand.core.transfer.integrity.TransferIntegrityVerifier
@@ -55,42 +54,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
-
-data class BatchReceiverSelection(
-    val acceptedItemIds: Set<UUID>,
-    val destinationTreeUri: String?,
-) {
-    init {
-        require(acceptedItemIds.isNotEmpty() || destinationTreeUri == null)
-        require(destinationTreeUri == null || destinationTreeUri.isNotBlank())
-    }
-}
-
-data class BatchTransferResult(
-    val outcomes: List<BatchItemOutcome>,
-    val outcomeDigestHex: String,
-) {
-    val completedCount: Int
-        get() = outcomes.count { it.status == BatchItemOutcomeStatus.COMPLETED }
-
-    val rejectedCount: Int
-        get() = outcomes.count { it.status == BatchItemOutcomeStatus.REJECTED }
-
-    val cancelledCount: Int
-        get() = outcomes.count { it.status == BatchItemOutcomeStatus.CANCELLED }
-
-    val failedCount: Int
-        get() = outcomes.count { it.status == BatchItemOutcomeStatus.FAILED }
-
-    val hasPartialOutcome: Boolean
-        get() = failedCount > 0 || rejectedCount > 0 || cancelledCount > 0
-}
-
-/**
- * Version-2 batch protocol. The input pump is the sole reader for the authenticated
- * stream and has a bounded queue. One item, source stream and staging sink are active
- * at a time. The caller retains ownership of the authenticated channel.
- */
 
 data class BatchReceiverSelection(
     val acceptedItemIds: Set<UUID>,
@@ -329,3 +292,4 @@ internal fun ByteArray.toLowerHex(): String {
     }
     return String(chars)
 }
+
