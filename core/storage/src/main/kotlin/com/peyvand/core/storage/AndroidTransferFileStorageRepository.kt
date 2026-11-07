@@ -21,7 +21,10 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.security.MessageDigest
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /**
@@ -113,13 +116,7 @@ class AndroidTransferFileStorageRepository(
                 throw IOException("Published destination failed read-back integrity verification")
             }
 
-            staging.delete()
-            true
-        } catch (exception: Exception) {
-            deletePartialDestination(target)
-            runCatching { staging.delete() }
-            throw exception
-        } finally {
+            // The destination is already verified. A failed private-stage cleanup must not\n            // turn a valid published file into a reported failure; the bounded stale-stage\n            // cleanup removes any leftover private artifact on a later storage operation.\n            runCatching { staging.delete() }\n            true\n        } catch (exception: Exception) {\n            val destinationRemoved = deletePartialDestination(target)\n            runCatching { staging.delete() }\n            if (exception is CancellationException) throw exception\n            if (!destinationRemoved) {\n                throw IOException(\n                    "Publication failed and the document provider did not confirm partial-file removal",\n                    exception,\n                )\n            }\n            throw exception\n        } finally {
             runCatching { staging.close() }
         }
     }
@@ -194,7 +191,7 @@ class AndroidTransferFileStorageRepository(
         return uri
     }
 
-    private fun deletePartialDestination(uri: Uri) {
+    private fun deletePartialDestination(uri: Uri): Boolean {
         val documentDeleted = runCatching {
             if (DocumentsContract.isDocumentUri(appContext, uri)) {
                 DocumentsContract.deleteDocument(resolver, uri)
@@ -203,54 +200,11 @@ class AndroidTransferFileStorageRepository(
             }
         }.getOrDefault(false)
 
-        if (!documentDeleted) {
-            runCatching { resolver.delete(uri, null, null) }
-        }
+        if (documentDeleted) return true
+        return runCatching { resolver.delete(uri, null, null) > 0 }.getOrDefault(false)
     }
 
-    private fun copyAndDigest(
-        source: InputStream,
-        destination: OutputStream,
-        expectedSizeBytes: Long,
-    ): Pair<Long, ByteArray> {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val buffer = ByteArray(COPY_BUFFER_BYTES)
-        var total = 0L
-        while (true) {
-            val count = source.read(buffer)
-            if (count < 0) break
-            if (count == 0) continue
-            if (count.toLong() > expectedSizeBytes - total) {
-                throw IOException("Staged file exceeds the verified byte count")
-            }
-            destination.write(buffer, 0, count)
-            digest.update(buffer, 0, count)
-            total += count.toLong()
-        }
-        destination.flush()
-        return total to digest.digest()
-    }
-
-    private fun calculateDigest(
-        input: InputStream,
-        expectedSizeBytes: Long,
-    ): Pair<Long, ByteArray> {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val buffer = ByteArray(COPY_BUFFER_BYTES)
-        var total = 0L
-        while (true) {
-            val count = input.read(buffer)
-            if (count < 0) break
-            if (count == 0) continue
-            if (count.toLong() > expectedSizeBytes - total) {
-                throw IOException("Published document exceeds the verified byte count")
-            }
-            digest.update(buffer, 0, count)
-            total += count.toLong()
-        }
-        return total to digest.digest()
-    }
-
+    private suspend fun copyAndDigest(\n        source: InputStream,\n        destination: OutputStream,\n        expectedSizeBytes: Long,\n    ): Pair<Long, ByteArray> {\n        val context = currentCoroutineContext()\n        val digest = MessageDigest.getInstance("SHA-256")\n        val buffer = ByteArray(COPY_BUFFER_BYTES)\n        var total = 0L\n        while (true) {\n            context.ensureActive()\n            var count = source.read(buffer, 0, buffer.size)\n            if (count < 0) break\n            if (count == 0) {\n                val single = source.read()\n                if (single < 0) break\n                buffer[0] = single.toByte()\n                count = 1\n            }\n            if (count.toLong() > expectedSizeBytes - total) {\n                throw IOException("Staged file exceeds the verified byte count")\n            }\n            context.ensureActive()\n            destination.write(buffer, 0, count)\n            digest.update(buffer, 0, count)\n            total += count.toLong()\n        }\n        destination.flush()\n        return total to digest.digest()\n    }\n\n    private suspend fun calculateDigest(\n        input: InputStream,\n        expectedSizeBytes: Long,\n    ): Pair<Long, ByteArray> {\n        val context = currentCoroutineContext()\n        val digest = MessageDigest.getInstance("SHA-256")\n        val buffer = ByteArray(COPY_BUFFER_BYTES)\n        var total = 0L\n        while (true) {\n            context.ensureActive()\n            var count = input.read(buffer, 0, buffer.size)\n            if (count < 0) break\n            if (count == 0) {\n                val single = input.read()\n                if (single < 0) break\n                buffer[0] = single.toByte()\n                count = 1\n            }\n            if (count.toLong() > expectedSizeBytes - total) {\n                throw IOException("Published document exceeds the verified byte count")\n            }\n            digest.update(buffer, 0, count)\n            total += count.toLong()\n        }\n        return total to digest.digest()\n    }\n
     private fun decodeSha256(value: String): ByteArray {
         if (value.length != SHA256_HEX_LENGTH || value.any {
                 it !in '0'..'9' && it !in 'a'..'f' && it !in 'A'..'F'
