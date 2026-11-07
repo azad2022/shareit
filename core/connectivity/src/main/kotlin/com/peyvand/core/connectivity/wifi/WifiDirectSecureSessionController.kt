@@ -1,5 +1,6 @@
 package com.peyvand.core.connectivity.wifi
 
+import com.peyvand.core.domain.connection.AuthenticatedPeerChannel
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
 import com.peyvand.core.domain.connection.PeerTransferRole
 import com.peyvand.core.domain.connection.SecureSessionFailure
@@ -65,6 +66,8 @@ internal class WifiDirectSecureSessionController(
     private var approval: CompletableDeferred<Boolean>? = null
     private var rawSocket: Socket? = null
     private var secureSocket: SSLSocket? = null
+    private var activeSessionId: UUID? = null
+    private var authenticatedChannelClaimed = false
     private var activeKeyAlias: String? = null
     private val staleAliasCleanupJob = scope.launch { cleanupStaleKeyAliases() }
 
@@ -105,6 +108,39 @@ internal class WifiDirectSecureSessionController(
         synchronized(lock) {
             if (mutableState.value.status == SecureSessionStatus.WAITING_FOR_SAS_APPROVAL) {
                 approval?.complete(false)
+            }
+        }
+    }
+
+    override fun claimAuthenticatedChannel(): AuthenticatedPeerChannel? = synchronized(lock) {
+        if (mutableState.value.status != SecureSessionStatus.AUTHENTICATED ||
+            authenticatedChannelClaimed
+        ) {
+            return@synchronized null
+        }
+
+        val socket = secureSocket?.takeIf { it.isConnected && !it.isClosed }
+            ?: return@synchronized null
+        val sessionId = activeSessionId ?: return@synchronized null
+        val input = try {
+            socket.inputStream
+        } catch (_: IOException) {
+            return@synchronized null
+        }
+        val output = try {
+            socket.outputStream
+        } catch (_: IOException) {
+            return@synchronized null
+        }
+
+        authenticatedChannelClaimed = true
+        object : AuthenticatedPeerChannel {
+            override val sessionId: UUID = sessionId
+            override val inputStream = input
+            override val outputStream = output
+
+            override fun close() {
+                runCatching { socket.close() }
             }
         }
     }
@@ -350,6 +386,8 @@ internal class WifiDirectSecureSessionController(
             synchronized(lock) {
                 if (generation != expectedGeneration) throw CancellationException()
                 secureSocket = tlsSocket
+                activeSessionId = sessionId
+                authenticatedChannelClaimed = false
                 rawSocket = null
                 approval = null
                 mutableState.value = SecureSessionSnapshot(SecureSessionStatus.AUTHENTICATED)
@@ -583,6 +621,7 @@ internal class WifiDirectSecureSessionController(
                     "localCertificateCount=${socket.session.localCertificates?.size ?: 0} " +
                     "durationMs=$elapsedMillis peerPinVerified=true",
             )
+            socket.soTimeout = TRANSFER_READ_TIMEOUT_MILLIS
             return socket
         } catch (exception: SessionSetupException) {
             runCatching { tlsSocket?.close() }
@@ -655,6 +694,8 @@ internal class WifiDirectSecureSessionController(
             if (generation == expectedGeneration) {
                 approval = null
                 rawSocket = null
+                activeSessionId = null
+                authenticatedChannelClaimed = false
                 activeKeyAlias = null
                 mutableState.value = snapshot
             }
@@ -666,6 +707,8 @@ internal class WifiDirectSecureSessionController(
         closeQuietly(rawSocket)
         secureSocket = null
         rawSocket = null
+        activeSessionId = null
+        authenticatedChannelClaimed = false
         activeKeyAlias?.let(::deleteKeyAlias)
         activeKeyAlias = null
     }
@@ -688,6 +731,7 @@ internal class WifiDirectSecureSessionController(
         const val TCP_READY_TIMEOUT_MILLIS = 25_000L
         const val USER_APPROVAL_TIMEOUT_MILLIS = 60_000L
         const val TLS_HANDSHAKE_TIMEOUT_MILLIS = 15_000
+        const val TRANSFER_READ_TIMEOUT_MILLIS = 300_000
         const val NANOS_PER_MILLI = 1_000_000L
     }
 }

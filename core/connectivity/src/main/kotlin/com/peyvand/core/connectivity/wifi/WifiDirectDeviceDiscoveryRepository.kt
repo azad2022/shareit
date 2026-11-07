@@ -18,6 +18,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.UUID
+import com.peyvand.core.domain.connection.AuthenticatedPeerChannel
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.domain.connection.SecureSessionSnapshot
 import kotlinx.coroutines.flow.StateFlow
@@ -119,6 +120,9 @@ class WifiDirectDeviceDiscoveryRepository(
     override fun approvePairing() = secureSessionController.value.approvePairing()
 
     override fun rejectPairing() = secureSessionController.value.rejectPairing()
+
+    override fun claimAuthenticatedChannel(): AuthenticatedPeerChannel? =
+        secureSessionController.value.claimAuthenticatedChannel()
     private var p2pStateQueryInFlight = false
     private var p2pStateQueryFailed = false
     private var p2pStateQueryGeneration = 0L
