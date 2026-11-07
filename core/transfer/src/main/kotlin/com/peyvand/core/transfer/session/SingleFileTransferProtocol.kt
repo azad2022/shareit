@@ -61,6 +61,7 @@ class SingleFileTransferProtocol(
         onProgress: (Long) -> Unit = {},
         onWaitingForReceiverConsent: () -> Unit = {},
         onConsentAccepted: () -> Unit = {},
+        onWaitingForVerification: () -> Unit = {},
     ): TransferSessionOutcome {
         require(manifest.sizeBytes == null || manifest.sizeBytes <= maximumFileSizeBytes) {
             "Manifest size exceeds the configured sender limit"
@@ -163,6 +164,7 @@ class SingleFileTransferProtocol(
                 TransferFrameType.ITEM_COMPLETE,
                 TransferCompletionCodec.encode(senderCompletion),
             )
+            onWaitingForVerification()
 
             val receiverFrame = readSessionFrame(input, sessionId)
             if (receiverFrame.type == TransferFrameType.CANCEL) {
@@ -204,6 +206,7 @@ class SingleFileTransferProtocol(
             TransferStagingSink,
         ) -> Boolean,
         onProgress: (Long) -> Unit = {},
+        onVerifying: () -> Unit = {},
     ): TransferSessionOutcome {
         val input = BufferedInputStream(channelInput, IO_BUFFER_BYTES)
         val output = BufferedOutputStream(channelOutput, IO_BUFFER_BYTES)
@@ -261,6 +264,7 @@ class SingleFileTransferProtocol(
                     }
 
                     TransferFrameType.ITEM_COMPLETE -> {
+                        onVerifying()
                         val senderCompletion = TransferCompletionCodec.decode(frame.payloadBytes())
                         val localResult = TransferStreamResult(
                             bytesTransferred = totalBytes,
