@@ -198,7 +198,7 @@
     <string name="file_transfer_completed">فایل ذخیره شد و صحت داده‌ها تأیید شد.</string>
     <string name="file_transfer_rejected">درخواست فایل توسط گیرنده رد شد.</string>
     <string name="file_transfer_cancelled">انتقال لغو شد و فایل ناقص منتشر نشد.</string>
-    <string name="file_transfer_failed">انتقال کامل نشد. فایل ناقص به‌عنوان فایل نهایی ذخیره نشده است.</string>
+    <string name="file_transfer_failed">انتقال کامل نشد. اگر فایل ناقصی در محل مقصد باقی مانده است، آن را حذف کنید و دوباره تلاش کنید.</string>
     <string name="file_transfer_error_selection">برای ارسال، دقیقاً یک فایل انتخاب‌شده لازم است.</string>
     <string name="file_transfer_error_source">این نوع مورد در مرحلهٔ فعلی قابل ارسال نیست. فعلاً فقط فایل با URI مجاز پشتیبانی می‌شود.</string>
     <string name="file_transfer_error_channel">کانال امن انتقال در دسترس نیست. اتصال را قطع و دوباره برقرار کنید.</string>
