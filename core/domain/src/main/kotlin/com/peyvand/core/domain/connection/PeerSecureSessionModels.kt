@@ -1,5 +1,9 @@
 package com.peyvand.core.domain.connection
 
+import java.io.Closeable
+import java.io.InputStream
+import java.io.OutputStream
+import java.util.UUID
 import kotlinx.coroutines.flow.StateFlow
 
 enum class PeerTransferRole {
@@ -37,6 +41,16 @@ data class SecureSessionSnapshot(
     val failure: SecureSessionFailure? = null,
 )
 
+/**
+ * Exclusive, session-bound access to the already authenticated TLS byte stream.
+ * The owner must close the channel and terminate the peer connection on cancellation.
+ */
+interface AuthenticatedPeerChannel : Closeable {
+    val sessionId: UUID
+    val inputStream: InputStream
+    val outputStream: OutputStream
+}
+
 interface PeerSecureSessionRepository {
     val secureSession: StateFlow<SecureSessionSnapshot>
 
@@ -45,4 +59,7 @@ interface PeerSecureSessionRepository {
 
     /** Rejecting the SAS closes the current unauthenticated socket. */
     fun rejectPairing()
+
+    /** Claims the authenticated session channel once; null means not ready or already claimed. */
+    fun claimAuthenticatedChannel(): AuthenticatedPeerChannel?
 }
