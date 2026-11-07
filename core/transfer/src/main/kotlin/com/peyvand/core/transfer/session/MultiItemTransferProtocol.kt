@@ -245,6 +245,7 @@ class MultiItemTransferProtocol(
         cancellationRequests: ReceiveChannel<UUID>,
         isCancelledBeforeStart: (UUID) -> Boolean = { false },
         onItemProgress: (UUID, Long) -> Unit = { _, _ -> },
+        onItemVerifying: (UUID) -> Unit = {},
         onItemOutcome: (BatchItemOutcome) -> Unit = {},
     ): BatchTransferResult {
         if (firstManifestFrame.protocolVersion != TransferFrameCodec.BATCH_PROTOCOL_VERSION ||
