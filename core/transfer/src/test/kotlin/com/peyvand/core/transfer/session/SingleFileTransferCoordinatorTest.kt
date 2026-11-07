@@ -112,6 +112,9 @@ class SingleFileTransferCoordinatorTest {
             }
 
             assertArrayEquals(fileBytes, receiverStorage.publishedBytes)
+            // Four bounded receive windows plus the final staging seal; the receiver
+            // does not fsync once for every 64 KiB chunk.
+            assertEquals(5, receiverStorage.stagingSyncCount)
             assertEquals(fileBytes.size.toLong(), sender.state.value.transferredBytes)
             assertEquals(fileBytes.size.toLong(), receiver.state.value.transferredBytes)
             assertTrue(senderConnectivity.disconnected)
@@ -188,6 +191,10 @@ class SingleFileTransferCoordinatorTest {
         var publishedBytes: ByteArray? = null
             private set
 
+        @Volatile
+        var stagingSyncCount: Int = 0
+            private set
+
         override suspend fun openSource(
             item: ShareItem,
         ): TransferFileSource {
@@ -215,7 +222,9 @@ class SingleFileTransferCoordinatorTest {
 
         override suspend fun createPrivateStaging(
             maximumSizeBytes: Long,
-        ): TransferStagingSink = MemoryTransferStagingSink(maximumSizeBytes)
+        ): TransferStagingSink = MemoryTransferStagingSink(maximumSizeBytes) {
+            stagingSyncCount += 1
+        }
 
         override suspend fun publishVerified(
             staging: TransferStagingSink,
@@ -239,6 +248,7 @@ class SingleFileTransferCoordinatorTest {
 
     private class MemoryTransferStagingSink(
         private val maximumSizeBytes: Long,
+        private val onSync: () -> Unit,
     ) : TransferStagingSink {
         private val output = ByteArrayOutputStream()
         private var sealed = false
@@ -253,6 +263,7 @@ class SingleFileTransferCoordinatorTest {
 
         override fun sync() {
             check(!sealed && !deleted)
+            onSync()
         }
 
         override fun seal() {
