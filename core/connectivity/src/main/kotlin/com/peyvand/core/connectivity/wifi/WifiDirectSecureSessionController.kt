@@ -731,7 +731,7 @@ internal class WifiDirectSecureSessionController(
         const val TCP_READY_TIMEOUT_MILLIS = 25_000L
         const val USER_APPROVAL_TIMEOUT_MILLIS = 60_000L
         const val TLS_HANDSHAKE_TIMEOUT_MILLIS = 15_000
-        const val TRANSFER_READ_TIMEOUT_MILLIS = 300_000
+        const val TRANSFER_READ_TIMEOUT_MILLIS = 600_000
         const val NANOS_PER_MILLI = 1_000_000L
     }
 }
