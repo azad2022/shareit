@@ -253,9 +253,10 @@ class MultiItemTransferProtocol(
 
     suspend fun receiveBatch(
         sessionId: UUID,
-        firstManifestFrame: TransferFrame,
+        firstOfferFrame: TransferFrame,
         channelInput: InputStream,
         channelOutput: OutputStream,
+        acquireOfferConsent: suspend (BatchOffer) -> Boolean,
         acquireSelection: suspend (BatchTransferManifest) -> BatchReceiverSelection?,
         acquireStaging: suspend (TransferManifestItem) -> TransferStagingSink,
         publishVerified: suspend (
@@ -269,18 +270,43 @@ class MultiItemTransferProtocol(
         onItemProgress: (UUID, Long) -> Unit = { _, _ -> },
         onItemVerifying: (UUID) -> Unit = {},
         onItemOutcome: (BatchItemOutcome) -> Unit = {},
-    ): BatchTransferResult {
+    ): BatchTransferResult? {
+        if (firstOfferFrame.protocolVersion != TransferFrameCodec.BATCH_PROTOCOL_VERSION ||
+            firstOfferFrame.sessionId != sessionId ||
+            firstOfferFrame.type != TransferFrameType.BATCH_OFFER
+        ) {
+            throw TransferProtocolException("Invalid initial batch offer frame")
+        }
+
+        val output = BufferedOutputStream(channelOutput, IO_BUFFER_BYTES)
+        val offer = BatchOfferCodec.decode(firstOfferFrame.payloadBytes())
+        if (!acquireOfferConsent(offer)) {
+            writeReference(
+                output,
+                sessionId,
+                TransferFrameType.BATCH_ABORT,
+                BatchItemReference(offer.batchId, BATCH_ABORT_ITEM_ID),
+            )
+            return null
+        }
+        writeFrame(
+            output,
+            sessionId,
+            TransferFrameType.BATCH_OFFER_ACCEPTED,
+            BatchOfferCodec.encode(offer),
+        )
+
+        val firstManifestFrame = TransferFrameCodec.read(channelInput)
+            ?: throw EOFException("Sender closed before revealing the batch manifest")
         if (firstManifestFrame.protocolVersion != TransferFrameCodec.BATCH_PROTOCOL_VERSION ||
             firstManifestFrame.sessionId != sessionId ||
             firstManifestFrame.type != TransferFrameType.BATCH_MANIFEST
         ) {
-            throw TransferProtocolException("Invalid initial batch manifest frame")
+            throw TransferProtocolException("Expected the batch manifest after offer consent")
         }
-
         val manifestBytes = firstManifestFrame.payloadBytes()
         val manifest = BatchTransferManifestCodec.decode(manifestBytes)
         val selection = acquireSelection(manifest)
-        val output = BufferedOutputStream(channelOutput, IO_BUFFER_BYTES)
 
         if (selection == null) {
             writeReference(
@@ -310,7 +336,7 @@ class MultiItemTransferProtocol(
         )
         writeFrame(output, sessionId, TransferFrameType.BATCH_DECISION, BatchConsentDecisionCodec.encode(decision))
 
-        val reader = BatchFrameReader(channelInput, CoroutineScope(currentCoroutineContext()))
+        val reader = BatchFrameReader(channelInput, CoroutineScope(currentCoroutineContext()), sessionId)
         val outcomes = ArrayList<BatchItemOutcome>(manifest.items.size)
         try {
             manifest.items.forEach { item ->
