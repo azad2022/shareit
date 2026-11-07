@@ -205,3 +205,13 @@ See `docs/checkpoints/CP-001-FOUNDATION.md`, `docs/checkpoints/CP-002-WIFI-DIREC
 - **Physical evidence:** owner reported matching SAS and successful TLS between ASUS and Galaxy A12 (SM-A125F). No real file transfer using the new CP-003C runtime has yet been reported; CP-003 cannot be marked `PASSED`.
 - **Known remaining gates:** exact-head CI and APK checksum, repeated real-file tests both directions, SAF provider failure/cleanup behavior, large and zero-byte files, rejection/cancellation, source permission revocation and integrity mismatch.
 - **Deferred:** multi-file queue, group transfer, resume, background guarantees, APK/split-APK flow, discovery speed optimization and final design pass.
+
+
+### CP-003C implementation refinement — 2026-11-07
+
+This section supersedes earlier status bullets in this document that said the live transfer control/data path or SAF publication had not yet been implemented. Those statements are historical snapshots from before the CP-003C integration commits.
+
+- The live sender/receiver path uses a maximum four-chunk/256 KiB receive window. The receiver writes the window to private staging, calls `sync()`, commits the contiguous offset, then sends one cumulative ACK. The final partial window is synced after the sender sends its completion record. The coordinator test checks four batch syncs plus the final staging seal for a 900,123-byte test payload.
+- Both peers preserve an explicit `VERIFYING` state while the final ACK and authenticated receipt/publication steps finish.
+- SAF publication uses bounded, cancellation-aware copy and read-back digest loops. Provider deletion is best-effort; a provider that will not confirm deletion cannot be treated as a successful cleanup.
+- Exact-head CI and the owner’s physical file-transfer test remain required. CP-003 is still `IN_PROGRESS`; no physical real-file transfer is recorded yet.
