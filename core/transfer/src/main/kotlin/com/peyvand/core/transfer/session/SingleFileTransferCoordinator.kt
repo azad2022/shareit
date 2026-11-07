@@ -385,6 +385,15 @@ class SingleFileTransferCoordinator(
                     val sourceId = sourceIds.entries.firstOrNull { it.value == itemId }?.key
                     updateBatchItem(operation, sourceId, TransferItemPhase.TRANSFERRING, bytes)
                 },
+                onItemVerifying = { itemId ->
+                    val sourceId = sourceIds.entries.firstOrNull { it.value == itemId }?.key
+                    updateBatchItem(
+                        operation,
+                        sourceId,
+                        TransferItemPhase.VERIFYING,
+                        stateForItemBytes(sourceId),
+                    )
+                },
                 onItemOutcome = { outcome ->
                     updateBatchOutcome(operation, sourceIds, outcome)
                 },
@@ -675,6 +684,10 @@ class SingleFileTransferCoordinator(
                         bytes,
                     )
                 },
+                onItemVerifying = { itemId ->
+                    val id = itemId.toString()
+                    updateBatchItem(operation, id, TransferItemPhase.VERIFYING, stateForItemBytes(id))
+                },
                 onItemOutcome = { outcome ->
                     updateBatchOutcome(operation, emptyMap(), outcome)
                 },
@@ -739,18 +752,23 @@ class SingleFileTransferCoordinator(
                 } else item
             }
             state.copy(
-                phase = if (phase == TransferItemPhase.PUBLISHING) {
-                    TransferSessionPhase.PUBLISHING
-                } else if (state.phase == TransferSessionPhase.VERIFYING) {
-                    TransferSessionPhase.VERIFYING
-                } else {
-                    TransferSessionPhase.TRANSFERRING
+                phase = when (phase) {
+                    TransferItemPhase.PUBLISHING -> TransferSessionPhase.PUBLISHING
+                    TransferItemPhase.VERIFYING -> TransferSessionPhase.VERIFYING
+                    else -> if (state.phase == TransferSessionPhase.PUBLISHING) {
+                        state.phase
+                    } else {
+                        TransferSessionPhase.TRANSFERRING
+                    }
                 },
                 items = updatedItems,
                 transferredBytes = updatedItems.sumOf(TransferItemSnapshot::transferredBytes),
             )
         }
     }
+
+    private fun stateForItemBytes(itemId: String?): Long =
+        mutableState.value.items.firstOrNull { it.id == itemId }?.transferredBytes ?: 0L
 
     private fun updateBatchOutcome(
         operation: Long,
