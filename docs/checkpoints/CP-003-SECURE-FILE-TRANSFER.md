@@ -179,3 +179,11 @@ This entry supersedes the earlier CP-003B notes above that stated no file data p
 - Sender now passes a source-stream factory into the protocol instead of opening the URI stream before sending the manifest. The actual `ContentResolver.openInputStream()` call happens only after an authenticated receiver `ACCEPT`.
 - Rejection, consent timeout or cancellation before acceptance therefore leaves the file content stream unopened and avoids holding a provider descriptor while the receiver considers the manifest.
 - The protocol rejection test now asserts both zero source-open calls and zero source reads when the receiver rejects the manifest.
+
+
+### 2026-11-07 — Cancellation closes active source I/O
+
+- `SingleFileTransferCoordinator` retains the currently active source stream while the sender reads it. On cancel, leaving the transfer screen, or coordinator shutdown, it closes that source stream before closing the TLS channel and cancelling the job.
+- This is required because coroutine cancellation alone does not guarantee that a blocking platform `InputStream.read()` is interrupted.
+- `ContentUriTransferFileSource` now wraps the provider stream so closure clears its stored reference; closing it from the cancellation path and later disposing the source handle does not close the same provider stream twice.
+- Added a JVM coordinator test with a deliberately blocking source stream. It waits until the source is opened, cancels the transfer, and asserts the source stream and authenticated channel are closed and the transfer state is `CANCELLED`.
