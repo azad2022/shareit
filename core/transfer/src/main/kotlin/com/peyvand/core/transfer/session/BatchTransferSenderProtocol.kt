@@ -92,8 +92,10 @@ internal class BatchTransferSenderProtocol(
             )
             val offerResponse = reader.next(sessionId)
             if (offerResponse.type == TransferFrameType.BATCH_ABORT) {
-                val reference = BatchItemReferenceCodec.decode(offerResponse.payloadBytes())
-                requireBatchReference(reference, manifest.batchId, BATCH_ABORT_ITEM_ID)
+                val abortedOffer = BatchOfferCodec.decode(offerResponse.payloadBytes())
+                if (abortedOffer.batchId != manifest.batchId) {
+                    throw TransferProtocolException("Batch abort belongs to a different offer")
+                }
                 return rejectedResult(manifest)
             }
             requireType(offerResponse, TransferFrameType.BATCH_OFFER_ACCEPTED)
@@ -106,8 +108,10 @@ internal class BatchTransferSenderProtocol(
 
             val decisionFrame = reader.next(sessionId)
             if (decisionFrame.type == TransferFrameType.BATCH_ABORT) {
-                val reference = BatchItemReferenceCodec.decode(decisionFrame.payloadBytes())
-                requireBatchReference(reference, manifest.batchId, BATCH_ABORT_ITEM_ID)
+                val abortedOffer = BatchOfferCodec.decode(decisionFrame.payloadBytes())
+                if (abortedOffer.batchId != manifest.batchId) {
+                    throw TransferProtocolException("Batch abort belongs to a different manifest")
+                }
                 return cancelledResult(manifest)
             }
             requireType(decisionFrame, TransferFrameType.BATCH_DECISION)

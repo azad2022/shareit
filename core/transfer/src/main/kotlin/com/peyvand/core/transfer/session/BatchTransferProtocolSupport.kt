@@ -145,7 +145,6 @@ internal sealed interface ReceiverEvent {
 
 internal const val IO_BUFFER_BYTES = 8 * 1024
 internal const val INBOUND_FRAME_CAPACITY = TransferFlowControlPolicy.MAX_IN_FLIGHT_CHUNKS + 2
-internal val BATCH_ABORT_ITEM_ID = UUID(0L, 0L)
 
 internal fun addOutcome(
     outcomes: MutableList<BatchItemOutcome>,

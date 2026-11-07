@@ -93,11 +93,11 @@ internal class BatchTransferReceiverProtocol(
         val output = BufferedOutputStream(channelOutput, IO_BUFFER_BYTES)
         val offer = BatchOfferCodec.decode(firstOfferFrame.payloadBytes())
         if (!acquireOfferConsent(offer)) {
-            writeReference(
+            writeFrame(
                 output,
                 sessionId,
                 TransferFrameType.BATCH_ABORT,
-                BatchItemReference(offer.batchId, BATCH_ABORT_ITEM_ID),
+                BatchOfferCodec.encode(offer),
             )
             return null
         }
@@ -121,11 +121,11 @@ internal class BatchTransferReceiverProtocol(
         val selection = acquireSelection(manifest)
 
         if (selection == null) {
-            writeReference(
+            writeFrame(
                 output,
                 sessionId,
                 TransferFrameType.BATCH_ABORT,
-                BatchItemReference(manifest.batchId, BATCH_ABORT_ITEM_ID),
+                BatchOfferCodec.encode(BatchOffer(manifest.batchId)),
             )
             return cancelledResult(manifest)
         }
