@@ -310,6 +310,495 @@ class SingleFileTransferCoordinator(
         transferJob?.cancel()
     }
 
+    private suspend fun sendBatch(
+        channel: AuthenticatedPeerChannel,
+        items: List<ShareItem>,
+        operation: Long,
+    ) {
+        val cancellation = Channel<UUID>(Channel.UNLIMITED)
+        batchCancellationRequests = cancellation
+        try {
+            val sourceIds = LinkedHashMap<String, UUID>()
+            val sourcesByTransferId = LinkedHashMap<UUID, ShareItem>()
+            val manifestItems = ArrayList<TransferManifestItem>(items.size)
+
+            // Query metadata one item at a time and close each handle immediately.
+            // Provider content streams remain unopened until the receiver accepts that item.
+            items.forEach { selected ->
+                val transferId = UUID.randomUUID()
+                val source = storageRepository.openSource(selected)
+                val metadata = try {
+                    source.metadata
+                } finally {
+                    source.close()
+                }
+                sourceIds[selected.id] = transferId
+                sourcesByTransferId[transferId] = selected
+                manifestItems += TransferManifestItem(
+                    itemId = transferId,
+                    displayName = metadata.displayName,
+                    mimeType = metadata.mimeType,
+                    sizeBytes = metadata.sizeBytes,
+                )
+            }
+
+            batchTransferIdsBySourceId = sourceIds
+            batchSourceItemsByTransferId = sourcesByTransferId
+            val manifest = BatchTransferManifest(UUID.randomUUID(), manifestItems)
+            update(operation) {
+                it.copy(
+                    phase = TransferSessionPhase.WAITING_FOR_CONSENT,
+                    items = it.items.map { item ->
+                        item.copy(phase = TransferItemPhase.WAITING_FOR_RECEIVER)
+                    },
+                    error = null,
+                )
+            }
+
+            val result = MultiItemTransferProtocol(Long.MAX_VALUE).sendBatch(
+                sessionId = channel.sessionId,
+                manifest = manifest,
+                channelInput = channel.inputStream,
+                channelOutput = channel.outputStream,
+                openSource = { manifestItem ->
+                    val selected = sourcesByTransferId[manifestItem.itemId]
+                        ?: throw IOException("Batch source identity is no longer available")
+                    val source = storageRepository.openSource(selected)
+                    val current = source.metadata
+                    if (current.displayName != manifestItem.displayName ||
+                        current.mimeType != manifestItem.mimeType ||
+                        current.sizeBytes != manifestItem.sizeBytes
+                    ) {
+                        runCatching { source.close() }
+                        throw IOException("Source metadata changed after the manifest was sent")
+                    }
+                    source
+                },
+                cancellationRequests = cancellation,
+                isCancelledBeforeStart = { itemId -> itemId in cancelledBeforeStart },
+                onActiveSourceChanged = { itemId, stream ->
+                    activeBatchItemId = if (stream == null) null else itemId
+                    activeSourceStream = stream
+                },
+                onItemProgress = { itemId, bytes ->
+                    val sourceId = sourceIds.entries.firstOrNull { it.value == itemId }?.key
+                    updateBatchItem(operation, sourceId, TransferItemPhase.TRANSFERRING, bytes)
+                },
+                onItemOutcome = { outcome ->
+                    updateBatchOutcome(operation, sourceIds, outcome)
+                },
+            )
+            completeBatch(operation, result)
+        } catch (cancellationException: CancellationException) {
+            update(operation) { current ->
+                if (current.phase.isTerminal()) current
+                else current.copy(
+                    phase = TransferSessionPhase.CANCELLED,
+                    items = current.items.map { item ->
+                        if (item.phase in setOf(
+                                TransferItemPhase.QUEUED,
+                                TransferItemPhase.WAITING_FOR_RECEIVER,
+                                TransferItemPhase.TRANSFERRING,
+                                TransferItemPhase.VERIFYING,
+                                TransferItemPhase.PUBLISHING,
+                            )
+                        ) item.copy(phase = TransferItemPhase.CANCELLED) else item
+                    },
+                )
+            }
+            throw cancellationException
+        } catch (_: Exception) {
+            update(operation) { current ->
+                current.copy(
+                    phase = TransferSessionPhase.FAILED,
+                    error = TransferSessionError.TRANSFER_FAILED,
+                    items = current.items.map { item ->
+                        if (item.phase in setOf(
+                                TransferItemPhase.QUEUED,
+                                TransferItemPhase.WAITING_FOR_RECEIVER,
+                                TransferItemPhase.TRANSFERRING,
+                                TransferItemPhase.VERIFYING,
+                                TransferItemPhase.PUBLISHING,
+                            )
+                        ) item.copy(phase = TransferItemPhase.FAILED) else item
+                    },
+                )
+            }
+        } finally {
+            activeSourceStream = null
+            activeBatchItemId = null
+            cancellation.close()
+            if (batchCancellationRequests === cancellation) batchCancellationRequests = null
+            if (operation == operationId) closeTransport()
+        }
+    }
+
+    private suspend fun receiveIncoming(
+        channel: AuthenticatedPeerChannel,
+        operation: Long,
+    ) {
+        try {
+            // The dispatcher consumes exactly one frame. The selected protocol receives
+            // that frame explicitly, so it cannot accidentally read the next frame as a manifest.
+            val firstFrame = TransferFrameCodec.read(channel.inputStream)
+                ?: throw IOException("Authenticated peer closed before sending a transfer manifest")
+            when (firstFrame.type) {
+                TransferFrameType.MANIFEST -> receiveSingleWithFirstFrame(channel, operation, firstFrame)
+                TransferFrameType.BATCH_MANIFEST -> receiveBatch(channel, operation, firstFrame)
+                else -> throw IOException("The first application frame is not a supported manifest")
+            }
+        } catch (cancellationException: CancellationException) {
+            update(operation) {
+                if (it.phase.isTerminal()) it
+                else it.copy(phase = TransferSessionPhase.CANCELLED, error = null)
+            }
+            throw cancellationException
+        } catch (_: Exception) {
+            update(operation) {
+                it.copy(phase = TransferSessionPhase.FAILED, error = TransferSessionError.TRANSFER_FAILED)
+            }
+        } finally {
+            if (operation == operationId) closeTransport()
+        }
+    }
+
+    private suspend fun receiveSingleWithFirstFrame(
+        channel: AuthenticatedPeerChannel,
+        operation: Long,
+        firstFrame: com.peyvand.core.transfer.protocol.TransferFrame,
+    ) {
+        val maximumBytes = storageRepository.maximumReceiveSizeBytes()
+        val outcome = SingleFileTransferProtocol(maximumBytes).receiveOne(
+            sessionId = channel.sessionId,
+            channelInput = channel.inputStream,
+            channelOutput = channel.outputStream,
+            firstManifestFrame = firstFrame,
+            acquireConsentAndStaging = { manifest ->
+                update(operation) {
+                    it.copy(
+                        phase = TransferSessionPhase.WAITING_FOR_CONSENT,
+                        displayName = manifest.displayName,
+                        mimeType = manifest.mimeType,
+                        totalSizeBytes = manifest.sizeBytes,
+                        transferredBytes = 0L,
+                        error = null,
+                    )
+                }
+                val decision = CompletableDeferred<Boolean>()
+                consentDecision = decision
+                val accepted = try {
+                    withTimeout(USER_CONSENT_TIMEOUT_MILLIS) { decision.await() }
+                } finally {
+                    if (consentDecision === decision) consentDecision = null
+                }
+                if (!accepted) null
+                else {
+                    val stageLimit = minOf(manifest.sizeBytes ?: maximumBytes, maximumBytes)
+                    val staging = storageRepository.createPrivateStaging(stageLimit)
+                    update(operation) { it.copy(phase = TransferSessionPhase.TRANSFERRING) }
+                    staging
+                }
+            },
+            publishVerified = { manifest, receipt, staging ->
+                val requestId = mutableState.value.destinationPickerRequestId + 1
+                update(operation) {
+                    it.copy(
+                        phase = TransferSessionPhase.AWAITING_DESTINATION,
+                        displayName = manifest.displayName,
+                        mimeType = manifest.mimeType,
+                        totalSizeBytes = receipt.actualSizeBytes,
+                        transferredBytes = receipt.actualSizeBytes,
+                        destinationPickerRequestId = requestId,
+                    )
+                }
+                val destination = CompletableDeferred<String?>()
+                destinationDecision = destination
+                val uri = try {
+                    withTimeout(DESTINATION_SELECTION_TIMEOUT_MILLIS) { destination.await() }
+                } finally {
+                    if (destinationDecision === destination) destinationDecision = null
+                }
+                if (uri.isNullOrBlank()) false
+                else {
+                    update(operation) { it.copy(phase = TransferSessionPhase.PUBLISHING) }
+                    storageRepository.publishVerified(
+                        staging = staging,
+                        destinationUri = uri,
+                        displayName = manifest.displayName,
+                        mimeType = manifest.mimeType,
+                        expectedSizeBytes = receipt.actualSizeBytes,
+                        expectedSha256Hex = receipt.sha256Hex,
+                    )
+                }
+            },
+            onProgress = { bytes ->
+                update(operation) {
+                    it.copy(
+                        phase = if (it.phase == TransferSessionPhase.VERIFYING) {
+                            TransferSessionPhase.VERIFYING
+                        } else TransferSessionPhase.TRANSFERRING,
+                        transferredBytes = bytes,
+                    )
+                }
+            },
+            onVerifying = {
+                update(operation) { it.copy(phase = TransferSessionPhase.VERIFYING) }
+            },
+        )
+        if (outcome is TransferSessionOutcome.Rejected &&
+            outcome.manifest.sizeBytes != null &&
+            outcome.manifest.sizeBytes > maximumBytes
+        ) {
+            update(operation) {
+                it.copy(
+                    phase = TransferSessionPhase.FAILED,
+                    displayName = outcome.manifest.displayName,
+                    totalSizeBytes = outcome.manifest.sizeBytes,
+                    error = TransferSessionError.INSUFFICIENT_STORAGE,
+                )
+            }
+        } else {
+            applyOutcome(outcome, operation)
+        }
+    }
+
+    private suspend fun receiveBatch(
+        channel: AuthenticatedPeerChannel,
+        operation: Long,
+        firstFrame: com.peyvand.core.transfer.protocol.TransferFrame,
+    ) {
+        val cancellation = Channel<UUID>(Channel.UNLIMITED)
+        batchCancellationRequests = cancellation
+        try {
+            val result = MultiItemTransferProtocol(Long.MAX_VALUE).receiveBatch(
+                sessionId = channel.sessionId,
+                firstManifestFrame = firstFrame,
+                channelInput = channel.inputStream,
+                channelOutput = channel.outputStream,
+                acquireSelection = { manifest ->
+                    val incomingItems = manifest.items.map { item ->
+                        TransferItemSnapshot(
+                            id = item.itemId.toString(),
+                            displayName = item.displayName,
+                            mimeType = item.mimeType,
+                            totalSizeBytes = item.sizeBytes,
+                            phase = TransferItemPhase.WAITING_FOR_RECEIVER,
+                            isSelectedForConsent = false,
+                        )
+                    }
+                    update(operation) {
+                        it.copy(
+                            phase = TransferSessionPhase.AWAITING_BATCH_CONSENT,
+                            isBatch = true,
+                            displayName = null,
+                            mimeType = null,
+                            totalSizeBytes = null,
+                            transferredBytes = 0L,
+                            items = incomingItems,
+                            error = null,
+                        )
+                    }
+                    val decision = CompletableDeferred<Set<UUID>?>()
+                    batchConsentDecision = decision
+                    val accepted = try {
+                        withTimeout(USER_CONSENT_TIMEOUT_MILLIS) { decision.await() }
+                    } finally {
+                        if (batchConsentDecision === decision) batchConsentDecision = null
+                    }
+
+                    if (accepted == null) {
+                        null
+                    } else if (accepted.isEmpty()) {
+                        update(operation) {
+                            it.copy(items = it.items.map { item ->
+                                item.copy(phase = TransferItemPhase.REJECTED)
+                            })
+                        }
+                        BatchReceiverSelection(emptySet(), null)
+                    } else {
+                        val requestId = mutableState.value.destinationTreePickerRequestId + 1
+                        update(operation) {
+                            it.copy(
+                                phase = TransferSessionPhase.AWAITING_DESTINATION_TREE,
+                                destinationTreePickerRequestId = requestId,
+                                items = it.items.map { item ->
+                                    val uuid = runCatching { UUID.fromString(item.id) }.getOrNull()
+                                    item.copy(isSelectedForConsent = uuid in accepted)
+                                },
+                            )
+                        }
+                        val destination = CompletableDeferred<String?>()
+                        destinationTreeDecision = destination
+                        val treeUri = try {
+                            withTimeout(DESTINATION_SELECTION_TIMEOUT_MILLIS) { destination.await() }
+                        } finally {
+                            if (destinationTreeDecision === destination) destinationTreeDecision = null
+                        }
+                        if (treeUri.isNullOrBlank()) null
+                        else BatchReceiverSelection(accepted, treeUri)
+                    }
+                },
+                acquireStaging = { manifestItem ->
+                    val maximum = storageRepository.maximumReceiveSizeBytes()
+                    if (manifestItem.sizeBytes != null && manifestItem.sizeBytes > maximum) {
+                        throw IOException("Item size exceeds the current receive capacity")
+                    }
+                    storageRepository.createPrivateStaging(
+                        minOf(manifestItem.sizeBytes ?: maximum, maximum),
+                    )
+                },
+                publishVerified = { manifestItem, staging, treeUri, completion ->
+                    updateBatchItem(
+                        operation,
+                        manifestItem.itemId.toString(),
+                        TransferItemPhase.PUBLISHING,
+                        completion.actualSizeBytes,
+                    )
+                    storageRepository.publishVerifiedToTree(
+                        staging = staging,
+                        treeUri = treeUri,
+                        displayName = manifestItem.displayName,
+                        mimeType = manifestItem.mimeType,
+                        expectedSizeBytes = completion.actualSizeBytes,
+                        expectedSha256Hex = completion.sha256Hex,
+                    )
+                },
+                cancellationRequests = cancellation,
+                isCancelledBeforeStart = { itemId -> itemId in cancelledBeforeStart },
+                onItemProgress = { itemId, bytes ->
+                    updateBatchItem(
+                        operation,
+                        itemId.toString(),
+                        TransferItemPhase.TRANSFERRING,
+                        bytes,
+                    )
+                },
+                onItemOutcome = { outcome ->
+                    updateBatchOutcome(operation, emptyMap(), outcome)
+                },
+            )
+            completeBatch(operation, result)
+        } catch (cancellationException: CancellationException) {
+            update(operation) { current ->
+                if (current.phase.isTerminal()) current
+                else current.copy(
+                    phase = TransferSessionPhase.CANCELLED,
+                    items = current.items.map { item ->
+                        if (item.phase in setOf(
+                                TransferItemPhase.QUEUED,
+                                TransferItemPhase.WAITING_FOR_RECEIVER,
+                                TransferItemPhase.TRANSFERRING,
+                                TransferItemPhase.VERIFYING,
+                                TransferItemPhase.PUBLISHING,
+                            )
+                        ) item.copy(phase = TransferItemPhase.CANCELLED) else item
+                    },
+                )
+            }
+            throw cancellationException
+        } catch (_: Exception) {
+            update(operation) {
+                it.copy(
+                    phase = TransferSessionPhase.FAILED,
+                    error = TransferSessionError.TRANSFER_FAILED,
+                    items = it.items.map { item ->
+                        if (item.phase in setOf(
+                                TransferItemPhase.QUEUED,
+                                TransferItemPhase.WAITING_FOR_RECEIVER,
+                                TransferItemPhase.TRANSFERRING,
+                                TransferItemPhase.VERIFYING,
+                                TransferItemPhase.PUBLISHING,
+                            )
+                        ) item.copy(phase = TransferItemPhase.FAILED) else item
+                    },
+                )
+            }
+        } finally {
+            cancellation.close()
+            if (batchCancellationRequests === cancellation) batchCancellationRequests = null
+            if (operation == operationId) closeTransport()
+        }
+    }
+
+    private fun updateBatchItem(
+        operation: Long,
+        itemId: String?,
+        phase: TransferItemPhase,
+        bytes: Long,
+    ) {
+        if (itemId == null) return
+        update(operation) { state ->
+            val updatedItems = state.items.map { item ->
+                if (item.id == itemId) {
+                    item.copy(
+                        phase = phase,
+                        transferredBytes = maxOf(item.transferredBytes, bytes),
+                    )
+                } else item
+            }
+            state.copy(
+                phase = if (phase == TransferItemPhase.PUBLISHING) {
+                    TransferSessionPhase.PUBLISHING
+                } else if (state.phase == TransferSessionPhase.VERIFYING) {
+                    TransferSessionPhase.VERIFYING
+                } else {
+                    TransferSessionPhase.TRANSFERRING
+                },
+                items = updatedItems,
+                transferredBytes = updatedItems.sumOf(TransferItemSnapshot::transferredBytes),
+            )
+        }
+    }
+
+    private fun updateBatchOutcome(
+        operation: Long,
+        sourceIds: Map<String, UUID>,
+        outcome: BatchItemOutcome,
+    ) {
+        val uiId = sourceIds.entries.firstOrNull { it.value == outcome.itemId }?.key
+            ?: outcome.itemId.toString()
+        val phase = when (outcome.status) {
+            BatchItemOutcomeStatus.COMPLETED -> TransferItemPhase.COMPLETED
+            BatchItemOutcomeStatus.REJECTED -> TransferItemPhase.REJECTED
+            BatchItemOutcomeStatus.CANCELLED -> TransferItemPhase.CANCELLED
+            BatchItemOutcomeStatus.FAILED -> TransferItemPhase.FAILED
+        }
+        update(operation) { current ->
+            val updatedItems = current.items.map { item ->
+                if (item.id == uiId) {
+                    item.copy(
+                        phase = phase,
+                        transferredBytes = outcome.actualSizeBytes ?: item.transferredBytes,
+                    )
+                } else item
+            }
+            current.copy(
+                items = updatedItems,
+                transferredBytes = updatedItems.sumOf(TransferItemSnapshot::transferredBytes),
+            )
+        }
+    }
+
+    private fun completeBatch(
+        operation: Long,
+        result: BatchTransferResult,
+    ) {
+        update(operation) { current ->
+            val terminalPhase = when {
+                result.completedCount == result.outcomes.size -> TransferSessionPhase.COMPLETED
+                result.completedCount > 0 -> TransferSessionPhase.PARTIALLY_COMPLETED
+                result.rejectedCount == result.outcomes.size -> TransferSessionPhase.REJECTED
+                result.cancelledCount == result.outcomes.size -> TransferSessionPhase.CANCELLED
+                else -> TransferSessionPhase.FAILED
+            }
+            current.copy(
+                phase = terminalPhase,
+                transferredBytes = result.outcomes.sumOf { it.actualSizeBytes ?: 0L },
+                error = if (result.failedCount > 0) TransferSessionError.TRANSFER_FAILED else null,
+            )
+        }
+    }
+
     private suspend fun sendOne(
         channel: AuthenticatedPeerChannel,
         item: ShareItem,
