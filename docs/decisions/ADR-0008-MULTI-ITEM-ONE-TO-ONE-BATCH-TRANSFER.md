@@ -1,6 +1,6 @@
 # ADR-0008 — Secure multi-item one-to-one batch transfer
 
-- **Status:** Engineering design baseline for CP-004; owner review recorded in the project conversation; implementation and interoperability validation pending.
+- **Status:** Engineering design baseline prepared for product-owner approval; implementation and interoperability validation pending.
 - **Date:** 2026-11-07
 - **Scope:** One sender, one authenticated receiver, multiple user-selected arbitrary `content://` files in one ordered batch.
 - **Explicit exclusions:** Sender-to-many, multi-sender, APK/split APK, pause/resume, durable process-death recovery, guaranteed background continuation, and product-wide visual redesign.
@@ -243,4 +243,56 @@ CP-004 remains `IN_PROGRESS` until the complete evidence package is reproducible
 - Storage Access Framework, `ACTION_OPEN_DOCUMENT_TREE`, destination selection and Android 11+ directory restrictions: https://developer.android.com/training/data-storage/shared/documents-files
 - `DocumentsContract` tree and child-document operations: https://developer.android.com/reference/android/provider/DocumentsContract
 - Existing single-file security, TLS, framing, streaming and storage baseline: [ADR-0007](ADR-0007-SECURE-ONE-TO-ONE-FILE-TRANSFER.md)
+
+
+
+## 13. Protocol concurrency and terminal-boundary addendum
+
+This section is normative and clarifies the message ownership and completion rules above. If an earlier paragraph can be read as allowing competing stream readers, an unbounded abort response, or an unsynchronized batch terminal state, this section takes precedence.
+
+### 13.1 Single-reader/single-writer ownership
+
+1. Each direction of the authenticated TLS channel has exactly one frame reader. No two coroutines may concurrently call the frame decoder on the same input stream.
+2. The sender runs one structured, session-owned inbound control reader independently of the source-reading/data-writing work. It routes CHUNK_ACK, ITEM_ABORT_REQUEST, BATCH_CANCEL and terminal responses to the batch state machine. It must remain able to process a remote abort/cancel while a ContentResolver read is blocking.
+3. On a valid active-item abort request, the coordinator closes the currently active source stream before cancelling its source-reading job. Coroutine cancellation alone is not relied on to interrupt a blocking platform read.
+4. All writes to each directional output stream are serialized through one writer owner. Data chunks, ITEM_ABORT, ITEM_TERMINAL_COMMIT, BATCH_CANCEL and terminal markers cannot be written concurrently or interleaved.
+5. The receiver similarly has one inbound data/control frame reader for sender-to-receiver messages and one serialized reverse-direction writer for ACKs, rejection, abort requests and cancellation requests. UI callbacks never read or write protocol streams directly.
+6. Reader/writer children belong to the batch coordinator's structured coroutine scope. On batch termination, the coordinator closes the active source first, cancels children, closes staging resources and the authenticated channel, then releases the P2P group. No detached/global coroutine is permitted.
+
+### 13.2 Bounded abort response
+
+The abort protocol in section 4.2 is interpreted as follows:
+
+1. ITEM_ABORT_REQUEST is receiver-to-sender only. ITEM_ABORT is the sender-to-receiver ordered terminal marker. This avoids two peers independently writing competing abort markers.
+2. Because the sender's inbound control reader runs independently, the sender can process a receiver abort request even while the source reader is blocked. The active source is closed; no new source read is started.
+3. The sender may finish only data chunks already reserved in its existing four-chunk window, then writes exactly one ITEM_ABORT marker on the same sender-to-receiver stream after those frames. It must not reserve another chunk after processing the request.
+4. The receiver stops staging the active item as soon as it requests abort. It continues decoding and discarding only well-formed, same-item data frames already in flight, with a strict cumulative ceiling of 256 KiB beyond the abort request, until the ordered ITEM_ABORT marker is read. The marker's final offset must equal the end offset of the last observed data frame.
+5. The receiver then deletes the uncommitted stage and sends ITEM_ABORT_ACK. The sender sends ITEM_TERMINAL_COMMIT; the receiver validates that exact batch ID, item ID, ordinal, outcome and reason before allowing the next manifest.
+6. A sender-originated source failure or sender cancellation writes ITEM_ABORT after all data frames already emitted. The receiver consumes those earlier frames in order, deletes the stage, acknowledges, and waits for the commit.
+7. A missing marker, non-contiguous drain, more than 256 KiB of post-request data, duplicate/cross-item marker, failed stage cleanup, ACK timeout or commit mismatch terminates the whole batch. Never guess the next frame boundary.
+
+### 13.3 Explicit batch completion handshake
+
+Two additional v2 frame codes are reserved:
+
+| Code | v2 message | Direction | Purpose |
+|---:|---|---|---|
+| 48 | BATCH_COMPLETE | Sender → receiver | Announces that all declared items have terminal outcomes and includes bounded outcome counts |
+| 49 | BATCH_COMPLETE_ACK | Receiver → sender | Confirms that the receiver independently derived the same batch summary |
+
+After all declared items have completed their receipt or terminal-commit exchange:
+
+1. The sender derives the final item counts and sends BATCH_COMPLETE containing the batch ID, declared item count and counts of completed, rejected, cancelled and failed items. Counts must sum to the declared item count; NOT_STARTED is not allowed in a normally completed batch.
+2. The receiver independently derives its item outcomes and validates the counts and batch ID. A mismatch is batch-fatal.
+3. The receiver returns BATCH_COMPLETE_ACK with the same bounded summary. The sender marks COMPLETED_SUCCESSFULLY or COMPLETED_WITH_ERRORS only after validating this acknowledgement. The receiver may mark its local batch terminal after sending the acknowledgement; a subsequent transport failure is reported separately and does not invalidate already verified files.
+4. The completion handshake is finite-timeout and is the only normal path to a completed batch result. Reaching the last item ordinal alone is not sufficient.
+5. No item manifest, data frame or second completion frame is legal after BATCH_COMPLETE.
+
+### 13.4 Cancellation versus final completion race
+
+1. The sender's serialized writer/state owner linearizes the final choice between emitting BATCH_CANCEL and emitting BATCH_COMPLETE; it must never emit both for one batch.
+2. A receiver-initiated cancellation is effective only when the sender has not committed BATCH_COMPLETE. If the sender processes cancellation first, it returns BATCH_CANCEL_ACK and the batch becomes cancelled. If BATCH_COMPLETE has already been committed, the receiver treats a crossing late cancellation request as too late, validates the completion summary and returns BATCH_COMPLETE_ACK.
+3. The receiver reports a user-requested cancellation as confirmed only after receiving BATCH_CANCEL_ACK. If completion wins the race, the UI reports that the batch completed before cancellation took effect; it must not relabel completed files as cancelled.
+4. For a whole-batch cancellation while data is in flight, the sender stops new source reads and writes the cancellation acknowledgement after already-emitted data frames. The receiver drains/discards no more than the same bounded four-chunk window before acknowledging/tearing down. No item after the active item is started.
+5. Tests must cover both orderings of the cancellation/completion race, remote cancellation during a blocking source read, cancellation at a full and partial data window, and loss of either terminal acknowledgement.
 
