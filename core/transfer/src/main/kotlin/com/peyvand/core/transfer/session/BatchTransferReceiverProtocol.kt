@@ -190,7 +190,15 @@ internal class BatchTransferReceiverProtocol(
                         reference,
                         BatchItemFailureCode.STORAGE_UNAVAILABLE,
                     )
-                    addOutcome(outcomes, BatchItemOutcome(item.itemId, BatchItemOutcomeStatus.FAILED), onItemOutcome)
+                    addOutcome(
+                        outcomes,
+                        BatchItemOutcome(
+                            item.itemId,
+                            BatchItemOutcomeStatus.FAILED,
+                            failureCode = BatchItemFailureCode.STORAGE_UNAVAILABLE,
+                        ),
+                        onItemOutcome,
+                    )
                     return@forEach
                 }
 
@@ -346,6 +354,7 @@ internal class BatchTransferReceiverProtocol(
                                     staging,
                                     reader,
                                     output,
+                                    requestedFailureCode = BatchItemFailureCode.STORAGE_WRITE_FAILED,
                                 )
                             }
                         }
@@ -409,15 +418,23 @@ internal class BatchTransferReceiverProtocol(
                                     reference,
                                     BatchItemFailureCode.DESTINATION_FAILED,
                                 )
-                                return BatchItemOutcome(reference.itemId, BatchItemOutcomeStatus.FAILED)
+                                return BatchItemOutcome(
+                                    reference.itemId,
+                                    BatchItemOutcomeStatus.FAILED,
+                                    failureCode = BatchItemFailureCode.DESTINATION_FAILED,
+                                )
                             }
                         }
 
                         TransferFrameType.BATCH_ITEM_ABORT -> {
-                            decodeFailure(frame, reference)
+                            val failure = decodeFailure(frame, reference)
                             staging.delete()
                             writeReference(output, sessionId, TransferFrameType.BATCH_ITEM_FAILED_ACK, reference)
-                            return BatchItemOutcome(reference.itemId, BatchItemOutcomeStatus.FAILED)
+                            return BatchItemOutcome(
+                                reference.itemId,
+                                BatchItemOutcomeStatus.FAILED,
+                                failureCode = failure.failureCode,
+                            )
                         }
 
                         TransferFrameType.BATCH_ITEM_CANCELLED -> {
@@ -440,6 +457,7 @@ internal class BatchTransferReceiverProtocol(
         staging: TransferStagingSink,
         reader: BatchFrameReader,
         output: OutputStream,
+        requestedFailureCode: BatchItemFailureCode? = null,
     ): BatchItemOutcome {
         while (true) {
             val frame = reader.next(sessionId)
@@ -461,10 +479,14 @@ internal class BatchTransferReceiverProtocol(
                     )
                 }
                 TransferFrameType.BATCH_ITEM_ABORT -> {
-                    decodeFailure(frame, reference)
+                    val failure = decodeFailure(frame, reference)
                     staging.delete()
                     writeReference(output, sessionId, TransferFrameType.BATCH_ITEM_FAILED_ACK, reference)
-                    return BatchItemOutcome(reference.itemId, BatchItemOutcomeStatus.FAILED)
+                    return BatchItemOutcome(
+                        reference.itemId,
+                        BatchItemOutcomeStatus.FAILED,
+                        failureCode = requestedFailureCode ?: failure.failureCode,
+                    )
                 }
                 TransferFrameType.BATCH_ITEM_CANCELLED -> {
                     requireReference(frame, reference)
