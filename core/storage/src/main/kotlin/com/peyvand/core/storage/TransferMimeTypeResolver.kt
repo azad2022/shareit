@@ -41,6 +41,12 @@ internal object TransferMimeTypeResolver {
             ?.trim()
             ?.lowercase(Locale.ROOT)
             ?: return null
-        return normalized.takeIf(mimeTypePattern::matches)
+        val concrete = normalized.takeIf(mimeTypePattern::matches) ?: return null
+        return when (concrete) {
+            // Some OEM media providers still report legacy JPEG aliases. SAF
+            // destination providers expect the registered image/jpeg media type.
+            "image/jpg", "image/pjpeg", "image/x-jpeg" -> "image/jpeg"
+            else -> concrete
+        }
     }
 }
