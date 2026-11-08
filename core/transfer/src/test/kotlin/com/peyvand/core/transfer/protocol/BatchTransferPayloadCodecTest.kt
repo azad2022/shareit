@@ -76,9 +76,9 @@ class BatchTransferPayloadCodecTest {
             BatchTransferItemManifest(identity, "valid.txt", "text/plain", 1L),
         )
         val malformed = encoded.copyOf()
-        val nameLength = ByteBuffer.wrap(malformed).order(ByteOrder.BIG_ENDIAN).getShort(40).toInt() and 0xffff
+        val nameLength = ByteBuffer.wrap(malformed).order(ByteOrder.BIG_ENDIAN).getShort(36).toInt() and 0xffff
         assertEquals(9, nameLength)
-        malformed[42] = 0xff.toByte()
+        malformed[38] = 0xff.toByte()
         assertThrows(TransferProtocolException::class.java) {
             BatchTransferItemManifestCodec.decode(malformed)
         }
