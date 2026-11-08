@@ -6,7 +6,7 @@ import org.junit.Test
 
 class BatchTransferModelsTest {
     @Test
-    fun \`item snapshot rejects acknowledged bytes above receiver limit\`() {
+    fun `item snapshot rejects acknowledged bytes above receiver limit`() {
         assertThrows(IllegalArgumentException::class.java) {
             itemSnapshot(
                 acknowledgedBytes = 11L,
@@ -16,7 +16,7 @@ class BatchTransferModelsTest {
     }
 
     @Test
-    fun \`item snapshot rejects acknowledged bytes above declared size\`() {
+    fun `item snapshot rejects acknowledged bytes above declared size`() {
         assertThrows(IllegalArgumentException::class.java) {
             itemSnapshot(
                 acknowledgedBytes = 11L,
@@ -26,7 +26,7 @@ class BatchTransferModelsTest {
     }
 
     @Test
-    fun \`item snapshot rejects actual size beyond negotiated or declared bounds\`() {
+    fun `item snapshot rejects actual size beyond negotiated or declared bounds`() {
         assertThrows(IllegalArgumentException::class.java) {
             itemSnapshot(
                 acknowledgedBytes = 11L,
@@ -46,7 +46,7 @@ class BatchTransferModelsTest {
     }
 
     @Test
-    fun \`completed snapshot requires matching receipt identity and terminal byte counts\`() {
+    fun `completed snapshot requires matching receipt identity and terminal byte counts`() {
         val batchId = UUID.randomUUID()
         val itemId = UUID.randomUUID()
         val hash = "b".repeat(64)
