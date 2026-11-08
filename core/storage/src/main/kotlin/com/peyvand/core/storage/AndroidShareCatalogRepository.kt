@@ -128,9 +128,7 @@ class AndroidShareCatalogRepository(
                 val displayName = cursor.getString(nameIndex)?.takeIf(String::isNotBlank)
                     ?: continue
                 val mediaId = cursor.getLong(idIndex)
-                val size = sizeIndex.takeIf { it >= 0 && !cursor.isNull(it) }
-                    ?.let(cursor::getLong)
-                    ?.takeIf { it >= 0L }
+                val size = readOptionalNonNegativeLong(sizeIndex, cursor::isNull, cursor::getLong)
                 val mimeType = resolveMimeType(
                     displayName,
                     mimeIndex.takeIf { it >= 0 }?.let(cursor::getString),
@@ -246,9 +244,7 @@ class AndroidShareCatalogRepository(
                     ?.let(cursor::getString)
                     ?.takeIf(String::isNotBlank)
                     ?: return@use null
-                val size = sizeIndex.takeIf { it >= 0 && !cursor.isNull(it) }
-                    ?.let(cursor::getLong)
-                    ?.takeIf { it >= 0L }
+                val size = readOptionalNonNegativeLong(sizeIndex, cursor::isNull, cursor::getLong)
                 displayName to size
             }
         }.getOrNull() ?: return null
@@ -282,4 +278,13 @@ class AndroidShareCatalogRepository(
         const val APK_MIME_TYPE = "application/vnd.android.package-archive"
         const val BINARY_MIME_TYPE = "application/octet-stream"
     }
+}
+
+internal fun readOptionalNonNegativeLong(
+    columnIndex: Int,
+    isNull: (Int) -> Boolean,
+    getLong: (Int) -> Long,
+): Long? {
+    if (columnIndex < 0 || isNull(columnIndex)) return null
+    return getLong(columnIndex).takeIf { it >= 0L }
 }
