@@ -20,7 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.selects.onAwait
+import kotlinx.coroutines.onAwait
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
