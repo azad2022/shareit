@@ -15,7 +15,7 @@ import org.junit.Test
 
 class BatchTransferStateMachineTest {
     @Test
-    fun \`all items complete only after verified receipts and batch completion acknowledgement\`() {
+    fun `all items complete only after verified receipts and batch completion acknowledgement`() {
         val plan = plan(5L, 7L)
         var state = readyForItems(plan)
 
@@ -40,7 +40,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`explicit item rejection requires terminal commit before the next item\`() {
+    fun `explicit item rejection requires terminal commit before the next item`() {
         val plan = plan(10L, 20L)
         var state = readyForItems(plan)
         val firstId = plan.items[0].itemId
@@ -69,7 +69,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`item failure or cancellation cannot advance before abort acknowledgement and terminal commit\`() {
+    fun `item failure or cancellation cannot advance before abort acknowledgement and terminal commit`() {
         val plan = plan(100L, 200L)
         var state = readyForItems(plan)
         val firstId = plan.items[0].itemId
@@ -117,7 +117,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`partial success is not represented as full batch success\`() {
+    fun `partial success is not represented as full batch success`() {
         val plan = plan(10L, 20L)
         var state = readyForItems(plan)
         val firstId = plan.items[0].itemId
@@ -142,7 +142,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`acknowledged progress is monotonic and bounded by negotiated and declared sizes\`() {
+    fun `acknowledged progress is monotonic and bounded by negotiated and declared sizes`() {
         val plan = plan(100L, 200L)
         var state = readyForItems(plan)
         val itemId = plan.items[0].itemId
@@ -174,7 +174,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`receipt must match the exact batch item ordinal size and digest\`() {
+    fun `receipt must match the exact batch item ordinal size and digest`() {
         val plan = plan(4L, 8L)
         var state = readyForItems(plan)
         val item = plan.items[0]
@@ -212,7 +212,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`whole batch rejection leaves every item not started\`() {
+    fun `whole batch rejection leaves every item not started`() {
         val plan = plan(1L, 2L)
         var state = reduce(BatchTransferStateMachine.initial(plan), BatchTransferEvent.OfferSent)
         state = reduce(state, BatchTransferEvent.BatchConsentRequested)
@@ -225,7 +225,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`confirmed whole batch cancellation cancels active item and marks queued items not started\`() {
+    fun `confirmed whole batch cancellation cancels active item and marks queued items not started`() {
         val plan = plan(10L, 20L, 30L)
         var state = readyForItems(plan)
         val activeId = plan.items[0].itemId
@@ -245,7 +245,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`unconfirmed whole batch cancellation reports unknown active item outcome\`() {
+    fun `unconfirmed whole batch cancellation reports unknown active item outcome`() {
         val plan = plan(10L, 20L)
         var state = readyForItems(plan)
         val activeId = plan.items[0].itemId
@@ -268,7 +268,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`channel failure terminates active item and prevents queued items from starting\`() {
+    fun `channel failure terminates active item and prevents queued items from starting`() {
         val plan = plan(10L, 20L)
         var state = readyForItems(plan)
         val activeId = plan.items[0].itemId
@@ -289,7 +289,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`cancellation after completion dispatch is rejected and crossing peer cancellation is ignored\`() {
+    fun `cancellation after completion dispatch is rejected and crossing peer cancellation is ignored`() {
         val plan = plan(1L, 2L)
         var state = readyForItems(plan)
         state = completeItem(state, plan.items[0], 1L, "e".repeat(64))
@@ -307,7 +307,7 @@ class BatchTransferStateMachineTest {
     }
 
     @Test
-    fun \`snapshot item collection is immutable\`() {
+    fun `snapshot item collection is immutable`() {
         val plan = plan(1L, 2L)
         val state = BatchTransferStateMachine.initial(plan)
 
