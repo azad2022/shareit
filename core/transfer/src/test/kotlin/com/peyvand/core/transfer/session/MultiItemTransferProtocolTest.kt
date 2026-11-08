@@ -6,8 +6,7 @@ import com.peyvand.core.domain.transfer.TransferStagingSink
 import com.peyvand.core.transfer.manifest.BatchTransferManifest
 import com.peyvand.core.transfer.manifest.TransferManifestItem
 import com.peyvand.core.transfer.protocol.BatchItemOutcomeStatus
-import com.peyvand.core.transfer.protocol.BatchOffer
-import com.peyvand.core.transfer.protocol.BatchOfferCodec
+import com.peyvand.core.transfer.protocol.TransferFrameCodec
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -66,12 +65,9 @@ class MultiItemTransferProtocolTest {
             val receiving = async(Dispatchers.IO) {
                 receiver.receiveBatch(
                     sessionId = batchId,
-                    firstOfferFrame = com.peyvand.core.transfer.protocol.TransferFrame(
-                        2,
-                        com.peyvand.core.transfer.protocol.TransferFrameType.BATCH_OFFER,
-                        batchId,
-                        BatchOfferCodec.encode(BatchOffer(batchId)),
-                    ),
+                    firstOfferFrame = requireNotNull(TransferFrameCodec.read(receiverInput)) {
+                        "Sender did not send the initial batch offer"
+                    },
                     acquireOfferConsent = { offer -> offer.batchId == batchId },
                     channelInput = receiverInput,
                     channelOutput = receiverOutput,
@@ -182,12 +178,9 @@ class MultiItemTransferProtocolTest {
             val receiver = async(Dispatchers.IO) {
                 MultiItemTransferProtocol(1024 * 1024L).receiveBatch(
                     sessionId = manifest.batchId,
-                    firstOfferFrame = com.peyvand.core.transfer.protocol.TransferFrame(
-                        2,
-                        com.peyvand.core.transfer.protocol.TransferFrameType.BATCH_OFFER,
-                        manifest.batchId,
-                        BatchOfferCodec.encode(BatchOffer(manifest.batchId)),
-                    ),
+                    firstOfferFrame = requireNotNull(TransferFrameCodec.read(receiverInput)) {
+                        "Sender did not send the initial batch offer"
+                    },
                     channelInput = receiverInput,
                     channelOutput = receiverOutput,
                     acquireOfferConsent = { false },
@@ -238,7 +231,9 @@ class MultiItemTransferProtocolTest {
             val receiving = async(Dispatchers.IO) {
                 MultiItemTransferProtocol(4L * 1024L * 1024L).receiveBatch(
                     sessionId = batchId,
-                    firstOfferFrame = offerFrame(batchId),
+                    firstOfferFrame = requireNotNull(TransferFrameCodec.read(receiverInput)) {
+                        "Sender did not send the initial batch offer"
+                    },
                     channelInput = receiverInput,
                     channelOutput = receiverOutput,
                     acquireOfferConsent = { true },
@@ -314,7 +309,9 @@ class MultiItemTransferProtocolTest {
             val receiving = async(Dispatchers.IO) {
                 MultiItemTransferProtocol(1024 * 1024L).receiveBatch(
                     sessionId = batchId,
-                    firstOfferFrame = offerFrame(batchId),
+                    firstOfferFrame = requireNotNull(TransferFrameCodec.read(receiverInput)) {
+                        "Sender did not send the initial batch offer"
+                    },
                     channelInput = receiverInput,
                     channelOutput = receiverOutput,
                     acquireOfferConsent = { true },
@@ -361,13 +358,6 @@ class MultiItemTransferProtocolTest {
             runCatching { receiverOutput.close() }
         }
     }
-
-    private fun offerFrame(batchId: UUID) = com.peyvand.core.transfer.protocol.TransferFrame(
-        2,
-        com.peyvand.core.transfer.protocol.TransferFrameType.BATCH_OFFER,
-        batchId,
-        BatchOfferCodec.encode(BatchOffer(batchId)),
-    )
 
     private fun manifest(name: String, mime: String, size: Long): TransferManifestItem =
         TransferManifestItem(UUID.randomUUID(), name, mime, size)
