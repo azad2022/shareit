@@ -157,7 +157,7 @@ class BatchTransferPayloadCodecTest {
         val mimeLength = ByteBuffer.wrap(encoded).order(ByteOrder.BIG_ENDIAN)
             .getShort(mimeLengthOffset).toInt() and 0xffff
         assertEquals(10, mimeLength)
-        "invalidmime".toByteArray(Charsets.UTF_8).copyInto(
+        "badmimeval".toByteArray(Charsets.UTF_8).copyInto(
             encoded,
             mimeLengthOffset + 2,
         )

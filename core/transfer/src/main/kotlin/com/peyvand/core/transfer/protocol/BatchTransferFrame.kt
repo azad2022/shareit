@@ -185,6 +185,7 @@ class BatchTransferFrame(
 
 object BatchTransferFrameCodec {
     const val CURRENT_PROTOCOL_VERSION = 2
+    const val MAX_DATA_CHUNK_BYTES = TransferWireFrameCodec.MAX_DATA_CHUNK_BYTES
 
     fun write(frame: BatchTransferFrame, output: OutputStream) {
         if (frame.protocolVersion != CURRENT_PROTOCOL_VERSION) {

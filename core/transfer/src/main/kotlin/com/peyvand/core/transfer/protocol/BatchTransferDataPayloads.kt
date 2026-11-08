@@ -2,7 +2,6 @@ package com.peyvand.core.transfer.protocol
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.UUID
 
 class BatchTransferDataChunk(
     val identity: BatchTransferItemIdentity,
