@@ -279,9 +279,9 @@ data class BatchTransferCompletionSummary(
     init {
         require(totalItems in BatchTransferOffer.MIN_BATCH_ITEMS..BatchTransferOffer.MAX_BATCH_ITEMS)
         require(completedItems >= 0)
-        require(rejectedItems >= 0)
-        require(cancelledItems >= 0)
-        require(failedItems >= 0)
+        require(rejectedItems in 0..BatchTransferOffer.MAX_BATCH_ITEMS)
+        require(cancelledItems in 0..BatchTransferOffer.MAX_BATCH_ITEMS)
+        require(failedItems in 0..BatchTransferOffer.MAX_BATCH_ITEMS)
         require(completedItems + rejectedItems + cancelledItems + failedItems == totalItems) {
             "Batch completion item outcomes must add up to the declared item count"
         }

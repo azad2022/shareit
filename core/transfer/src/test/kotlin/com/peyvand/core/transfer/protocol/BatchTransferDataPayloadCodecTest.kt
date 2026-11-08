@@ -186,6 +186,17 @@ class BatchTransferDataPayloadCodecTest {
                 failedItems = 0,
             )
         }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            BatchTransferCompletionSummary(
+                batchId = batchId,
+                totalItems = 5,
+                completedItems = 0,
+                rejectedItems = 101,
+                cancelledItems = 0,
+                failedItems = -96,
+            )
+        }
         val malformed = encoded.copyOf()
         ByteBuffer.wrap(malformed).order(ByteOrder.BIG_ENDIAN).putShort(24, 0)
         assertThrows(TransferProtocolException::class.java) {
