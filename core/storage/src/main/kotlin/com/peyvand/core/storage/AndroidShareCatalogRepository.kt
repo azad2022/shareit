@@ -133,7 +133,7 @@ class AndroidShareCatalogRepository(
                     ?.takeIf { it >= 0L }
                 val mimeType = mimeIndex.takeIf { it >= 0 }
                     ?.let(cursor::getString)
-                    ?.takeIf(String::isNotBlank)
+                    ?.takeIf { !it.isNullOrBlank() && '/' in it && '*' !in it }
                     ?: resolveMimeType(displayName)
                 val modifiedAtMillis = modifiedIndex.takeIf { it >= 0 }
                     ?.let(cursor::getLong)
@@ -230,37 +230,40 @@ class AndroidShareCatalogRepository(
             // Some providers do not support persistable grants.
         }
 
-        val metadata = contentResolver.query(
-            uri,
-            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
-            null,
-            null,
-            null,
-        ) ?: return null
+        val metadata = runCatching {
+            contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use null
 
-        return metadata.use { cursor ->
-            if (!cursor.moveToFirst()) return@use null
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                val displayName = nameIndex.takeIf { it >= 0 }
+                    ?.let(cursor::getString)
+                    ?.takeIf(String::isNotBlank)
+                    ?: return@use null
+                val size = sizeIndex.takeIf { it >= 0 }
+                    ?.let(cursor::getLong)
+                    ?.takeIf { it >= 0L }
+                displayName to size
+            }
+        }.getOrNull() ?: return null
+        val (displayName, size) = metadata
+        val providerType = runCatching { contentResolver.getType(uri) }.getOrNull()
 
-            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-            val displayName = nameIndex.takeIf { it >= 0 }
-                ?.let(cursor::getString)
-                ?.takeIf(String::isNotBlank)
-                ?: return@use null
-            val size = sizeIndex.takeIf { it >= 0 }
-                ?.let(cursor::getLong)
-                ?.takeIf { it >= 0L }
-
-            ShareItem(
-                id = "document:$uri",
-                category = ShareCategory.FILES,
-                displayName = displayName,
-                mimeType = resolveMimeType(displayName, contentResolver.getType(uri)),
-                sizeBytes = size,
-                modifiedAtEpochMillis = null,
-                source = ShareSource.ContentUri(uri.toString()),
-            )
-        }
+        return ShareItem(
+            id = "document:$uri",
+            category = ShareCategory.FILES,
+            displayName = displayName,
+            mimeType = resolveMimeType(displayName, providerType),
+            sizeBytes = size,
+            modifiedAtEpochMillis = null,
+            source = ShareSource.ContentUri(uri.toString()),
+        )
     }
 
     private fun resolveMimeType(displayName: String, providerType: String? = null): String {

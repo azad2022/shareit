@@ -254,19 +254,19 @@ class AndroidTransferFileStorageRepository(
                 null,
                 null,
                 null,
-            )
-        }.getOrNull()?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val nameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (nameColumn >= 0 && !cursor.isNull(nameColumn)) {
-                    cursor.getString(nameColumn)?.takeIf(String::isNotBlank)?.let {
-                        displayName = it
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameColumn >= 0 && !cursor.isNull(nameColumn)) {
+                        cursor.getString(nameColumn)?.takeIf(String::isNotBlank)?.let {
+                            displayName = it
+                        }
                     }
-                }
-                val sizeColumn = cursor.getColumnIndex(OpenableColumns.SIZE)
-                if (sizeColumn >= 0 && !cursor.isNull(sizeColumn)) {
-                    cursor.getLong(sizeColumn).takeIf { it >= 0L }?.let {
-                        sizeBytes = it
+                    val sizeColumn = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (sizeColumn >= 0 && !cursor.isNull(sizeColumn)) {
+                        cursor.getLong(sizeColumn).takeIf { it >= 0L }?.let {
+                            sizeBytes = it
+                        }
                     }
                 }
             }
