@@ -8,10 +8,14 @@ import android.widget.VideoView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
@@ -32,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -99,40 +104,51 @@ private fun StartupVideoLoadingScreen(
         }
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            .windowInsetsPadding(WindowInsets.safeDrawing),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        AndroidView(
-            factory = { viewContext ->
-                VideoView(viewContext).apply {
-                    setBackgroundColor(AndroidColor.WHITE)
-                    setOnPreparedListener { player: MediaPlayer ->
-                        player.setVolume(0f, 0f)
-                        player.isLooping = false
-                        isPrepared = true
-                        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                            start()
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            val videoWidth = min(maxWidth, maxHeight * (9f / 16f))
+            AndroidView(
+                factory = { viewContext ->
+                    VideoView(viewContext).apply {
+                        setBackgroundColor(AndroidColor.WHITE)
+                        setOnPreparedListener { player: MediaPlayer ->
+                            player.setVolume(0f, 0f)
+                            player.isLooping = false
+                            isPrepared = true
+                            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                start()
+                            }
                         }
-                    }
-                    setOnCompletionListener { onCompleted() }
-                    setOnErrorListener { _, _, _ ->
-                        onFailed()
-                        true
-                    }
-                    setVideoURI(
-                        Uri.parse("android.resource://${viewContext.packageName}/$videoResourceId"),
-                    )
-                }.also { videoView = it }
-            },
-            modifier = Modifier.fillMaxSize(),
-        )
+                        setOnCompletionListener { onCompleted() }
+                        setOnErrorListener { _, _, _ ->
+                            onFailed()
+                            true
+                        }
+                        setVideoURI(
+                            Uri.parse("android.resource://${viewContext.packageName}/$videoResourceId"),
+                        )
+                    }.also { videoView = it }
+                },
+                modifier = Modifier
+                    .width(videoWidth)
+                    .aspectRatio(9f / 16f),
+            )
+        }
 
         Column(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .fillMaxWidth()
                 .padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
