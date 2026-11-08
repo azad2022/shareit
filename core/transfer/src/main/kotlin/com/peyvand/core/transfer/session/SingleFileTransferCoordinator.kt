@@ -78,6 +78,7 @@ class SingleFileTransferCoordinator(
     private var transferJob: Job? = null
 
     @Volatile
+    @Volatile
     private var consentDecision: CompletableDeferred<Boolean>? = null
 
     @Volatile
@@ -296,6 +297,10 @@ class SingleFileTransferCoordinator(
                 channelInput = channel.inputStream,
                 channelOutput = channel.outputStream,
                 acquireConsentAndStaging = { manifest ->
+                    // Install the decision before publishing a state that enables UI input.
+                    // A StateFlow observer may respond immediately to WAITING_FOR_CONSENT.
+                    val decision = CompletableDeferred<Boolean>()
+                    consentDecision = decision
                     update(operation) {
                         it.copy(
                             phase = TransferSessionPhase.WAITING_FOR_CONSENT,
@@ -306,8 +311,6 @@ class SingleFileTransferCoordinator(
                             error = null,
                         )
                     }
-                    val decision = CompletableDeferred<Boolean>()
-                    consentDecision = decision
                     val accepted = try {
                         withTimeout(USER_CONSENT_TIMEOUT_MILLIS) { decision.await() }
                     } finally {
@@ -325,6 +328,10 @@ class SingleFileTransferCoordinator(
                     }
                 },
                 publishVerified = { manifest, receipt, staging ->
+                    // Register the destination response before exposing the picker request.
+                    // Observers may submit the URI as soon as AWAITING_DESTINATION is emitted.
+                    val destination = CompletableDeferred<String?>()
+                    destinationDecision = destination
                     val requestId = mutableState.value.destinationPickerRequestId + 1
                     update(operation) {
                         it.copy(
@@ -336,8 +343,6 @@ class SingleFileTransferCoordinator(
                             destinationPickerRequestId = requestId,
                         )
                     }
-                    val destination = CompletableDeferred<String?>()
-                    destinationDecision = destination
                     val destinationUri = try {
                         withTimeout(DESTINATION_SELECTION_TIMEOUT_MILLIS) {
                             destination.await()
