@@ -139,6 +139,19 @@ fun FileSelectionScreen(
             )
         }
 
+        if (selectionMode && state.category == ShareCategory.APPLICATIONS) {
+            Text(
+                text = stringResource(R.string.file_apps_transfer_pending),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Text(
+                text = stringResource(R.string.file_apps_catalog_scope),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         if (selectionMode) {
             Text(
                 text = stringResource(R.string.file_selection_subtitle),
@@ -319,6 +332,7 @@ fun FileSelectionScreen(
                         item = item,
                         selected = state.selectedItems.containsKey(item.id),
                         selectionMode = selectionMode,
+                        enabled = item.source is ShareSource.ContentUri,
                         onToggle = { viewModel.toggleSelection(item) },
                     )
                 }
@@ -442,6 +456,7 @@ private fun ShareItemRow(
     item: ShareItem,
     selected: Boolean,
     selectionMode: Boolean,
+    enabled: Boolean,
     onToggle: () -> Unit,
 ) {
     val rowModifier = if (selectionMode) {
@@ -450,6 +465,7 @@ private fun ShareItemRow(
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
             .toggleable(
                 value = selected,
+                enabled = enabled,
                 role = Role.Checkbox,
                 onValueChange = { onToggle() },
             )
@@ -470,6 +486,7 @@ private fun ShareItemRow(
             Checkbox(
                 checked = selected,
                 onCheckedChange = null,
+                enabled = enabled,
             )
         }
         Box(

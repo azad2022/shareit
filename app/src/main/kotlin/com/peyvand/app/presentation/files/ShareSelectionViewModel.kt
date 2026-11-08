@@ -152,6 +152,7 @@ class ShareSelectionViewModel(
     }
 
     fun toggleSelection(item: ShareItem) {
+        if (item.source !is com.peyvand.core.domain.files.ShareSource.ContentUri) return
         mutableState.update { current ->
             val updated = LinkedHashMap(current.selectedItems)
             if (updated.containsKey(item.id)) {

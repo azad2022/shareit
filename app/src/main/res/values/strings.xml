@@ -235,6 +235,8 @@
     <string name="file_transfer_item_rejected">رد شد</string>
     <string name="file_transfer_item_cancelled">لغو شد</string>
     <string name="file_transfer_item_failed">ناموفق</string>
+    <string name="file_apps_transfer_pending">فهرست برنامه‌ها فعلاً برای مشاهده است؛ انتقال بستهٔ نصب‌شدنی برنامه‌ها و اجزای Split APK در مرحلهٔ جداگانه پیاده‌سازی می‌شود.</string>
+    <string name="file_apps_catalog_scope">این فهرست فقط برنامه‌های دارای فعالیت اجرا را نشان می‌دهد، نه لزوماً تمام بسته‌های نصب‌شدهٔ دستگاه.</string>
 
     <string name="file_transfer_batch_offer_title">درخواست نمایش فهرست فایل‌ها</string>
     <string name="file_transfer_batch_offer_explanation">یک دستگاهِ متصل می‌خواهد فهرست فایل‌های قابل‌ارسال خود را نمایش دهد. تا زمانی که اجازه ندهید، نام، نوع، اندازه و محتوای هیچ فایلی برای این دستگاه ارسال نمی‌شود.</string>
