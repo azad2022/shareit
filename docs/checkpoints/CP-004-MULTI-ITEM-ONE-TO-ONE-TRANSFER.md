@@ -65,3 +65,16 @@ The exact workflow may run the same tasks through GitHub Actions. Record actual 
 - A blocking provider read must be actively closed on item cancellation, not merely coroutine-cancelled.
 - Physical Wi-Fi Direct/mTLS and Android DocumentProvider behavior are not covered by JVM codec tests.
 - CP-003 remains `IN_PROGRESS` overall; CP-003C's basic one-file smoke path is owner-reported `PASSED`. This does not satisfy CP-003's complete physical failure-path matrix.
+
+
+## Audit addendum — 2026-11-08
+
+- **Latest code SHA:** `0815395cc1ff3b9259131b9eaf96363692c18078`.
+- **Latest CI:** #346, run `42507588353`, exact SHA above; Build/unit tests/Lint/Debug APK, mTLS API 26 and API 36 all succeeded.
+- **Previous CI #345:** run `42506900809` failed only because the Kotlin/JUnit test source contained a malformed combined backtick test declaration; corrected in the following commit and verified by #346.
+- **Owner physical test:** the CI #333 APK was installed on two phones. In a two-item audio+image batch the audio completed and the image failed. This is an observed failure; the exact failing stage/exception has not yet been captured. Therefore CP-004 remains `IN_PROGRESS`.
+- **MIME/provider hardening since CI #333:** commits `b745b222`, `8f0caa83`, `092a47be`, `4c473bd6`; per-item failure-code propagation was also added. These changes are relevant but require repeating the same physical test on the newer exact-SHA APK.
+- **Coverage gap:** current JVM protocol tests do not exercise real MediaStore/ContentResolver/SAF provider behavior. Add Android instrumentation tests and sanitized stage-level diagnostics before treating arbitrary-provider transfer as robust.
+- **APK/app scope:** standalone APK is an ordinary SAF file; installed-app extraction and PackageInstaller handoff are explicitly deferred to CP-005 and ADR-0011. Current CP-004 does not support `ShareSource.InstalledPackage`.
+- Full audit: [TRANSFER_PIPELINE_AUDIT_2026-11-08.md](../audits/TRANSFER_PIPELINE_AUDIT_2026-11-08.md).
+- CP-005 plan: [CP-005-APK-AND-APPLICATION-SHARING.md](CP-005-APK-AND-APPLICATION-SHARING.md).
