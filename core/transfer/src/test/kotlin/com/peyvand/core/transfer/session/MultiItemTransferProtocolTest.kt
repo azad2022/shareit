@@ -118,7 +118,9 @@ class MultiItemTransferProtocolTest {
             }
 
             val sent = withTimeout(15_000L) { sending.await() }
-            val receivedResult = withTimeout(15_000L) { receiving.await() }
+            val receivedResult = requireNotNull(
+                withTimeout(15_000L) { receiving.await() },
+            ) { "Receiver completed without returning a batch result" }
 
             assertEquals(3, sent.completedCount)
             assertEquals(1, sent.rejectedCount)

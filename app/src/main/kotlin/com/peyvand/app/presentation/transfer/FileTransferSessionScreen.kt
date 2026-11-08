@@ -435,12 +435,13 @@ private fun BatchItemsPanel(
                             )
                         }
                     }
-                    if (item.totalSizeBytes != null) {
+                    val totalSizeBytes = item.totalSizeBytes
+                    if (totalSizeBytes != null) {
                         Text(
                             text = stringResource(
                                 R.string.file_transfer_item_progress,
                                 Formatter.formatFileSize(LocalContext.current, item.transferredBytes),
-                                Formatter.formatFileSize(LocalContext.current, item.totalSizeBytes),
+                                Formatter.formatFileSize(LocalContext.current, totalSizeBytes),
                             ),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -29,7 +29,7 @@ class BatchTransferManifestCodecTest {
                 displayName = when (index) {
                     0 -> "گزارش مالی نهایی.pdf"
                     1 -> "没有扩展名"
-                    else -> "file-$index",
+                    else -> "file-$index"
                 },
                 mimeType = if (index % 2 == 0) "application/pdf" else "application/octet-stream",
                 sizeBytes = index.toLong(),
