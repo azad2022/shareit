@@ -15,10 +15,13 @@ import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.security.MessageDigest
 import java.util.UUID
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.selects.onAwait
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -113,10 +116,10 @@ class MultiItemTransferProtocolTest {
                 )
             }
 
-            val sent = withTimeout(15_000L) { sending.await() }
-            val receivedResult = requireNotNull(
-                withTimeout(15_000L) { receiving.await() },
-            ) { "Receiver completed without returning a batch result" }
+            val (sent, receiveValue) = awaitSenderAndReceiver(sending, receiving, 15_000L)
+            val receivedResult = requireNotNull(receiveValue) {
+                "Receiver completed without returning a batch result"
+            }
 
             assertEquals(3, sent.completedCount)
             assertEquals(1, sent.rejectedCount)
@@ -191,8 +194,7 @@ class MultiItemTransferProtocolTest {
                 )
             }
 
-            val sendResult = withTimeout(10_000L) { sender.await() }
-            val receiveResult = withTimeout(10_000L) { receiver.await() }
+            val (sendResult, receiveResult) = awaitSenderAndReceiver(sender, receiver, 10_000L)
             assertEquals(manifest.items.size, sendResult.rejectedCount)
             assertEquals(null, receiveResult)
             assertTrue(!sourceOpened)
@@ -268,8 +270,10 @@ class MultiItemTransferProtocolTest {
                 )
             }
 
-            val sent = withTimeout(20_000L) { sending.await() }
-            val receivedResult = requireNotNull(withTimeout(20_000L) { receiving.await() })
+            val (sent, receiveValue) = awaitSenderAndReceiver(sending, receiving, 20_000L)
+            val receivedResult = requireNotNull(receiveValue) {
+                "Receiver completed without returning a cancellation result"
+            }
             assertTrue(cancellationRequested.get())
             assertEquals(BatchItemOutcomeStatus.CANCELLED, sent.outcomes[0].status)
             assertEquals(BatchItemOutcomeStatus.COMPLETED, sent.outcomes[1].status)
@@ -343,8 +347,10 @@ class MultiItemTransferProtocolTest {
                 )
             }
 
-            val sent = withTimeout(15_000L) { sending.await() }
-            val receivedResult = requireNotNull(withTimeout(15_000L) { receiving.await() })
+            val (sent, receiveValue) = awaitSenderAndReceiver(sending, receiving, 15_000L)
+            val receivedResult = requireNotNull(receiveValue) {
+                "Receiver completed without returning a destination-failure result"
+            }
             assertEquals(BatchItemOutcomeStatus.FAILED, sent.outcomes[0].status)
             assertEquals(BatchItemOutcomeStatus.COMPLETED, sent.outcomes[1].status)
             assertEquals(sent.outcomes, receivedResult.outcomes)
@@ -356,6 +362,38 @@ class MultiItemTransferProtocolTest {
             runCatching { senderOutput.close() }
             runCatching { receiverInput.close() }
             runCatching { receiverOutput.close() }
+        }
+    }
+
+
+    private sealed interface TransferSideCompletion {
+        data class Sender(val result: BatchTransferResult) : TransferSideCompletion
+        data class Receiver(val result: BatchTransferResult?) : TransferSideCompletion
+    }
+
+    /**
+     * Observe whichever side of the in-memory duplex stream completes first.
+     * This prevents a receiver-side protocol exception from being hidden behind
+     * a sender-only timeout in integration tests.
+     */
+    private suspend fun awaitSenderAndReceiver(
+        sender: Deferred<BatchTransferResult>,
+        receiver: Deferred<BatchTransferResult?>,
+        timeoutMillis: Long,
+    ): Pair<BatchTransferResult, BatchTransferResult?> {
+        val first = withTimeout(timeoutMillis) {
+            select<TransferSideCompletion> {
+                sender.onAwait { TransferSideCompletion.Sender(it) }
+                receiver.onAwait { TransferSideCompletion.Receiver(it) }
+            }
+        }
+        return when (first) {
+            is TransferSideCompletion.Sender -> first.result to withTimeout(timeoutMillis) {
+                receiver.await()
+            }
+            is TransferSideCompletion.Receiver -> withTimeout(timeoutMillis) {
+                sender.await()
+            } to first.result
         }
     }
 
