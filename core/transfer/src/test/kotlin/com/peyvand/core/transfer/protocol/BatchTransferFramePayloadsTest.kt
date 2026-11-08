@@ -48,15 +48,22 @@ class BatchTransferFramePayloadsTest {
             BatchItemCompletionCodec.decode(BatchItemCompletionCodec.encode(completion)),
         )
 
-        val failure = BatchItemFailureRecord(
-            batchId,
-            itemId,
+        listOf(
+            BatchItemFailureCode.SOURCE_UNAVAILABLE,
+            BatchItemFailureCode.SOURCE_READ_FAILED,
             BatchItemFailureCode.STORAGE_UNAVAILABLE,
-        )
-        assertEquals(
-            failure,
-            BatchItemFailureCodec.decode(BatchItemFailureCodec.encode(failure)),
-        )
+            BatchItemFailureCode.STORAGE_WRITE_FAILED,
+            BatchItemFailureCode.DESTINATION_FAILED,
+            BatchItemFailureCode.INTEGRITY_VERIFICATION_FAILED,
+            BatchItemFailureCode.STAGING_FINALIZATION_FAILED,
+            BatchItemFailureCode.UNKNOWN_ITEM_FAILURE,
+        ).forEach { code ->
+            val failure = BatchItemFailureRecord(batchId, itemId, code)
+            assertEquals(
+                failure,
+                BatchItemFailureCodec.decode(BatchItemFailureCodec.encode(failure)),
+            )
+        }
     }
 
     @Test
