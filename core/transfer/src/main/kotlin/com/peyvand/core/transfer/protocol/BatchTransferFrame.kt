@@ -19,7 +19,7 @@ enum class BatchTransferFrameType(
     BATCH_OFFER(32, 26, 26),
     BATCH_ACCEPT(33, 16, 16),
     BATCH_REJECT(34, 17, 17),
-    ITEM_MANIFEST(35, 48, 48 + 255 + 127),
+    ITEM_MANIFEST(35, 50, 48 + 255 + 127),
     ITEM_ACCEPT(36, 44, 44),
     ITEM_REJECT(37, 37, 37),
     DATA_CHUNK(
