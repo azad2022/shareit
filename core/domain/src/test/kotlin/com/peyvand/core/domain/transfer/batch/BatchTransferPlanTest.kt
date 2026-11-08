@@ -14,7 +14,7 @@ import org.junit.Test
 
 class BatchTransferPlanTest {
     @Test
-    fun \`plan preserves selection order and generates distinct batch and item identifiers\`() {
+    fun `plan preserves selection order and generates distinct batch and item identifiers`() {
         val selected = listOf(
             shareItem("first.pdf", 10L, "content://provider/document/first"),
             shareItem("second.jpg", 20L, "content://provider/document/second"),
@@ -35,7 +35,7 @@ class BatchTransferPlanTest {
     }
 
     @Test
-    fun \`one selected item is rejected because single file uses protocol v1\`() {
+    fun `one selected item is rejected because single file uses protocol v1`() {
         assertThrows(IllegalArgumentException::class.java) {
             BatchTransferPlan.create(
                 listOf(shareItem("one.bin", 1L, "content://provider/one")),
@@ -44,7 +44,7 @@ class BatchTransferPlanTest {
     }
 
     @Test
-    fun \`empty and over-limit selections are rejected\`() {
+    fun `empty and over-limit selections are rejected`() {
         assertThrows(IllegalArgumentException::class.java) {
             BatchTransferPlan.create(emptyList())
         }
@@ -61,7 +61,7 @@ class BatchTransferPlanTest {
     }
 
     @Test
-    fun \`installed packages and invalid content URIs are rejected\`() {
+    fun `installed packages and invalid content URIs are rejected`() {
         val installedPackage = ShareItem(
             id = "package",
             category = ShareCategory.APPLICATIONS,
@@ -86,7 +86,7 @@ class BatchTransferPlanTest {
     }
 
     @Test
-    fun \`unknown item size makes aggregate size unknown\`() {
+    fun `unknown item size makes aggregate size unknown`() {
         val plan = BatchTransferPlan.create(
             listOf(
                 shareItem("known.bin", 12L, "content://provider/known"),
@@ -98,7 +98,7 @@ class BatchTransferPlanTest {
     }
 
     @Test
-    fun \`aggregate size overflow is represented as unknown rather than wrapping\`() {
+    fun `aggregate size overflow is represented as unknown rather than wrapping`() {
         val plan = BatchTransferPlan.create(
             listOf(
                 shareItem("large.bin", Long.MAX_VALUE, "content://provider/large"),
@@ -110,7 +110,7 @@ class BatchTransferPlanTest {
     }
 
     @Test
-    fun \`plan item collection cannot be mutated through a cast\`() {
+    fun `plan item collection cannot be mutated through a cast`() {
         val plan = BatchTransferPlan.create(
             listOf(
                 shareItem("one.bin", 1L, "content://provider/one"),
