@@ -144,6 +144,54 @@ class TransferFrameCodecTest {
         }
     }
 
+    @Test
+    fun batchFramesUseTheCurrentBatchProtocolVersion() {
+        val batchId = UUID.randomUUID()
+        val payload = ByteBuffer.allocate(16)
+            .order(ByteOrder.BIG_ENDIAN)
+            .putLong(batchId.mostSignificantBits)
+            .putLong(batchId.leastSignificantBits)
+            .array()
+        val frame = TransferFrame(
+            TransferFrameCodec.BATCH_PROTOCOL_VERSION,
+            TransferFrameType.BATCH_OFFER,
+            sessionId,
+            payload,
+        )
+        val output = ByteArrayOutputStream()
+        TransferFrameCodec.write(frame, output)
+
+        val decoded = TransferFrameCodec.read(ByteArrayInputStream(output.toByteArray()))
+        assertEquals(3, TransferFrameCodec.BATCH_PROTOCOL_VERSION)
+        assertEquals(frame, decoded)
+    }
+
+    @Test
+    fun batchAndSingleFileFramesCannotCrossProtocolVersions() {
+        assertThrows(TransferProtocolException::class.java) {
+            TransferFrameCodec.write(
+                TransferFrame(
+                    TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+                    TransferFrameType.BATCH_OFFER,
+                    sessionId,
+                    ByteArray(16),
+                ),
+                ByteArrayOutputStream(),
+            )
+        }
+        assertThrows(TransferProtocolException::class.java) {
+            TransferFrameCodec.write(
+                TransferFrame(
+                    TransferFrameCodec.BATCH_PROTOCOL_VERSION,
+                    TransferFrameType.ACCEPT,
+                    sessionId,
+                    byteArrayOf(),
+                ),
+                ByteArrayOutputStream(),
+            )
+        }
+    }
+
     private fun encodeEmptyControlFrame(): ByteArray = ByteArrayOutputStream().also {
         TransferFrameCodec.write(
             TransferFrame(1, TransferFrameType.ACCEPT, sessionId, byteArrayOf()),
