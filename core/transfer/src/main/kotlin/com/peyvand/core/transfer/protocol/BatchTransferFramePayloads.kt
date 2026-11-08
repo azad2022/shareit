@@ -223,6 +223,8 @@ enum class BatchItemFailureCode(val wireCode: Int) {
     STORAGE_UNAVAILABLE(3),
     STORAGE_WRITE_FAILED(4),
     DESTINATION_FAILED(5),
+    INTEGRITY_VERIFICATION_FAILED(6),
+    STAGING_FINALIZATION_FAILED(7),
     UNKNOWN_ITEM_FAILURE(255);
 
     companion object {
