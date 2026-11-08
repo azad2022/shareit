@@ -36,6 +36,41 @@ import org.junit.Test
 
 class MultiItemTransferProtocolTest {
     @Test
+    fun batchReceiverRejectsVersionTwoFramesAfterProtocolUpgrade() = runBlocking {
+        val sessionId = UUID.randomUUID()
+        val cancellation = Channel<UUID>(Channel.UNLIMITED)
+        val oldOffer = com.peyvand.core.transfer.protocol.TransferFrame(
+            protocolVersion = 2,
+            type = com.peyvand.core.transfer.protocol.TransferFrameType.BATCH_OFFER,
+            sessionId = sessionId,
+            payload = com.peyvand.core.transfer.protocol.BatchOfferCodec.encode(
+                com.peyvand.core.transfer.protocol.BatchOffer(sessionId),
+            ),
+        )
+
+        try {
+            val failure = runCatching {
+                BatchTransferReceiverProtocol(1024L).receiveBatch(
+                    sessionId = sessionId,
+                    firstOfferFrame = oldOffer,
+                    channelInput = ByteArrayInputStream(byteArrayOf()),
+                    channelOutput = ByteArrayOutputStream(),
+                    acquireOfferConsent = { error("Legacy offer must be rejected before consent") },
+                    acquireSelection = { error("No manifest may be read for a legacy offer") },
+                    acquireStaging = { error("No staging may be created for a legacy offer") },
+                    publishVerified = { _, _, _, _ -> false },
+                    cancellationRequests = cancellation,
+                )
+            }.exceptionOrNull()
+
+            assertTrue(failure is com.peyvand.core.transfer.protocol.TransferProtocolException)
+            assertEquals("Invalid initial batch offer frame", failure?.message)
+        } finally {
+            cancellation.close()
+        }
+    }
+
+    @Test
     fun transfersSelectedItemsSeriallyAndReturnsIndependentIntegrityReceipts() = runBlocking {
         val firstBytes = ByteArray(150_123) { (it * 17).toByte() }
         val secondBytes = byteArrayOf()
