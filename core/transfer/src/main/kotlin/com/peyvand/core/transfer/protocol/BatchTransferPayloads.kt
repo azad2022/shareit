@@ -19,6 +19,7 @@ data class BatchTransferOffer(
     }
 
     companion object {
+        const val MIN_BATCH_ITEMS = 2
         const val MAX_BATCH_ITEMS = 100
     }
 }

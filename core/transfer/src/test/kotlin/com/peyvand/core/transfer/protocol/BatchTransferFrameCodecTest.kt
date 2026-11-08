@@ -129,4 +129,26 @@ class BatchTransferFrameCodecTest {
 
         assertEquals(frame, BatchTransferFrameCodec.read(fragmented))
     }
+
+    @Test
+    fun destinationReadyUsesItsDedicatedV2CodeAndBatchBoundPayload() {
+        val payload = BatchTransferDestinationReadyCodec.encode(
+            BatchTransferDestinationReady(sessionId),
+        )
+        assertEquals(16, payload.size)
+        assertEquals(50, BatchTransferFrameType.DESTINATION_READY.wireCode)
+
+        val frame = BatchTransferFrame(
+            protocolVersion = BatchTransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+            type = BatchTransferFrameType.DESTINATION_READY,
+            sessionId = sessionId,
+            payload = payload,
+        )
+        val encoded = ByteArrayOutputStream().also {
+            BatchTransferFrameCodec.write(frame, it)
+        }.toByteArray()
+
+        assertEquals(frame, BatchTransferFrameCodec.read(ByteArrayInputStream(encoded)))
+    }
+
 }

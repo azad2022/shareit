@@ -203,4 +203,16 @@ class BatchTransferDataPayloadCodecTest {
             BatchTransferCompletionSummaryCodec.decode(malformed)
         }
     }
+
+    @Test
+    fun destinationReadyCodecRejectsWrongLengthAndRoundTripsBatchId() {
+        val ready = BatchTransferDestinationReady(batchId)
+        val encoded = BatchTransferDestinationReadyCodec.encode(ready)
+        assertEquals(16, encoded.size)
+        assertEquals(ready, BatchTransferDestinationReadyCodec.decode(encoded))
+        assertThrows(TransferProtocolException::class.java) {
+            BatchTransferDestinationReadyCodec.decode(encoded.copyOf(15))
+        }
+    }
+
 }

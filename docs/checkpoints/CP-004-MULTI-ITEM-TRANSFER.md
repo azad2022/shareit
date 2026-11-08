@@ -30,6 +30,7 @@ Add a bounded, ordered, multi-item transfer operation with batch-level and per-i
 
 See [ADR-0008](../decisions/ADR-0008-MULTI-ITEM-ONE-TO-ONE-BATCH-TRANSFER.md).
 
+- `DESTINATION_READY(batchId)` synchronizes the batch-accepted and SAF-destination-ready boundary; no item metadata is sent before this signal.
 - Dedicated batch coordinator; retain `SingleFileTransferCoordinator` as the one-item path.
 - Sequential item processing, stable selected order, one active item/source descriptor.
 - Two consent boundaries: aggregate batch acceptance before item metadata; independent per-item acceptance before opening its URI stream.

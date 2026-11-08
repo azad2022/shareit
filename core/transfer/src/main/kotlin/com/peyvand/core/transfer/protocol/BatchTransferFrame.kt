@@ -37,7 +37,8 @@ enum class BatchTransferFrameType(
     BATCH_CANCEL(46, 17, 17),
     BATCH_CANCEL_ACK(47, 17, 17),
     BATCH_COMPLETE(48, 26, 26),
-    BATCH_COMPLETE_ACK(49, 26, 26);
+    BATCH_COMPLETE_ACK(49, 26, 26),
+    DESTINATION_READY(50, 16, 16);
 
     companion object {
         internal fun fromWireCode(code: Int): BatchTransferFrameType =

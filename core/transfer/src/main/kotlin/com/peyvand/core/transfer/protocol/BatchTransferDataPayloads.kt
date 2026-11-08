@@ -2,6 +2,7 @@ package com.peyvand.core.transfer.protocol
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.UUID
 
 class BatchTransferDataChunk(
     val identity: BatchTransferItemIdentity,
@@ -242,6 +243,33 @@ object BatchTransferBatchAcceptanceCodec {
     }
 }
 
+/**
+ * Confirms that the receiver's selected SAF tree is usable for this batch.
+ * The actual tree URI remains a local capability and is never sent to the peer.
+ */
+data class BatchTransferDestinationReady(
+    val batchId: UUID,
+)
+
+object BatchTransferDestinationReadyCodec {
+    const val PAYLOAD_BYTES = 16
+
+    fun encode(value: BatchTransferDestinationReady): ByteArray =
+        ByteBuffer.allocate(PAYLOAD_BYTES)
+            .order(ByteOrder.BIG_ENDIAN)
+            .putUuid(value.batchId)
+            .array()
+
+    fun decode(payload: ByteArray): BatchTransferDestinationReady {
+        if (payload.size != PAYLOAD_BYTES) {
+            throw TransferProtocolException("Invalid destination-ready payload length")
+        }
+        return BatchTransferDestinationReady(
+            ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN).readUuid(),
+        )
+    }
+}
+
 data class BatchTransferBatchStatusRecord(
     val batchId: UUID,
     val reason: BatchTransferReasonCode,
@@ -278,7 +306,7 @@ data class BatchTransferCompletionSummary(
 ) {
     init {
         require(totalItems in BatchTransferOffer.MIN_BATCH_ITEMS..BatchTransferOffer.MAX_BATCH_ITEMS)
-        require(completedItems >= 0)
+        require(completedItems in 0..BatchTransferOffer.MAX_BATCH_ITEMS)
         require(rejectedItems in 0..BatchTransferOffer.MAX_BATCH_ITEMS)
         require(cancelledItems in 0..BatchTransferOffer.MAX_BATCH_ITEMS)
         require(failedItems in 0..BatchTransferOffer.MAX_BATCH_ITEMS)

@@ -44,6 +44,7 @@ The v2 codec must not reuse a v1 frame type with a different meaning. The follow
 | 45 | `ITEM_TERMINAL_COMMIT` | Sender → receiver | Commits the synchronized terminal item outcome |
 | 46 | `BATCH_CANCEL` | Either peer → other | Cancels the entire batch |
 | 47 | `BATCH_CANCEL_ACK` | Other peer → initiator | Confirms whole-batch cancellation |
+| 50 | `DESTINATION_READY` | Receiver → sender | Confirms the selected destination tree is ready for this batch |
 
 All message payloads are length-bounded and strictly decoded. Reason values are finite enums; arbitrary remote error strings are not accepted as protocol commands. Unknown codes, unsupported fields, duplicate fields, invalid lengths, invalid state transitions and unknown identifiers fail closed.
 
@@ -64,6 +65,8 @@ All message payloads are length-bounded and strictly decoded. Reason values are 
 3. The tree URI is treated as a capability, not converted to a filesystem path. All child creation and writing use `DocumentsContract`/`ContentResolver` operations within the selected tree. No raw-path assumptions or broad storage permission are introduced.
 4. The tree grant is used only for the active batch. CP-004 does not persist destination grants for process-death recovery and does not retain the directory URI in transfer history. Durable permission/state lifecycle belongs to CP-007.
 5. A provider that cannot create and write new children, or whose behavior cannot be verified safely, causes the affected item to fail. The app must not silently switch to a different directory or provider.
+
+6. After successfully obtaining and validating the selected tree capability, the receiver sends `DESTINATION_READY` containing only the matching `batchId`. The sender MUST NOT send the first `ITEM_MANIFEST` until it receives and validates this frame. The receiver keeps the tree URI local; no URI or provider identifier is sent on the wire. The sender's destination-readiness wait uses the same finite 300-second destination-selection timeout. If the picker is cancelled, times out, or returns an unusable tree, the receiver sends `BATCH_CANCEL` with a bounded reason and completes the whole-batch cancellation handshake; no item metadata is disclosed.
 
 The existing 300-second destination-selection timeout is the initial timeout for this one-per-batch picker. Android 11+ restrictions on selectable directory roots and provider-specific behavior must be handled explicitly and tested; do not assume every visible provider supports identical operations.
 
@@ -288,7 +291,11 @@ After all declared items have completed their receipt or terminal-commit exchang
 4. The completion handshake is finite-timeout and is the only normal path to a completed batch result. Reaching the last item ordinal alone is not sufficient.
 5. No item manifest, data frame or second completion frame is legal after BATCH_COMPLETE.
 
-### 13.4 Cancellation versus final completion race
+### 13.4 Destination readiness synchronization
+
+Batch-level consent and destination-directory selection are separate user actions. `BATCH_ACCEPT` records explicit acceptance of the aggregate offer; it does not imply that a writable destination exists. After the receiver chooses and validates one destination tree, it sends `DESTINATION_READY(batchId)`. The sender's only legal next item-scoped message is `ITEM_MANIFEST`, and it may send that frame only after validating this exact readiness signal. The receiver sends `BATCH_CANCEL` if directory selection is cancelled, times out, or fails validation. The 90-second batch-consent timeout is not extended by the separate 300-second destination-selection phase.
+
+## 13.5 Cancellation versus final completion race
 
 1. The sender's serialized writer/state owner linearizes the final choice between emitting BATCH_CANCEL and emitting BATCH_COMPLETE; it must never emit both for one batch.
 2. A receiver-initiated cancellation is effective only when the sender has not committed BATCH_COMPLETE. If the sender processes cancellation first, it returns BATCH_CANCEL_ACK and the batch becomes cancelled. If BATCH_COMPLETE has already been committed, the receiver treats a crossing late cancellation request as too late, validates the completion summary and returns BATCH_COMPLETE_ACK.
