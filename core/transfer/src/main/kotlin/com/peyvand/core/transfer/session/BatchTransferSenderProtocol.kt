@@ -135,8 +135,16 @@ internal class BatchTransferSenderProtocol(
                 val ready = reader.next(sessionId)
                 when (ready.type) {
                     TransferFrameType.BATCH_ITEM_FAILED -> {
-                        decodeFailure(ready, reference)
-                        addOutcome(outcomes, BatchItemOutcome(item.itemId, BatchItemOutcomeStatus.FAILED), onItemOutcome)
+                        val failure = decodeFailure(ready, reference)
+                        addOutcome(
+                            outcomes,
+                            BatchItemOutcome(
+                                item.itemId,
+                                BatchItemOutcomeStatus.FAILED,
+                                failureCode = failure.failureCode,
+                            ),
+                            onItemOutcome,
+                        )
                         return@forEachIndexed
                     }
                     TransferFrameType.BATCH_ITEM_READY -> requireReference(ready, reference)
@@ -310,7 +318,9 @@ internal class BatchTransferSenderProtocol(
                                     reference,
                                     failure.failureCode,
                                 )
-                                return awaitFailedOutcome(reader, sessionId, reference)
+                                return awaitFailedOutcome(
+                                    reader, sessionId, reference, failure.failureCode,
+                                )
                             }
                             else -> throw TransferProtocolException(
                                 "Unexpected frame while sending batch item data",
@@ -341,7 +351,9 @@ internal class BatchTransferSenderProtocol(
                                 reference,
                                 BatchItemFailureCode.SOURCE_READ_FAILED,
                             )
-                            return awaitFailedOutcome(reader, sessionId, reference)
+                            return awaitFailedOutcome(
+                                reader, sessionId, reference, BatchItemFailureCode.SOURCE_READ_FAILED,
+                            )
                         }
 
                         if (bytes == null) {
@@ -355,7 +367,9 @@ internal class BatchTransferSenderProtocol(
                                     reference,
                                     BatchItemFailureCode.SOURCE_READ_FAILED,
                                 )
-                                return awaitFailedOutcome(reader, sessionId, reference)
+                                return awaitFailedOutcome(
+                                reader, sessionId, reference, BatchItemFailureCode.SOURCE_READ_FAILED,
+                            )
                             }
                             val completion = BatchItemCompletionRecord(batchId, itemId, totalBytes, localHash)
                             writeFrame(
@@ -390,7 +404,9 @@ internal class BatchTransferSenderProtocol(
                                 reference,
                                 BatchItemFailureCode.SOURCE_READ_FAILED,
                             )
-                            return awaitFailedOutcome(reader, sessionId, reference)
+                            return awaitFailedOutcome(
+                                reader, sessionId, reference, BatchItemFailureCode.SOURCE_READ_FAILED,
+                            )
                         }
 
                         val windowChunk = TransferDataChunk(itemId, totalBytes, bytes)
@@ -463,8 +479,12 @@ internal class BatchTransferSenderProtocol(
                         )
                     }
                     TransferFrameType.BATCH_ITEM_FAILED -> {
-                        decodeFailure(frame, reference)
-                        return BatchItemOutcome(reference.itemId, BatchItemOutcomeStatus.FAILED)
+                        val failure = decodeFailure(frame, reference)
+                        return BatchItemOutcome(
+                            reference.itemId,
+                            BatchItemOutcomeStatus.FAILED,
+                            failureCode = failure.failureCode,
+                        )
                     }
                     else -> throw TransferProtocolException("Unexpected frame while waiting for item receipt")
                 }
@@ -480,7 +500,7 @@ internal class BatchTransferSenderProtocol(
         failureCode: BatchItemFailureCode,
     ): BatchItemOutcome {
         writeFailure(output, sessionId, TransferFrameType.BATCH_ITEM_ABORT, reference, failureCode)
-        return awaitFailedOutcome(reader, sessionId, reference)
+        return awaitFailedOutcome(reader, sessionId, reference, failureCode)
     }
 
     private suspend fun awaitFailedOutcome(
@@ -497,7 +517,11 @@ internal class BatchTransferSenderProtocol(
                 }
                 TransferFrameType.BATCH_ITEM_FAILED_ACK -> {
                     requireReference(frame, reference)
-                    return BatchItemOutcome(reference.itemId, BatchItemOutcomeStatus.FAILED)
+                    return BatchItemOutcome(
+                        reference.itemId,
+                        BatchItemOutcomeStatus.FAILED,
+                        failureCode = failureCode,
+                    )
                 }
                 TransferFrameType.BATCH_ITEM_CANCELLED_ACK -> {
                     requireReference(frame, reference)
@@ -526,7 +550,11 @@ internal class BatchTransferSenderProtocol(
                 }
                 TransferFrameType.BATCH_ITEM_FAILED_ACK -> {
                     requireReference(frame, reference)
-                    return BatchItemOutcome(reference.itemId, BatchItemOutcomeStatus.FAILED)
+                    return BatchItemOutcome(
+                        reference.itemId,
+                        BatchItemOutcomeStatus.FAILED,
+                        failureCode = BatchItemFailureCode.UNKNOWN_ITEM_FAILURE,
+                    )
                 }
                 else -> throw TransferProtocolException("Unexpected frame while awaiting cancellation acknowledgement")
             }
