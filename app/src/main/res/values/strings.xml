@@ -239,7 +239,9 @@
     <string name="file_transfer_failure_source_read">خواندن کامل فایل از منبع انجام نشد.</string>
     <string name="file_transfer_failure_storage_unavailable">فضای کافی یا امکان ساخت فایل موقت در گیرنده وجود ندارد.</string>
     <string name="file_transfer_failure_storage_write">نوشتن یا همگام‌سازی داده در فضای موقت گیرنده ناموفق بود.</string>
-    <string name="file_transfer_failure_destination">ذخیره‌سازی یا بررسی نهایی فایل در پوشهٔ مقصد ناموفق بود.</string>
+    <string name="file_transfer_failure_destination">ساخت، نوشتن یا بررسی فایل در پوشهٔ مقصد ناموفق بود.</string>
+    <string name="file_transfer_failure_integrity">اندازه یا SHA-256 دادهٔ دریافت‌شده با اطلاعات فایل فرستنده مطابقت ندارد؛ فایل ذخیره نشد.</string>
+    <string name="file_transfer_failure_stage_finalization">نهایی‌سازی فایل موقت دریافت‌شده ناموفق بود؛ فایل در پوشه مقصد منتشر نشد.</string>
     <string name="file_transfer_failure_unknown">علت دقیق خطای این فایل مشخص نشد.</string>
     <string name="file_apps_transfer_pending">فهرست برنامه‌ها فعلاً برای مشاهده است؛ انتقال بستهٔ نصب‌شدنی برنامه‌ها و اجزای Split APK در مرحلهٔ جداگانه پیاده‌سازی می‌شود.</string>
     <string name="file_apps_catalog_scope">این فهرست فقط برنامه‌های دارای فعالیت اجرا را نشان می‌دهد، نه لزوماً تمام بسته‌های نصب‌شدهٔ دستگاه.</string>
