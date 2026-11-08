@@ -280,10 +280,12 @@ class AndroidTransferFileStorageRepository(
             .takeIf { it.isNotEmpty() && '/' in it && '*' !in it }
         val extension = displayName.substringAfterLast('.', missingDelimiterValue = "")
             .lowercase(java.util.Locale.ROOT)
-        val mimeType = providerMimeType
-            ?: fallbackMimeType
-            ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-            ?: DEFAULT_MIME_TYPE
+        val extensionMimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+        val mimeType = TransferMimeTypeResolver.resolve(
+            providerMimeType = providerMimeType,
+            fallbackMimeType = fallbackMimeType,
+            extensionMimeType = extensionMimeType,
+        )
 
         return TransferSourceMetadata(
             displayName = displayName,

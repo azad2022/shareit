@@ -131,10 +131,10 @@ class AndroidShareCatalogRepository(
                 val size = sizeIndex.takeIf { it >= 0 }
                     ?.let(cursor::getLong)
                     ?.takeIf { it >= 0L }
-                val mimeType = mimeIndex.takeIf { it >= 0 }
-                    ?.let(cursor::getString)
-                    ?.takeIf { !it.isNullOrBlank() && '/' in it && '*' !in it }
-                    ?: resolveMimeType(displayName)
+                val mimeType = resolveMimeType(
+                    displayName,
+                    mimeIndex.takeIf { it >= 0 }?.let(cursor::getString),
+                )
                 val modifiedAtMillis = modifiedIndex.takeIf { it >= 0 }
                     ?.let(cursor::getLong)
                     ?.takeIf { it > 0L }
@@ -267,15 +267,14 @@ class AndroidShareCatalogRepository(
     }
 
     private fun resolveMimeType(displayName: String, providerType: String? = null): String {
-        val concreteProviderType = providerType
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() && '/' in it && '*' !in it }
-        if (concreteProviderType != null) return concreteProviderType
-
         val extension = displayName.substringAfterLast('.', missingDelimiterValue = "")
             .lowercase(Locale.ROOT)
-        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-            ?: BINARY_MIME_TYPE
+        val extensionType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+        return TransferMimeTypeResolver.resolve(
+            providerMimeType = providerType,
+            fallbackMimeType = null,
+            extensionMimeType = extensionType,
+        )
     }
 
     private companion object {

@@ -14,6 +14,9 @@ android {
         named("main") {
             kotlin.directories.add("src/main/kotlin")
         }
+        named("test") {
+            kotlin.directories.add("src/test/kotlin")
+        }
     }
 
     compileOptions {
@@ -24,4 +27,9 @@ android {
 
 dependencies {
     implementation(project(":core:domain"))
+    testImplementation(libs.junit)
+}
+
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    useJUnit()
 }

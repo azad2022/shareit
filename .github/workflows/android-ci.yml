@@ -51,6 +51,7 @@ jobs:
         run: |
           ./gradlew --no-daemon --stacktrace --continue \
             :core:domain:testDebugUnitTest \
+            :core:storage:testDebugUnitTest \
             :app:lintDebug \
             :core:data:lintDebug \
             :core:designsystem:lintDebug \
