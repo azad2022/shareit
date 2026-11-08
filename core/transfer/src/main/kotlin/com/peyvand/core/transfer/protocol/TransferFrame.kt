@@ -1,6 +1,5 @@
 package com.peyvand.core.transfer.protocol
 
-import java.io.DataOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -32,7 +31,7 @@ enum class TransferFrameType(
     companion object {
         internal fun fromWireCode(code: Int): TransferFrameType =
             entries.firstOrNull { it.wireCode == code }
-                ?: throw TransferProtocolException("Unknown frame type: $code")
+                ?: throw TransferProtocolException("Unknown frame type: " + code)
     }
 }
 
@@ -52,7 +51,7 @@ class TransferFrame(
 
     fun payloadBytes(): ByteArray = content.copyOf()
 
-    internal fun writePayloadTo(output: OutputStream) {
+    fun writePayloadTo(output: OutputStream) {
         output.write(content)
     }
 
@@ -74,102 +73,40 @@ class TransferFrame(
 
 object TransferFrameCodec {
     const val CURRENT_PROTOCOL_VERSION = 1
-    const val HEADER_BYTES = 26
-    const val MAX_CONTROL_PAYLOAD_BYTES = 16 * 1024
-    const val MAX_DATA_CHUNK_BYTES = 64 * 1024
+    const val HEADER_BYTES = TransferWireFrameCodec.HEADER_BYTES
+    const val MAX_CONTROL_PAYLOAD_BYTES = TransferWireFrameCodec.MAX_CONTROL_PAYLOAD_BYTES
+    const val MAX_DATA_CHUNK_BYTES = TransferWireFrameCodec.MAX_DATA_CHUNK_BYTES
     const val CHUNK_METADATA_BYTES = 24
     const val CHUNK_ACK_PAYLOAD_BYTES = 24
 
-    private const val MAGIC = 0x50595644 // ASCII: PYVD
-
-    /** Writes one complete frame without closing or flushing the caller-owned stream. */
-    @Throws(TransferProtocolException::class)
     fun write(frame: TransferFrame, output: OutputStream) {
-        validate(frame)
-        val payload = frame.payloadBytes()
-        val data = DataOutputStream(output)
-        data.writeInt(MAGIC)
-        data.writeByte(frame.protocolVersion)
-        data.writeByte(frame.type.wireCode)
-        data.writeLong(frame.sessionId.mostSignificantBits)
-        data.writeLong(frame.sessionId.leastSignificantBits)
-        data.writeInt(payload.size)
-        data.write(payload)
-    }
-
-    /**
-     * Reads one frame. A null result means clean EOF before any header byte;
-     * EOF inside a header or payload is a protocol error.
-     */
-    @Throws(TransferProtocolException::class)
-    fun read(input: InputStream): TransferFrame? {
-        val header = ByteArray(HEADER_BYTES)
-        val first = input.read()
-        if (first < 0) return null
-        header[0] = first.toByte()
-        readFully(input, header, 1, HEADER_BYTES - 1, "frame header")
-
-        val headerBuffer = ByteBuffer.wrap(header).order(ByteOrder.BIG_ENDIAN)
-        if (headerBuffer.int != MAGIC) {
-            throw TransferProtocolException("Invalid frame magic")
-        }
-
-        val version = headerBuffer.get().toInt() and 0xff
-        if (version != CURRENT_PROTOCOL_VERSION) {
-            throw TransferProtocolException("Unsupported protocol version: $version")
-        }
-
-        val frameType = TransferFrameType.fromWireCode(headerBuffer.get().toInt() and 0xff)
-        val sessionId = UUID(headerBuffer.long, headerBuffer.long)
-        val payloadLength = headerBuffer.int
-        validatePayloadLength(frameType, payloadLength)
-
-        // The untrusted length is bounded and validated before this allocation.
-        val payload = ByteArray(payloadLength)
-        readFully(input, payload, 0, payloadLength, "frame payload")
-        return TransferFrame(version, frameType, sessionId, payload)
-    }
-
-    private fun validate(frame: TransferFrame) {
         if (frame.protocolVersion != CURRENT_PROTOCOL_VERSION) {
             throw TransferProtocolException(
-                "Unsupported protocol version: ${frame.protocolVersion}",
+                "Unsupported protocol version: " + frame.protocolVersion,
             )
         }
-        validatePayloadLength(frame.type, frame.payloadSize)
+        TransferWireFrameCodec.write(
+            TransferWireFrame(
+                protocolVersion = frame.protocolVersion,
+                wireType = frame.type.wireCode,
+                sessionId = frame.sessionId,
+                payload = frame.payloadBytes(),
+            ),
+            output,
+        )
     }
 
-    private fun validatePayloadLength(type: TransferFrameType, length: Int) {
-        if (length < type.minimumPayloadBytes || length > type.maximumPayloadBytes) {
-            throw TransferProtocolException(
-                "Invalid ${type.name} payload length: $length",
-            )
+    fun read(input: InputStream): TransferFrame? {
+        val wire = TransferWireFrameCodec.read(input) ?: return null
+        if (wire.protocolVersion != CURRENT_PROTOCOL_VERSION) {
+            throw TransferProtocolException("Unsupported protocol version: " + wire.protocolVersion)
         }
-    }
-
-    private fun readFully(
-        input: InputStream,
-        target: ByteArray,
-        startOffset: Int,
-        length: Int,
-        partName: String,
-    ) {
-        var offset = startOffset
-        val endOffset = startOffset + length
-        while (offset < endOffset) {
-            val count = input.read(target, offset, endOffset - offset)
-            when {
-                count < 0 -> throw TransferProtocolException("Truncated $partName")
-                count == 0 -> {
-                    val single = input.read()
-                    if (single < 0) {
-                        throw TransferProtocolException("Truncated $partName")
-                    }
-                    target[offset++] = single.toByte()
-                }
-                else -> offset += count
-            }
-        }
+        return TransferFrame(
+            protocolVersion = wire.protocolVersion,
+            type = TransferFrameType.fromWireCode(wire.wireType),
+            sessionId = wire.sessionId,
+            payload = wire.payloadBytes(),
+        )
     }
 }
 
