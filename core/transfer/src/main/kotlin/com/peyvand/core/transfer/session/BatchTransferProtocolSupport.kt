@@ -86,7 +86,7 @@ data class BatchTransferResult(
 }
 
 internal class BatchFrameReader(
-    input: InputStream,
+    private val input: InputStream,
     scope: CoroutineScope,
     private val expectedSessionId: UUID,
 ) {
@@ -128,6 +128,10 @@ internal class BatchFrameReader(
     fun close() {
         frames.cancel()
         readerJob.cancel()
+        // A synchronous Socket/SSLSocket read is not interrupted by coroutine cancellation.
+        // A batch owns this input until its terminal receipt, so closing it here releases the
+        // blocking read and lets the structured reader child finish.
+        runCatching { input.close() }
     }
 }
 
