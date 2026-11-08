@@ -3,7 +3,6 @@ package com.peyvand.app.presentation
 import android.animation.ValueAnimator
 import android.graphics.Color as AndroidColor
 import android.media.MediaPlayer
-import android.net.Uri
 import android.widget.VideoView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,12 +29,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.annotation.SuppressLint
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -44,11 +45,13 @@ import com.peyvand.app.R
 
 private const val STARTUP_SPLASH_RESOURCE_NAME = "peyvand_splash"
 
+@SuppressLint("DiscouragedApi") // The raw intro is optional; builds without the media asset must keep the static fallback.
 @Composable
 fun StartupLoadingScreen() {
     val context = LocalContext.current
-    val splashVideoResourceId = remember(context) {
-        context.resources.getIdentifier(
+    val resources = LocalResources.current
+    val splashVideoResourceId = remember(resources, context.packageName) {
+        resources.getIdentifier(
             STARTUP_SPLASH_RESOURCE_NAME,
             "raw",
             context.packageName,
@@ -135,7 +138,7 @@ private fun StartupVideoLoadingScreen(
                             true
                         }
                         setVideoURI(
-                            Uri.parse("android.resource://${viewContext.packageName}/$videoResourceId"),
+                            "android.resource://${viewContext.packageName}/$videoResourceId".toUri(),
                         )
                     }.also { videoView = it }
                 },
@@ -152,9 +155,6 @@ private fun StartupVideoLoadingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary,
-            )
             Text(
                 text = stringResource(R.string.app_startup_loading),
                 style = MaterialTheme.typography.bodyMedium,
@@ -185,7 +185,6 @@ private fun StartupStaticLoadingScreen() {
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
             )
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             Text(
                 text = stringResource(R.string.app_startup_loading),
                 style = MaterialTheme.typography.bodyMedium,

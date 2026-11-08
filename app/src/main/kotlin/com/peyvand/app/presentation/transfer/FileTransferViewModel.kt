@@ -47,6 +47,5 @@ class FileTransferViewModel(
 
     override fun onCleared() {
         coordinator.close()
-        super.onCleared()
     }
 }
