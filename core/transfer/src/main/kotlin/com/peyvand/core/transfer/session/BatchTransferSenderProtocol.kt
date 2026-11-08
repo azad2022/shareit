@@ -540,13 +540,33 @@ internal class BatchTransferSenderProtocol(
     ): SenderEvent {
         return if (pendingRead == null) {
             select {
-                reader.frames.onReceiveCatching { SenderEvent.FrameReceived(it.getOrElse { cause -> throw cause }) }
-                cancellations.onReceiveCatching { SenderEvent.LocalCancellation(it.getOrElse { cause -> throw cause }) }
+                reader.frames.onReceiveCatching { result ->
+                    SenderEvent.FrameReceived(
+                        result.getOrNull() ?: throw (result.exceptionOrNull()
+                            ?: EOFException("Batch protocol input closed while awaiting a frame")),
+                    )
+                }
+                cancellations.onReceiveCatching { result ->
+                    SenderEvent.LocalCancellation(
+                        result.getOrNull() ?: throw (result.exceptionOrNull()
+                            ?: CancellationException("Batch cancellation channel was closed")),
+                    )
+                }
             }
         } else {
             select {
-                reader.frames.onReceiveCatching { SenderEvent.FrameReceived(it.getOrElse { cause -> throw cause }) }
-                cancellations.onReceiveCatching { SenderEvent.LocalCancellation(it.getOrElse { cause -> throw cause }) }
+                reader.frames.onReceiveCatching { result ->
+                    SenderEvent.FrameReceived(
+                        result.getOrNull() ?: throw (result.exceptionOrNull()
+                            ?: EOFException("Batch protocol input closed while awaiting a frame")),
+                    )
+                }
+                cancellations.onReceiveCatching { result ->
+                    SenderEvent.LocalCancellation(
+                        result.getOrNull() ?: throw (result.exceptionOrNull()
+                            ?: CancellationException("Batch cancellation channel was closed")),
+                    )
+                }
                 pendingRead.onAwait { SenderEvent.ReadCompleted(it) }
             }
         }
