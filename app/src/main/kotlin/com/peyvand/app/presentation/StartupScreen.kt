@@ -71,7 +71,6 @@ private fun StartupVideoLoadingScreen(
     onCompleted: () -> Unit,
     onFailed: () -> Unit,
 ) {
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var videoView by remember(videoResourceId) { mutableStateOf<VideoView?>(null) }
     var isPrepared by remember(videoResourceId) { mutableStateOf(false) }
