@@ -506,6 +506,8 @@ private fun itemFailureLabel(code: BatchItemFailureCode): Int = when (code) {
     BatchItemFailureCode.STORAGE_UNAVAILABLE -> R.string.file_transfer_failure_storage_unavailable
     BatchItemFailureCode.STORAGE_WRITE_FAILED -> R.string.file_transfer_failure_storage_write
     BatchItemFailureCode.DESTINATION_FAILED -> R.string.file_transfer_failure_destination
+    BatchItemFailureCode.INTEGRITY_VERIFICATION_FAILED -> R.string.file_transfer_failure_integrity
+    BatchItemFailureCode.STAGING_FINALIZATION_FAILED -> R.string.file_transfer_failure_stage_finalization
     BatchItemFailureCode.UNKNOWN_ITEM_FAILURE -> R.string.file_transfer_failure_unknown
 }
 
