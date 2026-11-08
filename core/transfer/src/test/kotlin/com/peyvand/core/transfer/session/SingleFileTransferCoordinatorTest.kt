@@ -35,6 +35,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
@@ -81,6 +82,9 @@ class SingleFileTransferCoordinatorTest {
         val receiverStorage = InMemoryTransferStorageRepository(expectedPublishedBytes = fileBytes)
         val senderScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val receiverScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        // Unconfined observers react inline to StateFlow publication, reproducing the
+        // fastest possible UI callback and guarding against dropped decision races.
+        val stateObserverScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val sender = SingleFileTransferCoordinator(
             scope = senderScope,
             connectivityRepository = senderConnectivity,
@@ -99,19 +103,27 @@ class SingleFileTransferCoordinatorTest {
             assertEquals(TransferSessionPhase.READY_TO_SEND, sender.state.value.phase)
             assertEquals(TransferSessionPhase.WAITING_FOR_INCOMING, receiver.state.value.phase)
 
-            sender.startSending()
-            withTimeout(10_000L) {
+            // These observers submit the decisions synchronously with the StateFlow
+            // emission. If the coordinator publishes either state before registering
+            // its CompletableDeferred, the callback is dropped and this test times out.
+            val consentObserver = stateObserverScope.launch {
                 receiver.state.first { it.phase == TransferSessionPhase.WAITING_FOR_CONSENT }
+                receiver.acceptIncoming()
+            }
+            val destinationObserver = stateObserverScope.launch {
+                receiver.state.first { it.phase == TransferSessionPhase.AWAITING_DESTINATION }
+                receiver.provideDestination("content://destination/document/1")
             }
 
             // No file bytes may flow until the receiver makes this explicit decision.
-            receiver.acceptIncoming()
+            sender.startSending()
+            withTimeout(10_000L) { consentObserver.join() }
             withTimeout(10_000L) {
                 receiver.state.first { it.phase == TransferSessionPhase.AWAITING_DESTINATION }
             }
+            withTimeout(10_000L) { destinationObserver.join() }
             assertEquals(TransferSessionPhase.VERIFYING, sender.state.value.phase)
 
-            receiver.provideDestination("content://destination/document/1")
             withTimeout(10_000L) {
                 sender.state.first { it.phase == TransferSessionPhase.COMPLETED }
             }
@@ -135,6 +147,7 @@ class SingleFileTransferCoordinatorTest {
         } finally {
             sender.close()
             receiver.close()
+            stateObserverScope.cancel()
             senderScope.cancel()
             receiverScope.cancel()
         }
