@@ -4,8 +4,8 @@
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-004 — Multi-item one-to-one transfer
-- **Current branch:** `feature/secure-file-transfer` (stacked on the owner-updated CP-002 discovery branch; PR #3 remains open as Draft and is not merged)
-- **Last updated:** 2026-11-07 (CP-004 started; CP-003C basic one-file smoke and exact-head CI recorded)
+- **Current branch:** `feature/cp-004-multi-item-transfer` (isolated CP-004 branch; PR #3 remains open as Draft and is not merged)
+- **Last updated:** 2026-11-08 (CP-004 MIME/metadata/failure-stage hardening in progress; exact-head CI and physical interoperability retest pending)
 
 ## Milestones
 
@@ -242,10 +242,10 @@ The ordering is a proposed dependency-aware plan, not authorization to skip arch
 
 - CP-004 starts on the isolated branch `feature/cp-004-multi-item-transfer`, based on `7237115e1ce04ab225cbad223fad77e9ed8d344f`. The base contains only the latest CP-003 documentation updates beyond the CI-validated code SHA `0bb8d6582d860a45ded777ac9432d617c2106f55`.
 - PR #3 remains open, Draft and unmerged. CP-004 is not being developed by modifying or merging PR #3.
-- The scope is one sender, one receiver and 2–32 ordered generic `content://` files. A single selected file retains the existing version-1 implementation. Batch sessions use a separate, version-2 protocol.
+- The scope is one sender, one receiver and 2–32 ordered generic `content://` files. A single selected file retains the existing version-1 implementation. Batch sessions use the separate version-3 protocol; version-2 batch peers fail closed.
 - ADR-0009 records the two-step consent model: metadata-free offer approval before manifest disclosure, then per-item selection for content transfer; it also records immutable manifest order, item-scoped receipts/outcomes, serial resource ownership, and one receiver-selected SAF destination tree.
 - The receiver first approves a metadata-free batch offer before any filename/MIME/size/count metadata is disclosed. A second batch-level decision selects individual items. Only accepted items reach ITEM_START/ITEM_READY; source InputStreams and private stages are not opened/created before their respective authorization/readiness.
 - Files are processed sequentially with the existing 64 KiB chunk and maximum four-chunk/256 KiB flow-control caps. Item-local recoverable failures/cancellations are isolated; malformed protocol, channel or authentication failures terminate the batch.
 - Durable queue restoration, resume/process-death recovery, group transfer, multiple senders and APK/split-APK remain explicitly out of scope.
-- Version-2 protocol, initial UI, SAF tree storage, and JVM tests are now committed. CI compile/test/lint, final Debug build, complete failure-path evidence, APK artifact and physical-device evidence still require validation for the exact final SHA. Checkpoint status remains `IN_PROGRESS`; no CP-004 acceptance criterion is marked passed.
+- Version-3 protocol, initial UI, SAF tree storage, nullable-metadata handling, JPEG MIME canonicalization, stage-specific failure classification and JVM regression tests are committed on the isolated CP-004 branch. Exact-head CI, final Debug build, APK artifact and physical-device evidence still require validation for the latest SHA. Checkpoint status remains `IN_PROGRESS`; no CP-004 acceptance criterion is marked passed.
 - See `docs/checkpoints/CP-004-MULTI-ITEM-ONE-TO-ONE-TRANSFER.md` and `docs/decisions/ADR-0009-MULTI-ITEM-ONE-TO-ONE-TRANSFER.md`.
