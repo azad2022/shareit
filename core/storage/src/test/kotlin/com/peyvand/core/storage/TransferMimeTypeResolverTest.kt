@@ -53,6 +53,30 @@ class TransferMimeTypeResolverTest {
     }
 
     @Test
+    fun legacyJpegProviderMimeIsCanonicalizedForSafPublication() {
+        assertEquals(
+            "image/jpeg",
+            TransferMimeTypeResolver.resolve(
+                providerMimeType = "image/jpg",
+                fallbackMimeType = "application/octet-stream",
+                extensionMimeType = "image/jpeg",
+            ),
+        )
+    }
+
+    @Test
+    fun progressiveJpegProviderMimeIsCanonicalized() {
+        assertEquals(
+            "image/jpeg",
+            TransferMimeTypeResolver.resolve(
+                providerMimeType = "image/pjpeg",
+                fallbackMimeType = null,
+                extensionMimeType = null,
+            ),
+        )
+    }
+
+    @Test
     fun apkExtensionCanSupplyItsConcreteMimeType() {
         assertEquals(
             "application/vnd.android.package-archive",
