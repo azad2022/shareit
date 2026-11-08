@@ -368,8 +368,11 @@ internal class BatchTransferSenderProtocol(
                                     BatchItemFailureCode.SOURCE_READ_FAILED,
                                 )
                                 return awaitFailedOutcome(
-                                reader, sessionId, reference, BatchItemFailureCode.SOURCE_READ_FAILED,
-                            )
+                                    reader,
+                                    sessionId,
+                                    reference,
+                                    BatchItemFailureCode.SOURCE_READ_FAILED,
+                                )
                             }
                             val completion = BatchItemCompletionRecord(batchId, itemId, totalBytes, localHash)
                             writeFrame(
@@ -507,6 +510,7 @@ internal class BatchTransferSenderProtocol(
         reader: BatchFrameReader,
         sessionId: UUID,
         reference: BatchItemReference,
+        failureCode: BatchItemFailureCode,
     ): BatchItemOutcome {
         while (true) {
             val frame = reader.next(sessionId)
