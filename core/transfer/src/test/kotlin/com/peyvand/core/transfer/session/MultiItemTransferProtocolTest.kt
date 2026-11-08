@@ -369,6 +369,7 @@ class MultiItemTransferProtocolTest {
                 "Receiver completed without returning a destination-failure result"
             }
             assertEquals(BatchItemOutcomeStatus.FAILED, sent.outcomes[0].status)
+            assertEquals(BatchItemFailureCode.DESTINATION_FAILED, sent.outcomes[0].failureCode)
             assertEquals(BatchItemOutcomeStatus.COMPLETED, sent.outcomes[1].status)
             assertEquals(sent.outcomes, receivedResult.outcomes)
             assertEquals(setOf(items[1].itemId), published)
@@ -379,6 +380,91 @@ class MultiItemTransferProtocolTest {
         }
     }
 
+
+    @Test
+    fun stagingFinalizationFailureIsNotReportedAsDestinationFailure() = runBlocking {
+        val firstBytes = "stage finalization failure".toByteArray(Charsets.UTF_8)
+        val secondBytes = "the next file must still complete".toByteArray(Charsets.UTF_8)
+        val batchId = UUID.randomUUID()
+        val items = listOf(
+            manifest("first.jpg", "image/jpeg", firstBytes.size.toLong()),
+            manifest("second.mp3", "audio/mpeg", secondBytes.size.toLong()),
+        )
+        val manifest = BatchTransferManifest(batchId, items)
+        val bytesById = mapOf(items[0].itemId to firstBytes, items[1].itemId to secondBytes)
+        val streams = LoopbackSocketPair.create()
+        val senderCancellation = Channel<UUID>(Channel.UNLIMITED)
+        val receiverCancellation = Channel<UUID>(Channel.UNLIMITED)
+        val published = mutableSetOf<UUID>()
+
+        try {
+            val receiving = async(Dispatchers.IO) {
+                MultiItemTransferProtocol(1024 * 1024L).receiveBatch(
+                    sessionId = batchId,
+                    firstOfferFrame = requireNotNull(TransferFrameCodec.read(streams.receiverInput)),
+                    channelInput = streams.receiverInput,
+                    channelOutput = streams.receiverOutput,
+                    acquireOfferConsent = { true },
+                    acquireSelection = {
+                        BatchReceiverSelection(items.map { it.itemId }.toSet(), "content://tree/peyvand")
+                    },
+                    acquireStaging = { item ->
+                        if (item.itemId == items[0].itemId) SealFailingStage() else MemoryStage {}
+                    },
+                    publishVerified = { item, staging, _, _ ->
+                        val bytes = staging.openVerifiedInputStream().use { it.readBytes() }
+                        assertArrayEquals(requireNotNull(bytesById[item.itemId]), bytes)
+                        published += item.itemId
+                        true
+                    },
+                    cancellationRequests = receiverCancellation,
+                )
+            }
+            val sending = async(Dispatchers.IO) {
+                MultiItemTransferProtocol(1024 * 1024L).sendBatch(
+                    sessionId = batchId,
+                    manifest = manifest,
+                    channelInput = streams.senderInput,
+                    channelOutput = streams.senderOutput,
+                    openSource = { TestSource(it, requireNotNull(bytesById[it.itemId])) },
+                    cancellationRequests = senderCancellation,
+                )
+            }
+
+            val (sent, receivedValue) = awaitSenderAndReceiver(sending, receiving, 15_000L) {
+                streams.trafficSnapshot()
+            }
+            val received = requireNotNull(receivedValue)
+            assertEquals(BatchItemFailureCode.STAGING_FINALIZATION_FAILED, sent.outcomes[0].failureCode)
+            assertEquals(BatchItemOutcomeStatus.FAILED, sent.outcomes[0].status)
+            assertEquals(BatchItemOutcomeStatus.COMPLETED, sent.outcomes[1].status)
+            assertEquals(sent.outcomes, received.outcomes)
+            assertEquals(setOf(items[1].itemId), published)
+        } finally {
+            senderCancellation.close()
+            receiverCancellation.close()
+            runCatching { streams.close() }
+        }
+    }
+
+private class SealFailingStage : TransferStagingSink {
+    private val delegate = MemoryStage {}
+
+    override fun write(bytes: ByteArray, offset: Int, length: Int) =
+        delegate.write(bytes, offset, length)
+
+    override fun sync() = delegate.sync()
+
+    override fun seal() {
+        throw IOException("Injected staging finalization failure")
+    }
+
+    override fun openVerifiedInputStream(): InputStream = delegate.openVerifiedInputStream()
+
+    override fun delete() = delegate.delete()
+
+    override fun close() = delegate.close()
+}
 
 private class LoopbackSocketPair private constructor(
     private val senderSocket: Socket,
