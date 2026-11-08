@@ -326,19 +326,9 @@ internal class BatchTransferReceiverProtocol(
                                 throw TransferProtocolException("Batch item exceeds its declared size limit")
                             }
 
+                            val bytes = chunk.bytes()
                             try {
-                                val bytes = chunk.bytes()
                                 staging.write(bytes, 0, bytes.size)
-                                digest.update(bytes)
-                                nextExpectedOffset += bytes.size.toLong()
-                                pendingChunks += 1
-                                lastChunkSize = bytes.size
-                                if (pendingChunks == TransferFlowControlPolicy.MAX_IN_FLIGHT_CHUNKS) {
-                                    staging.sync()
-                                    sendBatchAck(output, sessionId, reference, nextExpectedOffset)
-                                    pendingChunks = 0
-                                    onItemProgress(item.itemId, nextExpectedOffset)
-                                }
                             } catch (cancellation: CancellationException) {
                                 throw cancellation
                             } catch (_: Exception) {
@@ -357,6 +347,36 @@ internal class BatchTransferReceiverProtocol(
                                     output,
                                     requestedFailureCode = BatchItemFailureCode.STORAGE_WRITE_FAILED,
                                 )
+                            }
+                            digest.update(bytes)
+                            nextExpectedOffset += bytes.size.toLong()
+                            pendingChunks += 1
+                            lastChunkSize = bytes.size
+                            if (pendingChunks == TransferFlowControlPolicy.MAX_IN_FLIGHT_CHUNKS) {
+                                try {
+                                    staging.sync()
+                                } catch (cancellation: CancellationException) {
+                                    throw cancellation
+                                } catch (_: Exception) {
+                                    writeFailure(
+                                        output,
+                                        sessionId,
+                                        TransferFrameType.BATCH_ITEM_FAILED_REQUEST,
+                                        reference,
+                                        BatchItemFailureCode.STORAGE_WRITE_FAILED,
+                                    )
+                                    return drainItemAfterRequest(
+                                        sessionId,
+                                        reference,
+                                        staging,
+                                        reader,
+                                        output,
+                                        requestedFailureCode = BatchItemFailureCode.STORAGE_WRITE_FAILED,
+                                    )
+                                }
+                                sendBatchAck(output, sessionId, reference, nextExpectedOffset)
+                                pendingChunks = 0
+                                onItemProgress(item.itemId, nextExpectedOffset)
                             }
                         }
 
