@@ -11,8 +11,10 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.IOException
-import java.io.PipedInputStream
-import java.io.PipedOutputStream
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.ServerSocket
+import java.net.Socket
 import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.coroutines.Deferred
@@ -51,10 +53,11 @@ class MultiItemTransferProtocolTest {
             items[3].itemId to fourthBytes,
             items[4].itemId to fifthBytes,
         )
-        val senderInput = PipedInputStream(512 * 1024)
-        val receiverOutput = PipedOutputStream(senderInput)
-        val receiverInput = PipedInputStream(512 * 1024)
-        val senderOutput = PipedOutputStream(receiverInput)
+        val streams = LoopbackSocketPair.create()
+        val senderInput = streams.senderInput
+        val senderOutput = streams.senderOutput
+        val receiverInput = streams.receiverInput
+        val receiverOutput = streams.receiverOutput
         val cancellation = Channel<UUID>(Channel.UNLIMITED)
         val receiverCancellation = Channel<UUID>(Channel.UNLIMITED)
         val sender = MultiItemTransferProtocol(2L * 1024L * 1024L)
@@ -139,10 +142,7 @@ class MultiItemTransferProtocolTest {
         } finally {
             cancellation.close()
             receiverCancellation.close()
-            runCatching { senderInput.close() }
-            runCatching { senderOutput.close() }
-            runCatching { receiverInput.close() }
-            runCatching { receiverOutput.close() }
+            runCatching { streams.close() }
         }
     }
 
@@ -155,10 +155,11 @@ class MultiItemTransferProtocolTest {
             item,
             manifest("second.bin", "application/octet-stream", 0L),
         ))
-        val senderInput = PipedInputStream(4096)
-        val receiverOutput = PipedOutputStream(senderInput)
-        val receiverInput = PipedInputStream(4096)
-        val senderOutput = PipedOutputStream(receiverInput)
+        val streams = LoopbackSocketPair.create()
+        val senderInput = streams.senderInput
+        val senderOutput = streams.senderOutput
+        val receiverInput = streams.receiverInput
+        val receiverOutput = streams.receiverOutput
         val senderCancellation = Channel<UUID>(Channel.UNLIMITED)
         val receiverCancellation = Channel<UUID>(Channel.UNLIMITED)
         var sourceOpened = false
@@ -200,10 +201,7 @@ class MultiItemTransferProtocolTest {
         } finally {
             senderCancellation.close()
             receiverCancellation.close()
-            runCatching { senderInput.close() }
-            runCatching { senderOutput.close() }
-            runCatching { receiverInput.close() }
-            runCatching { receiverOutput.close() }
+            runCatching { streams.close() }
         }
     }
 
@@ -219,10 +217,11 @@ class MultiItemTransferProtocolTest {
         )
         val manifest = BatchTransferManifest(batchId, items)
         val bytesById = mapOf(items[0].itemId to firstBytes, items[1].itemId to secondBytes)
-        val senderInput = PipedInputStream(512 * 1024)
-        val receiverOutput = PipedOutputStream(senderInput)
-        val receiverInput = PipedInputStream(512 * 1024)
-        val senderOutput = PipedOutputStream(receiverInput)
+        val streams = LoopbackSocketPair.create()
+        val senderInput = streams.senderInput
+        val senderOutput = streams.senderOutput
+        val receiverInput = streams.receiverInput
+        val receiverOutput = streams.receiverOutput
         val senderCancellation = Channel<UUID>(Channel.UNLIMITED)
         val receiverCancellation = Channel<UUID>(Channel.UNLIMITED)
         val cancellationRequested = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -282,10 +281,7 @@ class MultiItemTransferProtocolTest {
         } finally {
             senderCancellation.close()
             receiverCancellation.close()
-            runCatching { senderInput.close() }
-            runCatching { senderOutput.close() }
-            runCatching { receiverInput.close() }
-            runCatching { receiverOutput.close() }
+            runCatching { streams.close() }
         }
     }
 
@@ -300,10 +296,11 @@ class MultiItemTransferProtocolTest {
         )
         val manifest = BatchTransferManifest(batchId, items)
         val bytesById = mapOf(items[0].itemId to firstBytes, items[1].itemId to secondBytes)
-        val senderInput = PipedInputStream(128 * 1024)
-        val receiverOutput = PipedOutputStream(senderInput)
-        val receiverInput = PipedInputStream(128 * 1024)
-        val senderOutput = PipedOutputStream(receiverInput)
+        val streams = LoopbackSocketPair.create()
+        val senderInput = streams.senderInput
+        val senderOutput = streams.senderOutput
+        val receiverInput = streams.receiverInput
+        val receiverOutput = streams.receiverOutput
         val senderCancellation = Channel<UUID>(Channel.UNLIMITED)
         val receiverCancellation = Channel<UUID>(Channel.UNLIMITED)
         val published = mutableSetOf<UUID>()
@@ -357,13 +354,44 @@ class MultiItemTransferProtocolTest {
         } finally {
             senderCancellation.close()
             receiverCancellation.close()
-            runCatching { senderInput.close() }
-            runCatching { senderOutput.close() }
-            runCatching { receiverInput.close() }
-            runCatching { receiverOutput.close() }
+            runCatching { streams.close() }
         }
     }
 
+
+private class LoopbackSocketPair private constructor(
+    private val senderSocket: Socket,
+    private val receiverSocket: Socket,
+) : AutoCloseable {
+    val senderInput: InputStream = senderSocket.getInputStream()
+    val senderOutput: OutputStream = senderSocket.getOutputStream()
+    val receiverInput: InputStream = receiverSocket.getInputStream()
+    val receiverOutput: OutputStream = receiverSocket.getOutputStream()
+
+    override fun close() {
+        runCatching { senderSocket.close() }
+        runCatching { receiverSocket.close() }
+    }
+
+    companion object {
+        fun create(): LoopbackSocketPair {
+            val loopbackAddress = InetAddress.getLoopbackAddress()
+            ServerSocket(0, 1, loopbackAddress).use { server ->
+                val sender = Socket()
+                try {
+                    sender.tcpNoDelay = true
+                    sender.connect(InetSocketAddress(loopbackAddress, server.localPort), 5_000)
+                    val receiver = server.accept()
+                    receiver.tcpNoDelay = true
+                    return LoopbackSocketPair(sender, receiver)
+                } catch (failure: Throwable) {
+                    runCatching { sender.close() }
+                    throw failure
+                }
+            }
+        }
+    }
+}
 
     private sealed interface TransferSideCompletion {
         data class Sender(val result: BatchTransferResult) : TransferSideCompletion
