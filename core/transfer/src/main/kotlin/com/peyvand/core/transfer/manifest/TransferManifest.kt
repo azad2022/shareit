@@ -26,7 +26,7 @@ object TransferManifestCodec {
     private const val FIXED_BYTES = 16 + 2 + 2 + 8
 
     private val mimeTypePattern = Regex(
-        "^[a-z0-9!#"^[a-z0-9!#$&^_.+-]{1,64}/(?:[a-z0-9!#$&^_.+-]{1,64}|\\*)$",^_.+-]{1,64}/[a-z0-9!#"^[a-z0-9!#$&^_.+-]{1,64}/(?:[a-z0-9!#$&^_.+-]{1,64}|\\*)$",^_.+-]{1,64}$",
+        "^[a-z0-9!#$&^_.+-]{1,64}/[a-z0-9!#$&^_.+-]{1,64}$",
     )
 
     fun encode(item: TransferManifestItem): ByteArray {
