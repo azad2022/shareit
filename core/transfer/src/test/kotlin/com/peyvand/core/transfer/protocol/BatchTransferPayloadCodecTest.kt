@@ -139,4 +139,31 @@ class BatchTransferPayloadCodecTest {
             BatchTransferItemIdentity(batchId, itemId, 100)
         }
     }
+
+    @Test
+    fun itemManifestRejectsInvalidMimeSyntaxOnEncodeAndDecode() {
+        assertThrows(IllegalArgumentException::class.java) {
+            BatchTransferItemManifestCodec.encode(
+                BatchTransferItemManifest(identity, "file.bin", "not-a-mime", 1L),
+            )
+        }
+
+        val encoded = BatchTransferItemManifestCodec.encode(
+            BatchTransferItemManifest(identity, "file.bin", "text/plain", 1L),
+        )
+        val nameLength = ByteBuffer.wrap(encoded).order(ByteOrder.BIG_ENDIAN)
+            .getShort(36).toInt() and 0xffff
+        val mimeLengthOffset = 38 + nameLength
+        val mimeLength = ByteBuffer.wrap(encoded).order(ByteOrder.BIG_ENDIAN)
+            .getShort(mimeLengthOffset).toInt() and 0xffff
+        assertEquals(10, mimeLength)
+        "invalidmime".toByteArray(Charsets.UTF_8).copyInto(
+            encoded,
+            mimeLengthOffset + 2,
+        )
+        assertThrows(TransferProtocolException::class.java) {
+            BatchTransferItemManifestCodec.decode(encoded)
+        }
+    }
+
 }

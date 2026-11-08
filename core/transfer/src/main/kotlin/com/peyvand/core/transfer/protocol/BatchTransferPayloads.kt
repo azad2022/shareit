@@ -89,6 +89,7 @@ object BatchTransferItemManifestCodec {
                 mimeType = manifest.mimeType,
                 sizeBytes = manifest.sizeBytes,
             ),
+            strictMimeType = true,
         )
         return ByteBuffer.allocate(IDENTITY_BYTES + itemManifest.size)
             .order(ByteOrder.BIG_ENDIAN)
@@ -110,7 +111,7 @@ object BatchTransferItemManifestCodec {
         val ordinal = buffer.int
         val encodedItemManifest = ByteArray(buffer.remaining())
         buffer.get(encodedItemManifest)
-        val item = TransferManifestCodec.decode(encodedItemManifest)
+        val item = TransferManifestCodec.decode(encodedItemManifest, strictMimeType = true)
         return try {
             BatchTransferItemManifest(
                 identity = BatchTransferItemIdentity(batchId, item.itemId, ordinal),
@@ -145,6 +146,9 @@ enum class BatchTransferReasonCode(val wireCode: Int) {
     PROTOCOL_ERROR(18),
     CHANNEL_LOST(19),
     INVALID_RECEIPT(20),
+    USER_CANCELLED(21),
+    BATCH_CONSENT_TIMEOUT(22),
+    DESTINATION_SELECTION_TIMEOUT(23),
     UNKNOWN(255);
 
     companion object {

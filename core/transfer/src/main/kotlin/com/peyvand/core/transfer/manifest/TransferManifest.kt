@@ -29,9 +29,15 @@ object TransferManifestCodec {
         "^[a-z0-9!#$&^_.+-]{1,64}/(?:[a-z0-9!#$&^_.+-]{1,64}|\\*)$",
     )
 
-    fun encode(item: TransferManifestItem): ByteArray {
+    fun encode(
+        item: TransferManifestItem,
+        strictMimeType: Boolean = false,
+    ): ByteArray {
         require(item.sizeBytes == null || item.sizeBytes >= 0L) {
             "File size must be non-negative or unknown"
+        }
+        if (strictMimeType && !isValidMimeType(item.mimeType)) {
+            throw IllegalArgumentException("Invalid MIME type in transfer manifest")
         }
         val name = SafeTransferFileName.sanitize(item.displayName)
         val nameBytes = name.toByteArray(StandardCharsets.UTF_8)
@@ -54,7 +60,10 @@ object TransferManifestCodec {
     }
 
     @Throws(TransferProtocolException::class)
-    fun decode(payload: ByteArray): TransferManifestItem {
+    fun decode(
+        payload: ByteArray,
+        strictMimeType: Boolean = false,
+    ): TransferManifestItem {
         if (payload.size < FIXED_BYTES || payload.size > FIXED_BYTES +
             MAX_NAME_BYTES + MAX_MIME_BYTES
         ) {
@@ -90,6 +99,9 @@ object TransferManifestCodec {
 
         val rawName = decodeUtf8(nameBytes, "file name")
         val rawMimeType = decodeUtf8(mimeBytes, "MIME type")
+        if (strictMimeType && !isValidMimeType(rawMimeType)) {
+            throw TransferProtocolException("Invalid MIME type in transfer manifest")
+        }
         return TransferManifestItem(
             itemId = itemId,
             displayName = SafeTransferFileName.sanitize(rawName),
@@ -97,6 +109,9 @@ object TransferManifestCodec {
             sizeBytes = declaredSize.takeIf { it != UNKNOWN_SIZE_SENTINEL },
         )
     }
+
+    fun isValidMimeType(value: String): Boolean =
+        mimeTypePattern.matches(value.trim().lowercase(Locale.ROOT))
 
     fun normalizeMimeType(value: String): String {
         val normalized = value.trim().lowercase(Locale.ROOT)
