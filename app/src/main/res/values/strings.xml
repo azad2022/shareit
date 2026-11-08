@@ -214,6 +214,7 @@
     <string name="file_transfer_file_size">حجم فایل: %1$s</string>
     <string name="file_transfer_progress">دادهٔ منتقل‌شده: %1$s</string>
     <string name="file_transfer_unknown_size">اندازهٔ فایل از منبع اعلام نشده است.</string>
+    <string name="file_transfer_batch_finalization_unconfirmed">فایل‌ها جداگانه دریافت و صحت آن‌ها تأیید شده است، اما تأیید نهایی مجموعه کامل نشد. پیش از ارسال دوباره، پوشهٔ مقصد را بررسی کنید.</string>
     <string name="file_transfer_destination_picker">در حال باز کردن محل ذخیره‌سازی…</string>
 
     <string name="file_transfer_batch_consent_title">بررسی و انتخاب فایل‌های دریافتی</string>

@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.peyvand.app.R
 import com.peyvand.core.transfer.session.TransferSessionError
 import com.peyvand.core.transfer.session.TransferSessionPhase
+import com.peyvand.core.transfer.session.TransferSessionSnapshot
 import com.peyvand.core.transfer.session.TransferItemPhase
 import com.peyvand.core.transfer.session.TransferItemSnapshot
 
@@ -130,10 +131,21 @@ fun FileTransferSessionScreen(
                     .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                val batchFinalizationUnconfirmed = isBatchFinalizationUnconfirmed(state)
                 Text(
-                    text = stringResource(phaseLabel(state.phase, state.isSender)),
+                    text = stringResource(
+                        if (batchFinalizationUnconfirmed) {
+                            R.string.file_transfer_batch_finalization_unconfirmed
+                        } else {
+                            phaseLabel(state.phase, state.isSender)
+                        },
+                    ),
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = if (batchFinalizationUnconfirmed) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                     fontWeight = FontWeight.SemiBold,
                 )
 
@@ -147,51 +159,53 @@ fun FileTransferSessionScreen(
                     )
                 }
 
-                state.displayName?.let {
-                    Text(
-                        text = stringResource(R.string.file_transfer_file_name, it),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-                state.mimeType?.let {
-                    Text(
-                        text = stringResource(R.string.file_transfer_file_type, it),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                state.totalSizeBytes?.let {
-                    Text(
-                        text = stringResource(
-                            R.string.file_transfer_file_size,
-                            Formatter.formatFileSize(context, it),
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                } ?: Text(
-                    text = stringResource(R.string.file_transfer_unknown_size),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-
-                if (state.phase == TransferSessionPhase.TRANSFERRING ||
-                    state.phase == TransferSessionPhase.VERIFYING ||
-                    state.phase == TransferSessionPhase.PUBLISHING
-                ) {
-                    if (state.phase == TransferSessionPhase.VERIFYING || progress == null) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    } else {
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.fillMaxWidth(),
+                if (!state.isBatch) {
+                    state.displayName?.let {
+                        Text(
+                            text = stringResource(R.string.file_transfer_file_name, it),
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                     }
-                    Text(
-                        text = stringResource(
-                            R.string.file_transfer_progress,
-                            Formatter.formatFileSize(context, state.transferredBytes),
-                        ),
+                    state.mimeType?.let {
+                        Text(
+                            text = stringResource(R.string.file_transfer_file_type, it),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    state.totalSizeBytes?.let {
+                        Text(
+                            text = stringResource(
+                                R.string.file_transfer_file_size,
+                                Formatter.formatFileSize(context, it),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } ?: Text(
+                        text = stringResource(R.string.file_transfer_unknown_size),
                         style = MaterialTheme.typography.bodySmall,
                     )
+
+                    if (state.phase == TransferSessionPhase.TRANSFERRING ||
+                        state.phase == TransferSessionPhase.VERIFYING ||
+                        state.phase == TransferSessionPhase.PUBLISHING
+                    ) {
+                        if (state.phase == TransferSessionPhase.VERIFYING || progress == null) {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        } else {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        Text(
+                            text = stringResource(
+                                R.string.file_transfer_progress,
+                                Formatter.formatFileSize(context, state.transferredBytes),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
 
                 if (state.phase == TransferSessionPhase.READY_TO_SEND) {
@@ -294,13 +308,18 @@ fun FileTransferSessionScreen(
                     )
                 }
 
-                state.error?.let { error ->
-                    Text(
-                        text = stringResource(errorLabel(error)),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+                state.error
+                    ?.takeUnless {
+                        state.phase == TransferSessionPhase.FAILED &&
+                            it == TransferSessionError.TRANSFER_FAILED
+                    }
+                    ?.let { error ->
+                        Text(
+                            text = stringResource(errorLabel(error)),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
             }
         }
 
@@ -323,6 +342,12 @@ fun FileTransferSessionScreen(
         }
     }
 }
+
+private fun isBatchFinalizationUnconfirmed(state: TransferSessionSnapshot): Boolean =
+    state.isBatch &&
+        state.phase == TransferSessionPhase.FAILED &&
+        state.items.isNotEmpty() &&
+        state.items.all { it.phase == TransferItemPhase.COMPLETED }
 
 private fun phaseLabel(phase: TransferSessionPhase, isSender: Boolean): Int = when (phase) {
     TransferSessionPhase.PREPARING -> R.string.file_transfer_waiting_incoming
