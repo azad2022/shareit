@@ -4,7 +4,7 @@
 - **Audited branch:** `feature/cp-004-multi-item-transfer`
 - **Audited code SHA:** `0815395cc1ff3b9259131b9eaf96363692c18078`
 - **Product:** PEYVAND (پیوند)
-- **Scope:** one-file v1 transfer, multi-item v2 transfer, Android content URI access, SAF publication, MIME metadata, installed-app/APK scope.
+- **Scope:** one-file v1 transfer, multi-item v3 transfer, Android content URI access, SAF publication, MIME metadata, installed-app/APK scope.
 - **Main branch:** not modified.
 - **PR #3:** remains open, Draft and unmerged.
 
@@ -26,7 +26,7 @@
 - `AndroidTransferFileStorageRepository.openSource`: accepts `ShareSource.ContentUri` only. It reads source data through `ContentResolver.openInputStream(uri)`.
 - `AndroidTransferFileStorageRepository.readMetadata`: combines fallback item metadata, `OpenableColumns.DISPLAY_NAME/SIZE`, provider MIME, fallback MIME, and extension MIME.
 - `TransferMimeTypeResolver`: rejects wildcard/generic metadata as a concrete media type and falls back to a specific type or `application/octet-stream`.
-- `SingleFileTransferCoordinator`: one selected item uses the v1 path; multiple selected items use the v2 batch path.
+- `SingleFileTransferCoordinator`: one selected item uses the v1 path; multiple selected items use the v3 batch path.
 - `BatchTransferSenderProtocol`: source-open failures and source-read failures are item-scoped; source read failures are surfaced as `SOURCE_READ_FAILED`. Terminal batch receipt is verified after all item outcomes.
 - `AndroidTransferFileStorageRepository.publishVerifiedToTree`: writes to a newly created SAF document, verifies byte count and SHA-256 by read-back, and attempts cleanup on failure. Document providers may differ in create/write/read/delete semantics.
 - `AndroidManifest.xml`: declares media permissions and a launcher-intent package visibility query; it does not request `QUERY_ALL_PACKAGES`.
@@ -85,3 +85,26 @@
 - PackageInstaller: https://developer.android.com/reference/android/content/pm/PackageInstaller
 - PackageInstaller.Session and split APK requirements: https://developer.android.com/reference/android/content/pm/PackageInstaller.Session
 - PackageManager archive inspection: https://developer.android.com/reference/android/content/pm/PackageManager#getPackageArchiveInfo(java.lang.String,int)
+
+
+## Owner retest report and implementation follow-up — 2026-11-08
+
+### Observed device scenario
+
+- Owner reports that Galaxy A12 → ASUS multi-file transfer succeeds.
+- In the reverse direction, ASUS → Galaxy A12, music and other file types transfer, while a JPG photo fails with the UI message: «ذخیره‌سازی یا بررسی نهایی فایل در پوشه مقصد ناموفق بود».
+- This directional observation narrows the fault to an interaction among the ASUS photo source metadata/URI and the Galaxy A12 receiving/publishing path. It does not yet prove which operation failed.
+
+### Newly confirmed code defects and corrections
+
+1. **Failure-stage conflation:** the prior receiver wrapped final partial-stage sync, integrity verification, stage sealing, SAF publication, and the receipt write in one exception handler. Several unrelated failures were therefore reported as `DESTINATION_FAILED`. The receiver now classifies stage writes/syncs, SHA-256/size verification, stage finalization and SAF publication independently. A receipt-write failure after successful publication is fatal to the session and is no longer represented as a destination failure.
+2. **Nullable size metadata:** both MediaStore-backed media and generic SAF document catalog reads used `Cursor.getLong()` without checking `Cursor.isNull()`. Android's cursor contract maps a SQL NULL numeric field to zero when read through `getLong()`; this can turn an unknown source size into a false zero-byte declaration. The adapter now preserves NULL/missing/negative sizes as unknown and retains a real zero-byte file as zero. A pure unit-tested reader covers missing column, NULL, zero, negative and positive values.
+3. **Legacy JPEG MIME aliases:** the MIME resolver previously accepted syntactically valid `image/jpg`, `image/pjpeg` or `image/x-jpeg` values as authoritative provider MIME. They are now canonicalized to `image/jpeg` before the manifest and SAF destination creation. JVM tests cover the alias cases.
+4. **Wire-safe diagnostics:** the batch protocol was advanced to version 3 for explicit `INTEGRITY_VERIFICATION_FAILED` and `STAGING_FINALIZATION_FAILED` wire codes. Version-2 batch peers fail closed; version-1 single-file transfer remains unchanged. This is an intentional batch-protocol compatibility break, not a silent fallback.
+
+### Root-cause status
+
+- The code defects above are confirmed and corrected in source.
+- The exact cause of the owner's ASUS JPG failure remains **unconfirmed** until the latest exact-head APK is tested on the same two physical devices. In particular, we have not yet observed whether the ASUS provider reported a legacy MIME alias, NULL size, or whether the Samsung destination DocumentProvider rejected/failed a specific create/write/read-back operation.
+- No Android instrumentation test yet exercises the real ASUS MediaStore source URI and Galaxy A12 SAF destination provider as one end-to-end path. JVM tests validate the corrected rules and protocol behavior but cannot substitute for that OEM-specific test.
+- Do not mark AUD-01 or CP-004 as `PASSED` solely from CI. Use the new per-item failure category to decide whether the next device result is an integrity/stage failure or a SAF publication failure; capture only sanitized metadata (failure code/stage, API, provider authority class), never a full URI or personal path.
