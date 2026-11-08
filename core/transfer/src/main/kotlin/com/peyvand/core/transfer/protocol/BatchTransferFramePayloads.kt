@@ -270,13 +270,17 @@ data class BatchItemOutcome(
     val status: BatchItemOutcomeStatus,
     val actualSizeBytes: Long? = null,
     val sha256Hex: String? = null,
+    /** Stable diagnostic code only; do not put provider paths or exception text on the wire. */
+    val failureCode: BatchItemFailureCode? = null,
 ) {
     init {
         if (status == BatchItemOutcomeStatus.COMPLETED) {
             require(actualSizeBytes != null && actualSizeBytes >= 0L)
             require(sha256Hex != null && isSha256Hex(sha256Hex))
+            require(failureCode == null)
         } else {
             require(actualSizeBytes == null && sha256Hex == null)
+            require(status == BatchItemOutcomeStatus.FAILED || failureCode == null)
         }
     }
 }
@@ -295,7 +299,7 @@ object BatchOutcomeDigest {
         require(outcomes.map(BatchItemOutcome::itemId) == orderedItemIds) {
             "Batch outcomes must match the immutable manifest order"
         }
-        val bytes = ByteArrayOutputStream(16 + orderedItemIds.size * 57)
+        val bytes = ByteArrayOutputStream(16 + orderedItemIds.size * 58)
         DataOutputStream(bytes).use { output ->
             output.writeLong(batchId.mostSignificantBits)
             output.writeLong(batchId.leastSignificantBits)
@@ -303,6 +307,7 @@ object BatchOutcomeDigest {
                 output.writeLong(outcome.itemId.mostSignificantBits)
                 output.writeLong(outcome.itemId.leastSignificantBits)
                 output.writeByte(outcome.status.wireCode)
+                output.writeByte(outcome.failureCode?.wireCode ?: 0)
                 if (outcome.status == BatchItemOutcomeStatus.COMPLETED) {
                     output.writeLong(requireNotNull(outcome.actualSizeBytes))
                     output.write(decodeSha256(requireNotNull(outcome.sha256Hex)))
