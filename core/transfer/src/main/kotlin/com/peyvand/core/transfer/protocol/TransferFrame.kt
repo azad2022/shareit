@@ -98,7 +98,7 @@ class TransferFrame(
 
 object TransferFrameCodec {
     const val CURRENT_PROTOCOL_VERSION = 1
-    const val BATCH_PROTOCOL_VERSION = 2
+    const val BATCH_PROTOCOL_VERSION = 3
     const val HEADER_BYTES = 26
     const val MAX_CONTROL_PAYLOAD_BYTES = 16 * 1024
     const val MAX_DATA_CHUNK_BYTES = 64 * 1024
@@ -162,16 +162,15 @@ object TransferFrameCodec {
     }
 
     private fun validateTypeVersion(type: TransferFrameType, version: Int) {
+        if (version !in CURRENT_PROTOCOL_VERSION..BATCH_PROTOCOL_VERSION) {
+            throw TransferProtocolException("Unsupported protocol version: $version")
+        }
         val isBatchFrame = type.wireCode >= TransferFrameType.BATCH_MANIFEST.wireCode
-        if (version == CURRENT_PROTOCOL_VERSION && isBatchFrame ||
-            version == BATCH_PROTOCOL_VERSION && !isBatchFrame
-        ) {
+        val isBatchProtocol = version > CURRENT_PROTOCOL_VERSION
+        if (isBatchFrame != isBatchProtocol) {
             throw TransferProtocolException(
                 "Frame type ${type.name} is not valid for protocol version $version",
             )
-        }
-        if (version !in CURRENT_PROTOCOL_VERSION..BATCH_PROTOCOL_VERSION) {
-            throw TransferProtocolException("Unsupported protocol version: $version")
         }
     }
 
