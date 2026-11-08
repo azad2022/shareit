@@ -2,6 +2,7 @@ package com.peyvand.core.transfer.session
 
 import com.peyvand.core.domain.transfer.TransferFileSource
 import com.peyvand.core.domain.transfer.TransferStagingSink
+import com.peyvand.core.transfer.integrity.TransferIntegrityException
 import com.peyvand.core.transfer.integrity.TransferIntegrityVerifier
 import com.peyvand.core.transfer.manifest.BatchConsentDecision
 import com.peyvand.core.transfer.manifest.BatchConsentDecisionCodec
@@ -366,16 +367,35 @@ internal class BatchTransferReceiverProtocol(
                                 reference.batchId,
                                 reference.itemId,
                             )
-                            try {
-                                onItemVerifying(item.itemId)
-                                if (pendingChunks > 0) {
+                            onItemVerifying(item.itemId)
+                            if (pendingChunks > 0) {
+                                try {
                                     staging.sync()
                                     sendBatchAck(output, sessionId, reference, nextExpectedOffset)
                                     pendingChunks = 0
                                     onItemProgress(item.itemId, nextExpectedOffset)
+                                } catch (cancellation: CancellationException) {
+                                    throw cancellation
+                                } catch (_: Exception) {
+                                    staging.delete()
+                                    writeFailure(
+                                        output,
+                                        sessionId,
+                                        TransferFrameType.BATCH_ITEM_FAILED,
+                                        reference,
+                                        BatchItemFailureCode.STORAGE_WRITE_FAILED,
+                                    )
+                                    return BatchItemOutcome(
+                                        reference.itemId,
+                                        BatchItemOutcomeStatus.FAILED,
+                                        failureCode = BatchItemFailureCode.STORAGE_WRITE_FAILED,
+                                    )
                                 }
-                                val localHash = digest.digest().toLowerHex()
-                                val verified = TransferIntegrityVerifier.verify(
+                            }
+
+                            val localHash = digest.digest().toLowerHex()
+                            val verified = try {
+                                TransferIntegrityVerifier.verify(
                                     item,
                                     TransferStreamResult(nextExpectedOffset, localHash),
                                     com.peyvand.core.transfer.protocol.TransferCompletionRecord(
@@ -384,29 +404,48 @@ internal class BatchTransferReceiverProtocol(
                                         completion.sha256Hex,
                                     ),
                                 )
-                                staging.seal()
-                                if (!publishVerified(item, staging, destinationTreeUri, completion)) {
-                                    throw IOException("Destination provider did not confirm publication")
-                                }
-                                writeFrame(
+                            } catch (cancellation: CancellationException) {
+                                throw cancellation
+                            } catch (_: Exception) {
+                                staging.delete()
+                                writeFailure(
                                     output,
                                     sessionId,
-                                    TransferFrameType.BATCH_ITEM_VERIFIED,
-                                    BatchItemCompletionCodec.encode(
-                                        BatchItemCompletionRecord(
-                                            reference.batchId,
-                                            reference.itemId,
-                                            verified.actualSizeBytes,
-                                            verified.sha256Hex,
-                                        ),
-                                    ),
+                                    TransferFrameType.BATCH_ITEM_FAILED,
+                                    reference,
+                                    BatchItemFailureCode.INTEGRITY_VERIFICATION_FAILED,
                                 )
                                 return BatchItemOutcome(
                                     reference.itemId,
-                                    BatchItemOutcomeStatus.COMPLETED,
-                                    verified.actualSizeBytes,
-                                    verified.sha256Hex,
+                                    BatchItemOutcomeStatus.FAILED,
+                                    failureCode = BatchItemFailureCode.INTEGRITY_VERIFICATION_FAILED,
                                 )
+                            }
+
+                            try {
+                                staging.seal()
+                            } catch (cancellation: CancellationException) {
+                                throw cancellation
+                            } catch (_: Exception) {
+                                staging.delete()
+                                writeFailure(
+                                    output,
+                                    sessionId,
+                                    TransferFrameType.BATCH_ITEM_FAILED,
+                                    reference,
+                                    BatchItemFailureCode.STAGING_FINALIZATION_FAILED,
+                                )
+                                return BatchItemOutcome(
+                                    reference.itemId,
+                                    BatchItemOutcomeStatus.FAILED,
+                                    failureCode = BatchItemFailureCode.STAGING_FINALIZATION_FAILED,
+                                )
+                            }
+
+                            try {
+                                if (!publishVerified(item, staging, destinationTreeUri, completion)) {
+                                    throw IOException("Destination provider did not confirm publication")
+                                }
                             } catch (cancellation: CancellationException) {
                                 throw cancellation
                             } catch (_: Exception) {
@@ -424,6 +463,29 @@ internal class BatchTransferReceiverProtocol(
                                     failureCode = BatchItemFailureCode.DESTINATION_FAILED,
                                 )
                             }
+
+                            // Publication succeeded. If the authenticated receipt cannot
+                            // be sent, treat that as a session/protocol failure, not as a
+                            // destination failure: the verified file may already exist.
+                            writeFrame(
+                                output,
+                                sessionId,
+                                TransferFrameType.BATCH_ITEM_VERIFIED,
+                                BatchItemCompletionCodec.encode(
+                                    BatchItemCompletionRecord(
+                                        reference.batchId,
+                                        reference.itemId,
+                                        verified.actualSizeBytes,
+                                        verified.sha256Hex,
+                                    ),
+                                ),
+                            )
+                            return BatchItemOutcome(
+                                reference.itemId,
+                                BatchItemOutcomeStatus.COMPLETED,
+                                verified.actualSizeBytes,
+                                verified.sha256Hex,
+                            )
                         }
 
                         TransferFrameType.BATCH_ITEM_ABORT -> {
