@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.provider.BaseColumns
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import com.peyvand.core.domain.files.ShareCatalogPage
 import com.peyvand.core.domain.files.ShareCatalogRepository
 import com.peyvand.core.domain.files.ShareCategory
@@ -133,7 +134,7 @@ class AndroidShareCatalogRepository(
                 val mimeType = mimeIndex.takeIf { it >= 0 }
                     ?.let(cursor::getString)
                     ?.takeIf(String::isNotBlank)
-                    ?: fallbackMimeType(category)
+                    ?: resolveMimeType(displayName)
                 val modifiedAtMillis = modifiedIndex.takeIf { it >= 0 }
                     ?.let(cursor::getLong)
                     ?.takeIf { it > 0L }
@@ -254,7 +255,7 @@ class AndroidShareCatalogRepository(
                 id = "document:$uri",
                 category = ShareCategory.FILES,
                 displayName = displayName,
-                mimeType = contentResolver.getType(uri) ?: BINARY_MIME_TYPE,
+                mimeType = resolveMimeType(displayName, contentResolver.getType(uri)),
                 sizeBytes = size,
                 modifiedAtEpochMillis = null,
                 source = ShareSource.ContentUri(uri.toString()),
@@ -262,11 +263,16 @@ class AndroidShareCatalogRepository(
         }
     }
 
-    private fun fallbackMimeType(category: ShareCategory): String = when (category) {
-        ShareCategory.MUSIC -> "audio/*"
-        ShareCategory.PHOTOS -> "image/*"
-        ShareCategory.VIDEOS -> "video/*"
-        else -> BINARY_MIME_TYPE
+    private fun resolveMimeType(displayName: String, providerType: String? = null): String {
+        val concreteProviderType = providerType
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && '/' in it && '*' !in it }
+        if (concreteProviderType != null) return concreteProviderType
+
+        val extension = displayName.substringAfterLast('.', missingDelimiterValue = "")
+            .lowercase(Locale.ROOT)
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+            ?: BINARY_MIME_TYPE
     }
 
     private companion object {

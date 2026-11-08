@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.StatFs
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import com.peyvand.core.domain.files.ShareItem
 import com.peyvand.core.domain.files.ShareSource
 import com.peyvand.core.domain.transfer.TransferFileSource
@@ -246,13 +247,15 @@ class AndroidTransferFileStorageRepository(
         var displayName = fallback.displayName
         var sizeBytes = fallback.sizeBytes
 
-        resolver.query(
-            uri,
-            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
-            null,
-            null,
-            null,
-        )?.use { cursor ->
+        runCatching {
+            resolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+                null,
+                null,
+                null,
+            )
+        }.getOrNull()?.use { cursor ->
             if (cursor.moveToFirst()) {
                 val nameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                 if (nameColumn >= 0 && !cursor.isNull(nameColumn)) {
@@ -269,9 +272,17 @@ class AndroidTransferFileStorageRepository(
             }
         }
 
-        val mimeType = resolver.getType(uri)
-            ?.takeIf(String::isNotBlank)
-            ?: fallback.mimeType.takeIf(String::isNotBlank)
+        val providerMimeType = runCatching { resolver.getType(uri) }.getOrNull()
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && '/' in it && '*' !in it }
+        val fallbackMimeType = fallback.mimeType
+            .trim()
+            .takeIf { it.isNotEmpty() && '/' in it && '*' !in it }
+        val extension = displayName.substringAfterLast('.', missingDelimiterValue = "")
+            .lowercase(java.util.Locale.ROOT)
+        val mimeType = providerMimeType
+            ?: fallbackMimeType
+            ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
             ?: DEFAULT_MIME_TYPE
 
         return TransferSourceMetadata(
