@@ -7,6 +7,7 @@ import android.net.Uri
 import android.widget.VideoView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -36,7 +37,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.min
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -117,7 +117,7 @@ private fun StartupVideoLoadingScreen(
                 .weight(1f),
             contentAlignment = Alignment.Center,
         ) {
-            val videoWidth = min(maxWidth, maxHeight * (9f / 16f))
+            val videoWidth = minOf(maxWidth, maxHeight * (9f / 16f))
             AndroidView(
                 factory = { viewContext ->
                     VideoView(viewContext).apply {
