@@ -92,7 +92,7 @@ jobs:
           retention-days: 7
 
   secure-tls-instrumented:
-    name: Android Keystore mTLS loopback (API ${{ matrix.api-level }})
+    name: Android storage publication and mTLS (API ${{ matrix.api-level }})
     runs-on: ubuntu-latest
     timeout-minutes: 50
     strategy:
@@ -130,7 +130,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run Android Keystore mTLS loopback tests
+      - name: Run Android storage publication and mTLS tests
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api-level }}
@@ -138,14 +138,16 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: ./gradlew --no-daemon --stacktrace :core:connectivity:connectedDebugAndroidTest
+          script: ./gradlew --no-daemon --stacktrace :core:storage:connectedDebugAndroidTest :core:connectivity:connectedDebugAndroidTest
 
       - name: Upload instrumented test reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: secure-tls-instrumented-api-${{ matrix.api-level }}
+          name: android-storage-and-mtls-instrumented-api-${{ matrix.api-level }}
           path: |
+            core/storage/build/outputs/androidTest-results/**
+            core/storage/build/reports/androidTests/**
             core/connectivity/build/outputs/androidTest-results/**
             core/connectivity/build/reports/androidTests/**
           if-no-files-found: ignore

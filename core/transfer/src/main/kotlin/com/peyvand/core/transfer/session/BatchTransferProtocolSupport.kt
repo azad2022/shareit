@@ -57,13 +57,7 @@ import kotlinx.coroutines.selects.select
 
 data class BatchReceiverSelection(
     val acceptedItemIds: Set<UUID>,
-    val destinationTreeUri: String?,
-) {
-    init {
-        require(acceptedItemIds.isNotEmpty() || destinationTreeUri == null)
-        require(destinationTreeUri == null || destinationTreeUri.isNotBlank())
-    }
-}
+)
 
 data class BatchTransferResult(
     val outcomes: List<BatchItemOutcome>,

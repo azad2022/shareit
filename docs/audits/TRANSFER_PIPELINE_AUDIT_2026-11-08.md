@@ -108,3 +108,29 @@
 - The exact cause of the owner's ASUS JPG failure remains **unconfirmed** until the latest exact-head APK is tested on the same two physical devices. In particular, we have not yet observed whether the ASUS provider reported a legacy MIME alias, NULL size, or whether the Samsung destination DocumentProvider rejected/failed a specific create/write/read-back operation.
 - No Android instrumentation test yet exercises the real ASUS MediaStore source URI and Galaxy A12 SAF destination provider as one end-to-end path. JVM tests validate the corrected rules and protocol behavior but cannot substitute for that OEM-specific test.
 - Do not mark AUD-01 or CP-004 as `PASSED` solely from CI. Use the new per-item failure category to decide whether the next device result is an integrity/stage failure or a SAF publication failure; capture only sanitized metadata (failure code/stage, API, provider authority class), never a full URI or personal path.
+
+
+## Storage destination architecture follow-up — 2026-11-08
+
+### Decision
+
+- ADR-0012 replaces the receiver-selected SAF destination tree in the default receive path with one app-managed PEYVAND destination policy.
+- Media files use their canonical shared-storage roots and matching MediaStore collections: Pictures/PEYVAND/Images, Movies/PEYVAND/Videos and Music/PEYVAND/Audio/{Music,Voice,Other}. General files use Download/PEYVAND/{Documents,Apps,Other} through MediaStore.Downloads.
+- This deliberately implements one logical PEYVAND destination system, not one physical top-level directory. Android MediaStore requires RELATIVE_PATH to be compatible with the media collection. Placing all files in Download would not be an equivalent gallery-integrated media implementation.
+- Android 10+ items remain IS_PENDING until destination write and independent read-back length/SHA-256 verification succeed. API 26–28 use a legacy public shared-storage path with WRITE_EXTERNAL_STORAGE capped at API 28 and requested only after receiver consent. No MANAGE_EXTERNAL_STORAGE permission is introduced.
+- Single-file and batch coordinators now call the same storage abstraction. Destination URI/tree picker dependencies are removed from the normal receive path; SAF remains appropriate for user-selected source URIs.
+
+### Classification and integrity constraints
+
+- A concrete MIME type wins over a conflicting file extension. Extensions are used only for generic/absent MIME metadata. Legacy JPEG aliases are already canonicalized to image/jpeg.
+- Voice/music separation cannot be inferred reliably for all codecs. Only recording-specific types go to Voice; obvious music formats go to Music; ambiguous audio goes to Audio/Other.
+- Files remain in bounded private staging until authenticated size/SHA-256 validation and stage sealing complete. Publication streams with a fixed buffer, verifies copied and read-back bytes, and never overwrites a same-name user file.
+- Public publication temporarily duplicates a file while private staging still exists. The advertised receive ceiling is conservatively limited by available private and public storage with a safety factor/reserve.
+- APK file storage does not imply installed-app extraction, split APK collection or installation. Those remain CP-005.
+
+### Validation status
+
+- JVM category tests and Android instrumentation tests are added. The instrumentation tests cover a JPEG MediaStore publication and a PDF Downloads publication, including relative path, IS_PENDING release, read-back bytes and cleanup on API 26 and API 36 CI emulators.
+- The instrumentation tests are not yet executed on this new exact source tree. CI must prove compilation, tests, lint, Debug APK build and both emulator API jobs.
+- A green emulator is not a substitute for Galaxy A12 (SM-A125F/API 31) and ASUS X017DA physical tests. The previously reported ASUS → A12 JPG failure remains an open interoperability issue until the new exact APK is installed and tested.
+- No root cause is claimed for the earlier JPG failure. The storage architecture reduces dependence on the receiver's SAF DocumentProvider but does not prove that the ASUS source URI/MIME/metadata path is correct.

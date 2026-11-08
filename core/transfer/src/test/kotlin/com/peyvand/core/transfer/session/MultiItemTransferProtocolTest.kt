@@ -58,7 +58,7 @@ class MultiItemTransferProtocolTest {
                     acquireOfferConsent = { error("Legacy offer must be rejected before consent") },
                     acquireSelection = { error("No manifest may be read for a legacy offer") },
                     acquireStaging = { error("No staging may be created for a legacy offer") },
-                    publishVerified = { _, _, _, _ -> false },
+                    publishVerified = { _, _, _ -> false },
                     cancellationRequests = cancellation,
                 )
             }.exceptionOrNull()
@@ -132,7 +132,6 @@ class MultiItemTransferProtocolTest {
                                 items[4].itemId,
                                 items[5].itemId,
                             ),
-                            destinationTreeUri = "content://tree/peyvand",
                         )
                     },
                     acquireStaging = { item ->
@@ -143,8 +142,7 @@ class MultiItemTransferProtocolTest {
                         peakStages = maxOf(peakStages, activeStages)
                         MemoryStage { activeStages -= 1 }
                     },
-                    publishVerified = { item, staging, treeUri, completion ->
-                        assertEquals("content://tree/peyvand", treeUri)
+                    publishVerified = { item, staging, completion ->
                         val bytes = staging.openVerifiedInputStream().use { it.readBytes() }
                         assertEquals(item.itemId, completion.itemId)
                         assertEquals(completion.actualSizeBytes, bytes.size.toLong())
@@ -245,7 +243,7 @@ class MultiItemTransferProtocolTest {
                     acquireOfferConsent = { false },
                     acquireSelection = { error("Manifest must remain undisclosed") },
                     acquireStaging = { error("No staging must be created") },
-                    publishVerified = { _, _, _, _ -> error("No publication must occur") },
+                    publishVerified = { _, _, _ -> error("No publication must occur") },
                     cancellationRequests = receiverCancellation,
                 )
             }
@@ -294,10 +292,10 @@ class MultiItemTransferProtocolTest {
                     channelOutput = receiverOutput,
                     acquireOfferConsent = { true },
                     acquireSelection = {
-                        BatchReceiverSelection(items.map { it.itemId }.toSet(), "content://tree/peyvand")
+                        BatchReceiverSelection(items.map { it.itemId }.toSet())
                     },
                     acquireStaging = { MemoryStage {} },
-                    publishVerified = { item, staging, _, completion ->
+                    publishVerified = { item, staging, completion ->
                         val content = staging.openVerifiedInputStream().use { it.readBytes() }
                         assertEquals(item.itemId, completion.itemId)
                         received[item.itemId] = content
@@ -372,10 +370,10 @@ class MultiItemTransferProtocolTest {
                     channelOutput = receiverOutput,
                     acquireOfferConsent = { true },
                     acquireSelection = {
-                        BatchReceiverSelection(items.map { it.itemId }.toSet(), "content://tree/peyvand")
+                        BatchReceiverSelection(items.map { it.itemId }.toSet())
                     },
                     acquireStaging = { MemoryStage {} },
-                    publishVerified = { item, staging, _, _ ->
+                    publishVerified = { item, staging, _ ->
                         if (item.itemId == items[0].itemId) {
                             false
                         } else {
@@ -441,12 +439,12 @@ class MultiItemTransferProtocolTest {
                     channelOutput = streams.receiverOutput,
                     acquireOfferConsent = { true },
                     acquireSelection = {
-                        BatchReceiverSelection(items.map { it.itemId }.toSet(), "content://tree/peyvand")
+                        BatchReceiverSelection(items.map { it.itemId }.toSet())
                     },
                     acquireStaging = { item ->
                         if (item.itemId == items[0].itemId) SealFailingStage() else MemoryStage {}
                     },
-                    publishVerified = { item, staging, _, _ ->
+                    publishVerified = { item, staging, _ ->
                         val bytes = staging.openVerifiedInputStream().use { it.readBytes() }
                         assertArrayEquals(requireNotNull(bytesById[item.itemId]), bytes)
                         published += item.itemId

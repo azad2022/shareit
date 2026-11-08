@@ -48,8 +48,8 @@ interface TransferFileStorageRepository {
     suspend fun openSource(item: ShareItem): TransferFileSource
 
     /**
-     * Maximum currently receivable bytes after preserving a small internal-storage reserve.
-     * This is a point-in-time limit and is checked again when the stage is created.
+     * Conservative maximum receivable bytes after reserving space for both private staging
+     * and the public destination copy. This point-in-time limit is checked again at stage creation.
      */
     suspend fun maximumReceiveSizeBytes(): Long
 
@@ -70,9 +70,23 @@ interface TransferFileStorageRepository {
     ): Boolean
 
     /**
-     * Publishes one verified stage as a new child document of a user-selected SAF tree.
-     * Providers may choose a collision-safe name; implementations must never overwrite
-     * an existing document by constructing a raw filesystem path.
+     * Publishes a verified stage into PEYVAND's app-managed public receive hierarchy.
+     * The implementation chooses the Android storage API from the media type and API level,
+     * never overwrites an existing user file, verifies the published bytes, and only then
+     * makes the result visible to other applications.
+     */
+    suspend fun publishVerifiedToDefaultDestination(
+        staging: TransferStagingSink,
+        displayName: String,
+        mimeType: String,
+        expectedSizeBytes: Long,
+        expectedSha256Hex: String,
+    ): Boolean = throw UnsupportedOperationException(
+        "PEYVAND default destination publication is not supported by this storage adapter",
+    )
+
+    /**
+     * Legacy explicit-URI publication retained for controlled compatibility paths.
      */
     suspend fun publishVerifiedToTree(
         staging: TransferStagingSink,

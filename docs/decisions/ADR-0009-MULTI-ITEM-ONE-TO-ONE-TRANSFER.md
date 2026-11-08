@@ -8,7 +8,7 @@
 
 CP-003C provides a working version-1 one-file protocol over an exclusively claimed authenticated TLS channel. Its manifest, consent, chunk, ACK, completion and receipt messages are bound to one item. The coordinator terminates the channel after that item. Wrapping `sendOne()` or `receiveOne()` in a loop would be unsafe: terminal messages and resource cleanup currently close the entire session, and a failed item would leave the peers without an unambiguous point at which to continue.
 
-The existing source adapter is URI-only. `openSource()` obtains metadata without opening the provider InputStream; `openStream()` is called after ACCEPT. The receiver stages privately, verifies length/SHA-256, publishes through SAF, reads the destination back, and only then emits the authenticated receipt. These properties are preserved.
+The existing source adapter is URI-only. `openSource()` obtains metadata without opening the provider InputStream; `openStream()` is called after ACCEPT. The receiver stages privately, verifies length/SHA-256, publishes to the app-managed PEYVAND destination, reads the destination back, and only then emits the authenticated receipt. These properties are preserved.
 
 ## Decisions
 
@@ -34,7 +34,7 @@ The existing source adapter is URI-only. `openSource()` obtains metadata without
 2. The receiver dispatches the first authenticated application frame by its version and type. A version-1 MANIFEST is handed to the existing single-file receiver; a version-3 BATCH_OFFER is handed to the batch receiver. The first frame must not be lost or read twice. No v1 message is reinterpreted as a batch message. The offer contains only a random batch UUID; the manifest follows only after the receiver's matching approval frame.
 3. A batch manifest carries a cryptographically random batch UUID and 2–32 ordered, uniquely identified item manifests. Its exact encoded bytes are SHA-256 hashed. The receiver's decision echoes the batch UUID and manifest digest and includes the selected item IDs (or a bounded bitmap whose bit positions are the immutable manifest order). The codec rejects duplicate IDs, invalid counts, malformed lengths, trailing bytes and oversized frames.
 4. Every version-3 control message and batch data/ACK message is bound to the session ID and batch ID. Every item-scoped message also carries its item ID. Data chunks retain explicit contiguous offsets; ACKs identify the batch, item and next durably committed offset.
-5. For each selected item, the order is: sender ITEM_START → receiver creates one bounded private stage → receiver ITEM_READY → sender opens that item's URI stream and sends bounded chunks → receiver syncs each maximum-four-chunk window before cumulative ACK → sender sends the authenticated actual-length/SHA-256 completion record → receiver verifies and seals staging → receiver publishes into the user-selected SAF tree and reads back the exact bytes → receiver sends the item's authenticated integrity receipt. No later item starts until the current item has reached a terminal outcome.
+5. For each selected item, the order is: sender ITEM_START → receiver creates one bounded private stage → receiver ITEM_READY → sender opens that item's URI stream and sends bounded chunks → receiver syncs each maximum-four-chunk window before cumulative ACK → sender sends the authenticated actual-length/SHA-256 completion record → receiver verifies and seals staging → receiver publishes into the API-appropriate PEYVAND public category and reads back the exact bytes → receiver sends the item's authenticated integrity receipt. No later item starts until the current item has reached a terminal outcome.
 6. Version 3 uses explicit stable failure codes for source access/read, private-stage allocation/write, integrity verification, stage finalization and SAF destination publication. The new integrity and stage-finalization wire codes are additive but intentionally require the version-3 batch contract; version-3 batch peers fail closed. Version-1 single-file messages remain unchanged.
 7. An item receipt binds batch ID, item ID, actual byte count and SHA-256. The terminal batch receipt binds the ordered list of terminal item outcomes/verified receipts. Sender-side batch completion is not reported until the batch receipt is validated.
 8. Control frames remain at or below 16 KiB. Data chunks remain capped at 64 KiB and the outstanding window remains capped at four chunks/256 KiB. The receiver ACKs only after staging sync succeeds. These values are caps inherited from CP-003, not performance promises.
@@ -48,12 +48,15 @@ The existing source adapter is URI-only. `openSource()` obtains metadata without
 5. Cleanup is item-scoped and idempotent. A failed cleanup is observable and must not be reported as successful cleanup. A provider that cannot confirm deletion of a partial destination cannot be treated as a successful publication.
 6. The aggregate batch state is derived from immutable per-item terminal states. Mixed outcomes are reported as partial completion; they are never collapsed into an all-success or all-failed result.
 
-### 5. Destination and Android storage
+### 5. Destination and Android storage (superseded in part by ADR-0012)
 
-1. The receiver selects one destination directory through the Storage Access Framework `ACTION_OPEN_DOCUMENT_TREE` flow before the first accepted item starts. The storage adapter creates each destination document through `DocumentsContract`, streams the verified stage using a bounded buffer, and performs a read-back byte-count/SHA-256 verification.
-2. Remote file names are sanitized display names, never paths. The provider's own collision behavior is respected; existing user files must not be overwritten by constructing a path or by using a guessed filesystem location.
-3. If document creation, copy, verification or confirmed partial cleanup fails for one item, report that item as FAILED and continue only if the TLS protocol remains synchronized.
-4. SAF providers differ in supported operations and durability. The implementation must not claim universal atomic publication. Android 11+ restricts tree selection for the internal-storage root, reliable SD-card roots, Downloads, Android/data and Android/obb; the picker must be allowed to enforce those platform restrictions. See the official Android storage guide: https://developer.android.com/training/data-storage/shared/documents-files.
+The original implementation selected one SAF tree before receiving a batch. The product decision now replaces that destination policy with an app-managed, automatically categorized PEYVAND public destination. ADR-0012 is authoritative for publication and directory layout; the consent, transfer and receipt protocol defined by this ADR remains unchanged.
+
+1. The receiver does not choose a save location per file or per batch. The receiver explicitly consents to the requested content; publication is automatic to the standard Android public media/download location assigned to that item's validated MIME type.
+2. Android 10+ publishes media through the matching MediaStore collection and publishes documents/general files through MediaStore Downloads. MediaStore RELATIVE_PATH is rooted in the canonical public directory for that collection. The app-owned row remains pending until bounded write, sync, byte-count and SHA-256 read-back verification have succeeded.
+3. Android 8–9 use the equivalent public shared-storage paths with the narrowly capped WRITE_EXTERNAL_STORAGE permission (maxSdkVersion=28), requested only when the user accepts a receive. No all-files access permission is used.
+4. Remote names are sanitized display names, never paths. Existing user files are never overwritten; collisions receive a deterministic suffix. A failed write/verification attempts to remove the uncommitted public item and is reported as a failed item.
+5. The standard Android roots intentionally differ by media type (Pictures, Movies, Music and Download). A single physical Download/PEYVAND root for every media type would conflict with MediaStore's collection/path rules and reduce gallery/media integration.
 
 ### 6. State and resource ownership
 
@@ -67,7 +70,7 @@ The existing source adapter is URI-only. `openSource()` obtains metadata without
 
 - Two-file and larger batches require both devices to run a version-3-capable build. Single-file transfers retain the existing version-1 wire contract and code path.
 - The receiver explicitly authorizes metadata disclosure before seeing filenames, then makes one batch-level content decision with per-item selection and independent terminal status.
-- A chosen SAF directory avoids repeated save dialogs but is subject to document-provider limitations and Android's system-enforced directory restrictions.
+- The app-managed PEYVAND destinations remove repeated save dialogs and avoid depending on a receiver-selected writable DocumentProvider for publication. Android MediaStore and legacy shared-storage behavior still require API-level and OEM validation.
 - Sequential processing reduces memory, descriptor and disk-pressure risk. It does not claim parallel-file throughput.
 - The version-3 dispatcher and all codecs require negative tests for malformed manifests, duplicate IDs, cross-batch/item frames, invalid decisions, out-of-order items and truncation.
 
@@ -76,7 +79,7 @@ The existing source adapter is URI-only. `openSource()` obtains metadata without
 - Codec tests: metadata-free offer exact length/roundtrip, count 2/32/33, exact 16 KiB boundary, malformed UTF-8, duplicate IDs, malformed lengths, duplicate/unknown selections, manifest digest mismatch, unknown item IDs, wrong batch/session binding and trailing bytes.
 - Consent-order tests: receiver rejection sends no metadata approval; sender does not transmit a manifest before a matching offer approval; item contents do not begin before explicit per-item acceptance and ITEM_READY.
 - Protocol tests: version-1 sender/receiver regression; version-3 two/32 item flows; mixed MIME; arbitrary binary; zero-byte; large item; unknown length; Persian/Unicode names; extensionless names; item receipts and terminal batch receipt.
-- Consent tests: no source stream or stage before consent; selected subset only; reject all; timeout; destination-tree cancellation.
+- Consent tests: no source stream or stage before consent; selected subset only; reject all; timeout; receive rejection, legacy-storage permission denial, and default-destination publication failure.
 - Item isolation: provider-open/read failure, low storage, stage/write/sync failure, destination creation/write/read-back failure, active/queued cancellation, cleanup and subsequent-item continuation.
 - Resource tests: maximum one active source stream/stage, four-chunk cap, bounded memory, no descriptor/socket/staging leak, cancellation of a blocking source read.
 - Build gates: all relevant unit tests, configured lint and Debug APK build.

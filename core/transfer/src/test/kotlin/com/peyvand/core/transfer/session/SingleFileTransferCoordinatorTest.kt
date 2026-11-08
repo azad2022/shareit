@@ -107,16 +107,16 @@ class SingleFileTransferCoordinatorTest {
             // No file bytes may flow until the receiver makes this explicit decision.
             receiver.acceptIncoming()
             withTimeout(10_000L) {
-                receiver.state.first { it.phase == TransferSessionPhase.AWAITING_DESTINATION }
+                receiver.state.first { it.phase == TransferSessionPhase.COMPLETED }
             }
-            assertEquals(TransferSessionPhase.VERIFYING, sender.state.value.phase)
-
-            receiver.provideDestination("content://destination/document/1")
+            assertTrue(
+                sender.state.value.phase in setOf(
+                    TransferSessionPhase.VERIFYING,
+                    TransferSessionPhase.COMPLETED,
+                ),
+            )
             withTimeout(10_000L) {
                 sender.state.first { it.phase == TransferSessionPhase.COMPLETED }
-            }
-            withTimeout(10_000L) {
-                receiver.state.first { it.phase == TransferSessionPhase.COMPLETED }
             }
 
             assertArrayEquals(fileBytes, receiverStorage.publishedBytes)
@@ -337,6 +337,21 @@ class SingleFileTransferCoordinatorTest {
             staging.delete()
             return true
         }
+
+        override suspend fun publishVerifiedToDefaultDestination(
+            staging: TransferStagingSink,
+            displayName: String,
+            mimeType: String,
+            expectedSizeBytes: Long,
+            expectedSha256Hex: String,
+        ): Boolean = publishVerified(
+            staging = staging,
+            destinationUri = "content://peyvand/default-test-destination",
+            displayName = displayName,
+            mimeType = mimeType,
+            expectedSizeBytes = expectedSizeBytes,
+            expectedSha256Hex = expectedSha256Hex,
+        )
     }
 
     private class BlockingSourceInputStream : InputStream() {

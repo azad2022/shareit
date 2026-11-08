@@ -1,5 +1,11 @@
 package com.peyvand.app.presentation.transfer
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
+import android.content.Intent
+import android.net.Uri
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,9 +31,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -51,44 +57,36 @@ fun FileTransferSessionScreen(
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val context = LocalContext.current
-    var lastLaunchedPickerRequestId by rememberSaveable { mutableIntStateOf(0) }
-    var lastLaunchedTreeRequestId by rememberSaveable { mutableIntStateOf(0) }
-    val createDocument = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("*/*"),
-    ) { uri ->
-        viewModel.provideDestination(uri?.toString())
-    }
-    val openDestinationTree = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree(),
-    ) { uri ->
-        viewModel.provideDestinationTree(uri?.toString())
-    }
-
-    LaunchedEffect(state.destinationPickerRequestId, state.phase) {
-        if (state.phase != TransferSessionPhase.AWAITING_DESTINATION &&
-            state.destinationPickerRequestId == 0
-        ) {
-            lastLaunchedPickerRequestId = 0
-        }
-        if (state.phase == TransferSessionPhase.AWAITING_DESTINATION &&
-            state.destinationPickerRequestId > lastLaunchedPickerRequestId
-        ) {
-            lastLaunchedPickerRequestId = state.destinationPickerRequestId
-            createDocument.launch(state.displayName ?: "received-file")
+    var pendingLegacyAcceptance by rememberSaveable { mutableIntStateOf(0) }
+    var legacyStoragePermissionDenied by rememberSaveable { mutableStateOf(false) }
+    val legacyStoragePermission = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val pendingAction = pendingLegacyAcceptance
+        pendingLegacyAcceptance = 0
+        legacyStoragePermissionDenied = !granted
+        if (granted) {
+            when (pendingAction) {
+                1 -> viewModel.acceptIncoming()
+                2 -> viewModel.acceptBatchIncoming()
+            }
         }
     }
-
-    LaunchedEffect(state.destinationTreePickerRequestId, state.phase) {
-        if (state.phase != TransferSessionPhase.AWAITING_DESTINATION_TREE &&
-            state.destinationTreePickerRequestId == 0
-        ) {
-            lastLaunchedTreeRequestId = 0
-        }
-        if (state.phase == TransferSessionPhase.AWAITING_DESTINATION_TREE &&
-            state.destinationTreePickerRequestId > lastLaunchedTreeRequestId
-        ) {
-            lastLaunchedTreeRequestId = state.destinationTreePickerRequestId
-            openDestinationTree.launch(null)
+    val acceptIncoming: (Boolean) -> Unit = { isBatch ->
+        val needsLegacyWritePermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED
+        if (needsLegacyWritePermission) {
+            pendingLegacyAcceptance = if (isBatch) 2 else 1
+            legacyStoragePermissionDenied = false
+            legacyStoragePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            legacyStoragePermissionDenied = false
+            if (isBatch) {
+                viewModel.acceptBatchIncoming()
+            } else {
+                viewModel.acceptIncoming()
+            }
         }
     }
 
@@ -251,6 +249,36 @@ fun FileTransferSessionScreen(
                         text = stringResource(R.string.file_transfer_batch_consent_explanation),
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    Text(
+                        text = stringResource(R.string.file_transfer_default_destination_info),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                        Text(
+                            text = stringResource(R.string.file_transfer_legacy_storage_permission_info),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (legacyStoragePermissionDenied) {
+                        Text(
+                            text = stringResource(R.string.file_transfer_legacy_storage_permission_denied),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (legacyStoragePermissionDenied) {
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                                runCatching { context.startActivity(intent) }
+                            },
+                        ) {
+                            Text(stringResource(R.string.file_transfer_open_app_settings))
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -262,7 +290,7 @@ fun FileTransferSessionScreen(
                             Text(stringResource(R.string.file_transfer_reject))
                         }
                         Button(
-                            onClick = viewModel::acceptBatchIncoming,
+                            onClick = { acceptIncoming(true) },
                             enabled = state.items.any { it.isSelectedForConsent },
                             modifier = Modifier.weight(1f),
                         ) {
@@ -276,6 +304,36 @@ fun FileTransferSessionScreen(
                         text = stringResource(R.string.file_transfer_waiting_consent_receiver),
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    Text(
+                        text = stringResource(R.string.file_transfer_default_destination_info),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                        Text(
+                            text = stringResource(R.string.file_transfer_legacy_storage_permission_info),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (legacyStoragePermissionDenied) {
+                        Text(
+                            text = stringResource(R.string.file_transfer_legacy_storage_permission_denied),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (legacyStoragePermissionDenied) {
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                                runCatching { context.startActivity(intent) }
+                            },
+                        ) {
+                            Text(stringResource(R.string.file_transfer_open_app_settings))
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -287,26 +345,12 @@ fun FileTransferSessionScreen(
                             Text(stringResource(R.string.file_transfer_reject))
                         }
                         Button(
-                            onClick = viewModel::acceptIncoming,
+                            onClick = { acceptIncoming(false) },
                             modifier = Modifier.weight(1f),
                         ) {
                             Text(stringResource(R.string.file_transfer_accept))
                         }
                     }
-                }
-
-                if (state.phase == TransferSessionPhase.AWAITING_DESTINATION_TREE) {
-                    Text(
-                        text = stringResource(R.string.file_transfer_destination_tree_picker),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-
-                if (state.phase == TransferSessionPhase.AWAITING_DESTINATION) {
-                    Text(
-                        text = stringResource(R.string.file_transfer_destination_picker),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
                 }
 
                 state.error
@@ -361,10 +405,8 @@ private fun phaseLabel(phase: TransferSessionPhase, isSender: Boolean): Int = wh
     }
     TransferSessionPhase.AWAITING_BATCH_OFFER_CONSENT -> R.string.file_transfer_batch_offer_title
     TransferSessionPhase.AWAITING_BATCH_CONSENT -> R.string.file_transfer_batch_consent_title
-    TransferSessionPhase.AWAITING_DESTINATION_TREE -> R.string.file_transfer_destination_tree_picker
     TransferSessionPhase.TRANSFERRING -> R.string.file_transfer_transferring
     TransferSessionPhase.VERIFYING -> R.string.file_transfer_verifying
-    TransferSessionPhase.AWAITING_DESTINATION -> R.string.file_transfer_awaiting_destination
     TransferSessionPhase.PUBLISHING -> R.string.file_transfer_publishing
     TransferSessionPhase.COMPLETED -> R.string.file_transfer_completed
     TransferSessionPhase.PARTIALLY_COMPLETED -> R.string.file_transfer_partially_completed

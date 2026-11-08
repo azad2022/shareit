@@ -115,11 +115,10 @@ internal class BatchTransferCoordinator(
                     minOf(item.sizeBytes ?: maximumReceiveSizeBytes, maximumReceiveSizeBytes),
                 )
             },
-            publishVerified = { item, staging, treeUri, completion ->
+            publishVerified = { item, staging, completion ->
                 onItemPublishing(item, completion.actualSizeBytes)
-                storageRepository.publishVerifiedToTree(
+                storageRepository.publishVerifiedToDefaultDestination(
                     staging = staging,
-                    treeUri = treeUri,
                     displayName = item.displayName,
                     mimeType = item.mimeType,
                     expectedSizeBytes = completion.actualSizeBytes,

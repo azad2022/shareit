@@ -32,8 +32,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * URI-only Android storage adapter. Remote filenames never become filesystem paths.
- * Receiving bytes remain in noBackupFilesDir until the receiver selects a SAF destination
- * and the published document passes a second length/hash verification.
+ * Receiving bytes remain in noBackupFilesDir until the default PEYVAND public destination
+ * passes a second length/hash verification.
  */
 class AndroidTransferFileStorageRepository(
     context: Context,
@@ -42,6 +42,7 @@ class AndroidTransferFileStorageRepository(
     private val appContext = context.applicationContext
     private val resolver: ContentResolver = appContext.contentResolver
     private val stagingDirectory = File(appContext.noBackupFilesDir, STAGING_DIRECTORY_NAME)
+    private val defaultDestinationPublisher = AndroidPeyvandDestinationPublisher(appContext)
 
     override suspend fun openSource(item: ShareItem): TransferFileSource = withContext(Dispatchers.IO) {
         val source = item.source as? ShareSource.ContentUri
@@ -54,7 +55,13 @@ class AndroidTransferFileStorageRepository(
     override suspend fun maximumReceiveSizeBytes(): Long = withContext(Dispatchers.IO) {
         ensureStagingDirectory()
         cleanupExpiredStages()
-        availableBytesAfterReserve()
+        // A verified item exists in private staging while a second copy is being published.
+        // Bound the item size against both stores and reserve space for both copies.
+        val privateAvailable = availableBytesAfterReserve()
+        val publicAvailable = (
+            defaultDestinationPublisher.availableBytes() - MINIMUM_FREE_SPACE_RESERVE_BYTES
+        ).coerceAtLeast(0L)
+        minOf(privateAvailable, publicAvailable) / 2L
     }
 
     override suspend fun createPrivateStaging(maximumSizeBytes: Long): TransferStagingSink =
@@ -140,6 +147,20 @@ class AndroidTransferFileStorageRepository(
         }
     }
 
+
+    override suspend fun publishVerifiedToDefaultDestination(
+        staging: TransferStagingSink,
+        displayName: String,
+        mimeType: String,
+        expectedSizeBytes: Long,
+        expectedSha256Hex: String,
+    ): Boolean = defaultDestinationPublisher.publishVerified(
+        staging = staging,
+        displayName = displayName,
+        mimeType = mimeType,
+        expectedSizeBytes = expectedSizeBytes,
+        expectedSha256Hex = expectedSha256Hex,
+    )
 
     override suspend fun publishVerifiedToTree(
         staging: TransferStagingSink,

@@ -6,7 +6,7 @@
 - **PR #3:** remains open, Draft and unmerged. CP-004 must not change or merge PR #3.
 - **Objective:** send an ordered batch of 2–32 arbitrary user-authorized content files from one sender to one receiver over the already authenticated Wi-Fi Direct/mTLS session. A one-item selection must retain the existing v1 transfer path.
 - **Architecture decision:** see [ADR-0009](../decisions/ADR-0009-MULTI-ITEM-ONE-TO-ONE-TRANSFER.md). Receiver first authorizes metadata disclosure through a metadata-free offer handshake, then chooses explicit per-item inclusion/exclusion in one batch-level content decision; transfer and integrity remain independent per item. Version-3 batch frames are separate from the existing v1 one-file wire contract.
-- **Current implementation status:** implementation is in progress. Version-3 batch codecs, metadata-free offer consent, sequential protocol orchestration, SAF tree publication adapter, UI state, and initial JVM tests have been committed. The branch still requires CI compile/test/lint verification, failure-path coverage, final hardening and physical-device testing; no CP-004 gate is marked passed.
+- **Current implementation status:** implementation is in progress. Version-3 batch codecs, metadata-free offer consent, sequential protocol orchestration, PEYVAND-managed categorized public publication, UI state and initial JVM tests have been implemented; Android storage instrumentation and exact-head CI are being validated. The branch still requires CI compile/test/lint verification, failure-path coverage, final hardening and physical-device testing; no CP-004 gate is marked passed.
 
 ## Scope
 
@@ -14,7 +14,7 @@ Included:
 - Select 2–32 generic files from approved SAF/ContentResolver URIs, in a deterministic user-selected order.
 - Version-3 metadata-free batch offer/approval, bounded batch manifest, batch/item IDs, receiver selection decision, per-item start/readiness, data/ACK, completion/integrity receipt, error/cancel outcome and terminal batch receipt.
 - Sequential queue with independent immutable item states and actual acknowledged-byte progress.
-- Single receiver-selected SAF destination tree, with per-item document create, copy and read-back verification.
+- Automatic PEYVAND public destination by validated MIME category, with MediaStore/Downloads publication on Android 10+ and scoped legacy shared-storage publication on API 26–28.
 - Item-local recoverable failure/cancellation isolation and continuation; fatal protocol/session errors stop the batch.
 - Preserve the current single-file v1 transfer path and its security/resource invariants.
 
@@ -27,13 +27,13 @@ Excluded:
 ## Acceptance criteria
 
 1. The sender selects 2–32 `content://` files in a stable order; installed-package sources and invalid/duplicate items are rejected.
-2. The receiver first receives only a metadata-free batch offer. The sender must not send names, MIME types, sizes or item count until the receiver approves manifest disclosure. After the manifest is displayed, the receiver explicitly selects items and a destination tree. No source InputStream is opened and no staging file is allocated before the item-specific readiness exchange.
+2. The receiver first receives only a metadata-free batch offer. The sender must not send names, MIME types, sizes or item count until the receiver approves manifest disclosure. After the manifest is displayed, the receiver explicitly selects items; the destination is assigned automatically by PEYVAND. No source InputStream is opened and no staging file is allocated before the item-specific readiness exchange.
 3. Protocol codecs enforce version, session ID, batch ID, item ID, frame bounds, manifest count, unique IDs, exact lengths, order and valid state transitions before processing data.
 4. Items transfer serially with at most one source stream, one staging sink and one publication operation active. Chunks are at most 64 KiB, the receive window is at most four chunks/256 KiB, and ACKs follow durable stage sync.
 5. Every item has independent QUEUED/WAITING/TRANSFERRING/VERIFYING/PUBLISHING/COMPLETED/REJECTED/CANCELLED/FAILED state, actual progress, and an authenticated byte-count/SHA-256 receipt when completed.
 6. A recoverable item failure or item cancellation deletes that item's uncommitted stage and does not corrupt the next item. A fatal protocol/session error stops the batch without publishing incomplete data.
 7. Batch completion is reported only after all item outcomes are terminal and the authenticated batch receipt has been verified. Partial success remains visibly partial.
-8. Receiver publication uses one user-selected SAF tree, a bounded copy, read-back SHA-256 and byte-count verification, and best-effort confirmed cleanup on failure; no filesystem path assumption or overwrite shortcut is introduced.
+8. Receiver publication uses PEYVAND's API-appropriate public destination: matching MediaStore collection with IS_PENDING on API 29+, and a limited WRITE_EXTERNAL_STORAGE-gated public path on API 26–28. Both paths use bounded copy, byte-count/SHA-256 read-back verification, no-overwrite collision handling and failure cleanup. No MANAGE_EXTERNAL_STORAGE is requested.
 9. Tests cover mixed MIME, zero-byte, large, Persian/Unicode, extensionless, reject, cancel, item failure then continue, low storage/provider error, independent receipts, resource cleanup and malformed/cross-item protocol frames.
 10. Existing version-1 single-file protocol/coordinator tests remain green and the one-file app route remains usable.
 11. Configured lint and Debug build pass on the exact final commit. No physical-device result is marked PASSED without exact APK/build details and repeatable evidence.
@@ -42,7 +42,8 @@ Excluded:
 
 - `./gradlew :core:transfer:testDebugUnitTest`
 - `./gradlew :core:domain:testDebugUnitTest`
-- `./gradlew :core:storage:testDebugUnitTest` (only if storage unit tests are added/configured; otherwise record Android storage behavior as instrumentation/manual pending)
+- `./gradlew :core:storage:testDebugUnitTest`
+- `./gradlew :core:storage:connectedDebugAndroidTest` on API 26 and API 36 emulators.
 - `./gradlew lint`
 - `./gradlew :app:assembleDebug`
 
@@ -55,15 +56,14 @@ The exact workflow may run the same tasks through GitHub Actions. Record actual 
 - CI run/jobs: pending.
 - Debug APK artifact/hash: pending.
 - Physical devices: Galaxy A12 SM-A125F Android 12/API 31 and ASUS X017DA; exact build, API, APK digest, roles, direction and repetition: pending.
-- SAF provider matrix, destination tree restrictions, low-space and provider write/delete behavior: pending.
+- Android MediaStore publication on API 29+ and legacy public shared-storage behavior on API 26–28: instrumentation and physical OEM validation pending.
 
 ## Risks and open verification
 
 - Version-3 negotiation is intentionally not backward-compatible for multi-item batches; old builds must fail closed. Version-1 one-file transfer remains the compatibility route.
-- SAF tree providers vary in creation, collision, output-stream, read-back and deletion semantics. No universal atomicity is promised.
 - A provider may return unknown or stale size/MIME metadata. Actual streamed byte count and SHA-256 remain authoritative; size ceilings must be enforced while staging.
 - A blocking provider read must be actively closed on item cancellation, not merely coroutine-cancelled.
-- Physical Wi-Fi Direct/mTLS and Android DocumentProvider behavior are not covered by JVM codec tests.
+- Physical Wi-Fi Direct/mTLS and Android storage-provider behavior are not covered by JVM codec tests.
 - CP-003 remains `IN_PROGRESS` overall; CP-003C's basic one-file smoke path is owner-reported `PASSED`. This does not satisfy CP-003's complete physical failure-path matrix.
 
 
@@ -88,3 +88,15 @@ The exact workflow may run the same tasks through GitHub Actions. Record actual 
 - Receiver finalization now separates staged write/sync errors, integrity-verification errors, stage-seal errors and destination-provider publication errors. Socket ACK write failures are no longer mislabeled as storage failures; a failure to send the post-publication receipt is treated as a session failure rather than evidence that publication failed.
 - Added JVM coverage for JPEG aliases, all failure-code wire mappings, batch-v3 frame boundaries and item continuation after an injected stage-finalization failure. Cursor-size tests also prove that NULL/missing values remain unknown while a legitimate zero-byte file remains zero.
 - Exact final SHA and CI run: pending after this follow-up commit. Physical Galaxy A12 ↔ ASUS validation remains required; no OEM-specific SAF claim is marked passed.
+
+
+## Managed PEYVAND receive destination — 2026-11-08
+
+- ADR-0012 supersedes the receiver-selected SAF tree destination policy. The receiver still explicitly consents to metadata disclosure and content receipt, but no longer selects a destination URI/tree for the default receive flow.
+- Public layout uses Android-compatible media roots: Pictures/PEYVAND/Images, Movies/PEYVAND/Videos, Music/PEYVAND/Audio/{Music,Voice,Other}, and Download/PEYVAND/{Documents,Apps,Other}. This is a logical PEYVAND hierarchy, not one physical root: MediaStore enforces collection-compatible root directories.
+- Android 10+ publication inserts into the appropriate MediaStore collection with IS_PENDING=1, performs bounded copy and read-back byte-count/SHA-256 verification, then clears IS_PENDING. Documents and arbitrary downloads use MediaStore.Downloads.
+- Android 8–9 use a WRITE_EXTERNAL_STORAGE permission capped to API 28, requested only after explicit receive acceptance. No broad all-files permission is used.
+- Category resolution gives concrete MIME metadata precedence over extensions; generic or missing MIME may use a known extension. Ambiguous audio is not falsely labelled as voice or music; uncertain audio is placed in Audio/Other. Installed-app extraction remains outside CP-004; APK files are ordinary files in Apps.
+- Batch and single-file receive code now use the same default-destination storage contract. Per-file CreateDocument and batch OpenDocumentTree selection are removed from the default path.
+- Added Android instrumentation coverage for JPEG publication to the Images MediaStore collection and PDF publication to Downloads. CI is configured to run storage instrumentation on API 26 and API 36 alongside the existing mTLS tests. Exact run evidence is pending.
+- The earlier ASUS → Galaxy A12 JPG failure is not considered fixed until the new exact-SHA APK passes physical retesting in both directions. CP-004 remains IN_PROGRESS.

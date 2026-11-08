@@ -8,6 +8,7 @@ android {
 
     defaultConfig {
         minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     sourceSets {
@@ -28,6 +29,8 @@ android {
 dependencies {
     implementation(project(":core:domain"))
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 }
 
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {

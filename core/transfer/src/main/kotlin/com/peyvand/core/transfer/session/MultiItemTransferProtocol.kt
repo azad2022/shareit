@@ -60,7 +60,6 @@ class MultiItemTransferProtocol(
         publishVerified: suspend (
             TransferManifestItem,
             TransferStagingSink,
-            String,
             BatchItemCompletionRecord,
         ) -> Boolean,
         cancellationRequests: ReceiveChannel<UUID>,

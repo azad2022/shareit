@@ -36,10 +36,8 @@ enum class TransferSessionPhase {
     WAITING_FOR_CONSENT,
     AWAITING_BATCH_OFFER_CONSENT,
     AWAITING_BATCH_CONSENT,
-    AWAITING_DESTINATION_TREE,
     TRANSFERRING,
     VERIFYING,
-    AWAITING_DESTINATION,
     PUBLISHING,
     COMPLETED,
     PARTIALLY_COMPLETED,
@@ -78,8 +76,6 @@ data class TransferSessionSnapshot(
     val totalSizeBytes: Long? = null,
     val transferredBytes: Long = 0L,
     val error: TransferSessionError? = null,
-    val destinationPickerRequestId: Int = 0,
-    val destinationTreePickerRequestId: Int = 0,
     val isBatch: Boolean = false,
     val items: List<TransferItemSnapshot> = emptyList(),
 )
@@ -117,13 +113,9 @@ class SingleFileTransferCoordinator(
     private var consentDecision: CompletableDeferred<Boolean>? = null
 
     @Volatile
-    private var destinationDecision: CompletableDeferred<String?>? = null
-    @Volatile
     private var batchOfferConsentDecision: CompletableDeferred<Boolean>? = null
     @Volatile
     private var batchConsentDecision: CompletableDeferred<Set<UUID>?>? = null
-    @Volatile
-    private var destinationTreeDecision: CompletableDeferred<String?>? = null
     @Volatile
     private var batchCancellationRequests: Channel<UUID>? = null
     private val cancelledBeforeStart = ConcurrentHashMap.newKeySet<UUID>()
@@ -255,14 +247,6 @@ class SingleFileTransferCoordinator(
         if (selected.isNotEmpty()) batchConsentDecision?.complete(selected)
     }
 
-    fun provideDestination(uri: String?) {
-        destinationDecision?.complete(uri)
-    }
-
-    fun provideDestinationTree(uri: String?) {
-        destinationTreeDecision?.complete(uri)
-    }
-
     fun cancelItem(itemId: String) {
         val current = mutableState.value
         if (!current.isBatch || current.phase.isTerminal()) return
@@ -296,10 +280,8 @@ class SingleFileTransferCoordinator(
             }
         }
         consentDecision?.complete(false)
-        destinationDecision?.complete(null)
         batchOfferConsentDecision?.complete(false)
         batchConsentDecision?.complete(null)
-        destinationTreeDecision?.complete(null)
         batchCancellationRequests?.close()
         operationId += 1L
         closeTransport()
@@ -308,9 +290,7 @@ class SingleFileTransferCoordinator(
 
     fun leaveSession() {
         consentDecision?.complete(false)
-        destinationDecision?.complete(null)
         batchConsentDecision?.complete(null)
-        destinationTreeDecision?.complete(null)
         batchCancellationRequests?.close()
         operationId += 1L
         closeTransport()
@@ -328,9 +308,7 @@ class SingleFileTransferCoordinator(
 
     override fun close() {
         consentDecision?.complete(false)
-        destinationDecision?.complete(null)
         batchConsentDecision?.complete(null)
-        destinationTreeDecision?.complete(null)
         batchCancellationRequests?.close()
         operationId += 1L
         closeTransport()
@@ -497,36 +475,23 @@ class SingleFileTransferCoordinator(
                 }
             },
             publishVerified = { manifest, receipt, staging ->
-                val destination = CompletableDeferred<String?>()
-                destinationDecision = destination
-                val requestId = mutableState.value.destinationPickerRequestId + 1
                 update(operation) {
                     it.copy(
-                        phase = TransferSessionPhase.AWAITING_DESTINATION,
+                        phase = TransferSessionPhase.PUBLISHING,
                         displayName = manifest.displayName,
                         mimeType = manifest.mimeType,
                         totalSizeBytes = receipt.actualSizeBytes,
                         transferredBytes = receipt.actualSizeBytes,
-                        destinationPickerRequestId = requestId,
+                        error = null,
                     )
                 }
-                val uri = try {
-                    withTimeout(DESTINATION_SELECTION_TIMEOUT_MILLIS) { destination.await() }
-                } finally {
-                    if (destinationDecision === destination) destinationDecision = null
-                }
-                if (uri.isNullOrBlank()) false
-                else {
-                    update(operation) { it.copy(phase = TransferSessionPhase.PUBLISHING) }
-                    storageRepository.publishVerified(
-                        staging = staging,
-                        destinationUri = uri,
-                        displayName = manifest.displayName,
-                        mimeType = manifest.mimeType,
-                        expectedSizeBytes = receipt.actualSizeBytes,
-                        expectedSha256Hex = receipt.sha256Hex,
-                    )
-                }
+                storageRepository.publishVerifiedToDefaultDestination(
+                    staging = staging,
+                    displayName = manifest.displayName,
+                    mimeType = manifest.mimeType,
+                    expectedSizeBytes = receipt.actualSizeBytes,
+                    expectedSha256Hex = receipt.sha256Hex,
+                )
             },
             onProgress = { bytes ->
                 update(operation) {
@@ -638,33 +603,19 @@ class SingleFileTransferCoordinator(
                                     item.copy(phase = TransferItemPhase.REJECTED)
                                 })
                             }
-                            BatchReceiverSelection(emptySet(), null)
+                            BatchReceiverSelection(emptySet())
                         }
                         else -> {
-                            val destination = CompletableDeferred<String?>()
-                            destinationTreeDecision = destination
-                            val requestId = mutableState.value.destinationTreePickerRequestId + 1
                             update(operation) {
                                 it.copy(
-                                    phase = TransferSessionPhase.AWAITING_DESTINATION_TREE,
-                                    destinationTreePickerRequestId = requestId,
+                                    phase = TransferSessionPhase.TRANSFERRING,
                                     items = it.items.map { item ->
                                         val itemUuid = runCatching { UUID.fromString(item.id) }.getOrNull()
                                         item.copy(isSelectedForConsent = itemUuid in accepted)
                                     },
                                 )
                             }
-                            val treeUri = try {
-                                withTimeout(DESTINATION_SELECTION_TIMEOUT_MILLIS) {
-                                    destination.await()
-                                }
-                            } finally {
-                                if (destinationTreeDecision === destination) {
-                                    destinationTreeDecision = null
-                                }
-                            }
-                            if (treeUri.isNullOrBlank()) null
-                            else BatchReceiverSelection(accepted, treeUri)
+                            BatchReceiverSelection(accepted)
                         }
                     }
                 },
@@ -966,6 +917,5 @@ class SingleFileTransferCoordinator(
 
     private companion object {
         const val USER_CONSENT_TIMEOUT_MILLIS = 90_000L
-        const val DESTINATION_SELECTION_TIMEOUT_MILLIS = 300_000L
     }
 }

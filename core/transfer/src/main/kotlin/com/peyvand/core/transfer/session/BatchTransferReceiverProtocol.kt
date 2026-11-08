@@ -75,7 +75,6 @@ internal class BatchTransferReceiverProtocol(
         publishVerified: suspend (
             TransferManifestItem,
             TransferStagingSink,
-            String,
             BatchItemCompletionRecord,
         ) -> Boolean,
         cancellationRequests: ReceiveChannel<UUID>,
@@ -135,10 +134,6 @@ internal class BatchTransferReceiverProtocol(
         if (!manifestIds.containsAll(selection.acceptedItemIds)) {
             throw TransferProtocolException("Receiver selected an item outside the batch manifest")
         }
-        if (selection.acceptedItemIds.isNotEmpty() && selection.destinationTreeUri.isNullOrBlank()) {
-            throw TransferProtocolException("Accepted batch items require a user-selected SAF tree")
-        }
-
         val acceptedMask = manifest.items.foldIndexed(0L) { index, mask, item ->
             if (item.itemId in selection.acceptedItemIds) mask or (1L shl index) else mask
         }
@@ -211,7 +206,6 @@ internal class BatchTransferReceiverProtocol(
                         item,
                         reference,
                         staging,
-                        requireNotNull(selection.destinationTreeUri),
                         reader,
                         output,
                         publishVerified,
@@ -270,13 +264,11 @@ internal class BatchTransferReceiverProtocol(
         item: TransferManifestItem,
         reference: BatchItemReference,
         staging: TransferStagingSink,
-        destinationTreeUri: String,
         reader: BatchFrameReader,
         output: OutputStream,
         publishVerified: suspend (
             TransferManifestItem,
             TransferStagingSink,
-            String,
             BatchItemCompletionRecord,
         ) -> Boolean,
         cancellationRequests: ReceiveChannel<UUID>,
@@ -463,7 +455,7 @@ internal class BatchTransferReceiverProtocol(
                             }
 
                             try {
-                                if (!publishVerified(item, staging, destinationTreeUri, completion)) {
+                                if (!publishVerified(item, staging, completion)) {
                                     throw IOException("Destination provider did not confirm publication")
                                 }
                             } catch (cancellation: CancellationException) {

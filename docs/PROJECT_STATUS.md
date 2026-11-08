@@ -249,3 +249,13 @@ The ordering is a proposed dependency-aware plan, not authorization to skip arch
 - Durable queue restoration, resume/process-death recovery, group transfer, multiple senders and APK/split-APK remain explicitly out of scope.
 - Version-3 protocol, initial UI, SAF tree storage, nullable-metadata handling, JPEG MIME canonicalization, stage-specific failure classification and JVM regression tests are committed on the isolated CP-004 branch. Exact-head CI, final Debug build, APK artifact and physical-device evidence still require validation for the latest SHA. Checkpoint status remains `IN_PROGRESS`; no CP-004 acceptance criterion is marked passed.
 - See `docs/checkpoints/CP-004-MULTI-ITEM-ONE-TO-ONE-TRANSFER.md` and `docs/decisions/ADR-0009-MULTI-ITEM-ONE-TO-ONE-TRANSFER.md`.
+
+
+## CP-004 destination architecture update — 2026-11-08
+
+- ADR-0012 defines the default receive destination as a PEYVAND-managed public hierarchy. Receiver consent remains mandatory; destination picking is removed from the ordinary single-file and batch receive flows.
+- Android 10+ uses the appropriate MediaStore collection with IS_PENDING and read-back SHA-256 verification. API 26–28 use public shared storage with WRITE_EXTERNAL_STORAGE capped at API 28 and requested only after explicit receive acceptance.
+- Media directories follow the platform collection roots: Pictures/PEYVAND/Images, Movies/PEYVAND/Videos, Music/PEYVAND/Audio and Download/PEYVAND for documents, APK artifacts and other files. This is one logical PEYVAND destination policy, not a single physical root.
+- The source and publication paths remain URI-based where Android exposes provider-backed content; no whole-file RAM buffering or all-files permission is added.
+- JVM category tests and Android storage instrumentation tests are authored for API 26 and API 36 validation. The exact follow-up CI run, APK SHA and physical Galaxy A12 ↔ ASUS retest are pending.
+- CP-004 remains IN_PROGRESS. The ASUS-to-Galaxy-A12 JPG failure is not marked resolved until the exact new build is tested on both physical devices.
