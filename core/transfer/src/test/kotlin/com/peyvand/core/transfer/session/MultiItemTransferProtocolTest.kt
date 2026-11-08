@@ -6,6 +6,7 @@ import com.peyvand.core.domain.transfer.TransferStagingSink
 import com.peyvand.core.transfer.manifest.BatchTransferManifest
 import com.peyvand.core.transfer.manifest.TransferManifestItem
 import com.peyvand.core.transfer.protocol.BatchItemOutcomeStatus
+import com.peyvand.core.transfer.protocol.BatchItemFailureCode
 import com.peyvand.core.transfer.protocol.TransferFrameCodec
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -156,6 +157,7 @@ class MultiItemTransferProtocolTest {
             assertArrayEquals(fifthBytes, received[items[4].itemId])
             assertArrayEquals(sixthBytes, received[items[5].itemId])
             assertTrue(items[6].itemId !in received)
+            assertEquals(BatchItemFailureCode.STORAGE_UNAVAILABLE, sent.outcomes[3].failureCode)
             assertEquals(1, peakStages)
             assertEquals(0, activeStages)
         } finally {

@@ -40,14 +40,14 @@ class TransferManifestCodecTest {
     }
 
     @Test
-    fun `unknown mime type is normalized to generic binary rather than rejected`() {    @Test
     fun `wildcard mime type is normalized to generic binary`() {
         val item = TransferManifestItem(UUID.randomUUID(), "photo.jpg", "image/*", 4L)
         val restored = TransferManifestCodec.decode(TransferManifestCodec.encode(item))
         assertEquals("application/octet-stream", restored.mimeType)
     }
 
-
+    @Test
+    fun `unknown mime type is normalized to generic binary rather than rejected`() {
         val item = TransferManifestItem(
             UUID.randomUUID(), "unknown.bin", "not a valid mime", 4L,
         )
