@@ -9,6 +9,8 @@ import com.peyvand.core.transfer.protocol.BatchItemOutcomeStatus
 import com.peyvand.core.transfer.protocol.TransferFrameCodec
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.FilterInputStream
+import java.io.FilterOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.IOException
@@ -18,6 +20,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -119,7 +122,7 @@ class MultiItemTransferProtocolTest {
                 )
             }
 
-            val (sent, receiveValue) = awaitSenderAndReceiver(sending, receiving, 15_000L)
+            val (sent, receiveValue) = awaitSenderAndReceiver(sending, receiving, 15_000L) { streams.trafficSnapshot() }
             val receivedResult = requireNotNull(receiveValue) {
                 "Receiver completed without returning a batch result"
             }
@@ -195,7 +198,7 @@ class MultiItemTransferProtocolTest {
                 )
             }
 
-            val (sendResult, receiveResult) = awaitSenderAndReceiver(sender, receiver, 10_000L)
+            val (sendResult, receiveResult) = awaitSenderAndReceiver(sender, receiver, 10_000L) { streams.trafficSnapshot() }
             assertEquals(manifest.items.size, sendResult.rejectedCount)
             assertEquals(null, receiveResult)
             assertTrue(!sourceOpened)
@@ -269,7 +272,7 @@ class MultiItemTransferProtocolTest {
                 )
             }
 
-            val (sent, receiveValue) = awaitSenderAndReceiver(sending, receiving, 20_000L)
+            val (sent, receiveValue) = awaitSenderAndReceiver(sending, receiving, 20_000L) { streams.trafficSnapshot() }
             val receivedResult = requireNotNull(receiveValue) {
                 "Receiver completed without returning a cancellation result"
             }
@@ -344,7 +347,7 @@ class MultiItemTransferProtocolTest {
                 )
             }
 
-            val (sent, receiveValue) = awaitSenderAndReceiver(sending, receiving, 15_000L)
+            val (sent, receiveValue) = awaitSenderAndReceiver(sending, receiving, 15_000L) { streams.trafficSnapshot() }
             val receivedResult = requireNotNull(receiveValue) {
                 "Receiver completed without returning a destination-failure result"
             }
@@ -364,14 +367,60 @@ private class LoopbackSocketPair private constructor(
     private val senderSocket: Socket,
     private val receiverSocket: Socket,
 ) : AutoCloseable {
-    val senderInput: InputStream = senderSocket.getInputStream()
-    val senderOutput: OutputStream = senderSocket.getOutputStream()
-    val receiverInput: InputStream = receiverSocket.getInputStream()
-    val receiverOutput: OutputStream = receiverSocket.getOutputStream()
+    private val senderToReceiverWritten = AtomicLong()
+    private val senderToReceiverRead = AtomicLong()
+    private val receiverToSenderWritten = AtomicLong()
+    private val receiverToSenderRead = AtomicLong()
+
+    val senderInput: InputStream = CountingInputStream(
+        senderSocket.getInputStream(),
+        receiverToSenderRead,
+    )
+    val senderOutput: OutputStream = CountingOutputStream(
+        senderSocket.getOutputStream(),
+        senderToReceiverWritten,
+    )
+    val receiverInput: InputStream = CountingInputStream(
+        receiverSocket.getInputStream(),
+        senderToReceiverRead,
+    )
+    val receiverOutput: OutputStream = CountingOutputStream(
+        receiverSocket.getOutputStream(),
+        receiverToSenderWritten,
+    )
+
+    fun trafficSnapshot(): String =
+        "sender->receiver written=${senderToReceiverWritten.get()} read=${senderToReceiverRead.get()}; " +
+            "receiver->sender written=${receiverToSenderWritten.get()} read=${receiverToSenderRead.get()}"
 
     override fun close() {
         runCatching { senderSocket.close() }
         runCatching { receiverSocket.close() }
+    }
+
+    private class CountingInputStream(
+        input: InputStream,
+        private val counter: AtomicLong,
+    ) : FilterInputStream(input) {
+        override fun read(): Int = super.read().also { if (it >= 0) counter.incrementAndGet() }
+
+        override fun read(bytes: ByteArray, offset: Int, length: Int): Int =
+            super.read(bytes, offset, length).also { if (it > 0) counter.addAndGet(it.toLong()) }
+    }
+
+    private class CountingOutputStream(
+        output: OutputStream,
+        private val counter: AtomicLong,
+    ) : FilterOutputStream(output) {
+        override fun write(value: Int) {
+            out.write(value)
+            counter.incrementAndGet()
+        }
+
+        override fun write(bytes: ByteArray, offset: Int, length: Int) {
+            out.write(bytes, offset, length)
+            counter.addAndGet(length.toLong())
+        }
     }
 
     companion object {
@@ -408,20 +457,25 @@ private class LoopbackSocketPair private constructor(
         sender: Deferred<BatchTransferResult>,
         receiver: Deferred<BatchTransferResult?>,
         timeoutMillis: Long,
+        diagnostics: () -> String,
     ): Pair<BatchTransferResult, BatchTransferResult?> {
-        val first = withTimeout(timeoutMillis) {
-            select<TransferSideCompletion> {
-                sender.onAwait { TransferSideCompletion.Sender(it) }
-                receiver.onAwait { TransferSideCompletion.Receiver(it) }
+        try {
+            val first = withTimeout(timeoutMillis) {
+                select<TransferSideCompletion> {
+                    sender.onAwait { TransferSideCompletion.Sender(it) }
+                    receiver.onAwait { TransferSideCompletion.Receiver(it) }
+                }
             }
-        }
-        return when (first) {
-            is TransferSideCompletion.Sender -> first.result to withTimeout(timeoutMillis) {
-                receiver.await()
+            return when (first) {
+                is TransferSideCompletion.Sender -> first.result to withTimeout(timeoutMillis) {
+                    receiver.await()
+                }
+                is TransferSideCompletion.Receiver -> withTimeout(timeoutMillis) {
+                    sender.await()
+                } to first.result
             }
-            is TransferSideCompletion.Receiver -> withTimeout(timeoutMillis) {
-                sender.await()
-            } to first.result
+        } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
+            throw AssertionError("Batch protocol timed out; ${diagnostics()}", timeout)
         }
     }
 

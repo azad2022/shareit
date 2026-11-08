@@ -469,6 +469,8 @@ class SingleFileTransferCoordinator(
             channelOutput = channel.outputStream,
             firstManifestFrame = firstFrame,
             acquireConsentAndStaging = { manifest ->
+                val decision = CompletableDeferred<Boolean>()
+                consentDecision = decision
                 update(operation) {
                     it.copy(
                         phase = TransferSessionPhase.WAITING_FOR_CONSENT,
@@ -479,8 +481,6 @@ class SingleFileTransferCoordinator(
                         error = null,
                     )
                 }
-                val decision = CompletableDeferred<Boolean>()
-                consentDecision = decision
                 val accepted = try {
                     withTimeout(USER_CONSENT_TIMEOUT_MILLIS) { decision.await() }
                 } finally {
@@ -495,6 +495,8 @@ class SingleFileTransferCoordinator(
                 }
             },
             publishVerified = { manifest, receipt, staging ->
+                val destination = CompletableDeferred<String?>()
+                destinationDecision = destination
                 val requestId = mutableState.value.destinationPickerRequestId + 1
                 update(operation) {
                     it.copy(
@@ -506,8 +508,6 @@ class SingleFileTransferCoordinator(
                         destinationPickerRequestId = requestId,
                     )
                 }
-                val destination = CompletableDeferred<String?>()
-                destinationDecision = destination
                 val uri = try {
                     withTimeout(DESTINATION_SELECTION_TIMEOUT_MILLIS) { destination.await() }
                 } finally {
@@ -564,11 +564,14 @@ class SingleFileTransferCoordinator(
     ) {
         val cancellation = Channel<UUID>(Channel.UNLIMITED)
         batchCancellationRequests = cancellation
+        var pendingBatchConsentDecision: CompletableDeferred<Set<UUID>?>? = null
         try {
             val result = batchTransferCoordinator.receive(
                 channel = channel,
                 firstOfferFrame = firstFrame,
                 acquireOfferConsent = { offer ->
+                    val decision = CompletableDeferred<Boolean>()
+                    batchOfferConsentDecision = decision
                     update(operation) {
                         it.copy(
                             phase = TransferSessionPhase.AWAITING_BATCH_OFFER_CONSENT,
@@ -581,8 +584,6 @@ class SingleFileTransferCoordinator(
                             error = null,
                         )
                     }
-                    val decision = CompletableDeferred<Boolean>()
-                    batchOfferConsentDecision = decision
                     try {
                         withTimeout(USER_CONSENT_TIMEOUT_MILLIS) { decision.await() }
                     } finally {
@@ -592,6 +593,9 @@ class SingleFileTransferCoordinator(
                 cancellationRequests = cancellation,
                 isCancelledBeforeStart = { itemId -> itemId in cancelledBeforeStart },
                 onManifest = { manifestItems ->
+                    val decision = CompletableDeferred<Set<UUID>?>()
+                    pendingBatchConsentDecision = decision
+                    batchConsentDecision = decision
                     val incomingItems = manifestItems.map { item ->
                         TransferItemSnapshot(
                             id = item.itemId.toString(),
@@ -615,8 +619,9 @@ class SingleFileTransferCoordinator(
                     }
                 },
                 acquireSelection = { manifest ->
-                    val decision = CompletableDeferred<Set<UUID>?>()
-                    batchConsentDecision = decision
+                    val decision = pendingBatchConsentDecision
+                        ?: CompletableDeferred<Set<UUID>?>().also { batchConsentDecision = it }
+                    pendingBatchConsentDecision = null
                     val accepted = try {
                         withTimeout(USER_CONSENT_TIMEOUT_MILLIS) { decision.await() }
                     } finally {
@@ -634,6 +639,8 @@ class SingleFileTransferCoordinator(
                             BatchReceiverSelection(emptySet(), null)
                         }
                         else -> {
+                            val destination = CompletableDeferred<String?>()
+                            destinationTreeDecision = destination
                             val requestId = mutableState.value.destinationTreePickerRequestId + 1
                             update(operation) {
                                 it.copy(
@@ -645,8 +652,6 @@ class SingleFileTransferCoordinator(
                                     },
                                 )
                             }
-                            val destination = CompletableDeferred<String?>()
-                            destinationTreeDecision = destination
                             val treeUri = try {
                                 withTimeout(DESTINATION_SELECTION_TIMEOUT_MILLIS) {
                                     destination.await()
