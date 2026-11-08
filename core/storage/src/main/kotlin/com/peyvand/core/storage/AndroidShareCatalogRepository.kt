@@ -128,7 +128,7 @@ class AndroidShareCatalogRepository(
                 val displayName = cursor.getString(nameIndex)?.takeIf(String::isNotBlank)
                     ?: continue
                 val mediaId = cursor.getLong(idIndex)
-                val size = sizeIndex.takeIf { it >= 0 }
+                val size = sizeIndex.takeIf { it >= 0 && !cursor.isNull(it) }
                     ?.let(cursor::getLong)
                     ?.takeIf { it >= 0L }
                 val mimeType = resolveMimeType(
@@ -246,7 +246,7 @@ class AndroidShareCatalogRepository(
                     ?.let(cursor::getString)
                     ?.takeIf(String::isNotBlank)
                     ?: return@use null
-                val size = sizeIndex.takeIf { it >= 0 }
+                val size = sizeIndex.takeIf { it >= 0 && !cursor.isNull(it) }
                     ?.let(cursor::getLong)
                     ?.takeIf { it >= 0L }
                 displayName to size
