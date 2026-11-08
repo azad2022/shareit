@@ -475,7 +475,12 @@ private class LoopbackSocketPair private constructor(
                 } to first.result
             }
         } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
-            throw AssertionError("Batch protocol timed out; ${diagnostics()}", timeout)
+            val details = "Batch protocol timed out; ${diagnostics()}; " +
+                "senderCompleted=${sender.isCompleted}, senderCancelled=${sender.isCancelled}, " +
+                "receiverCompleted=${receiver.isCompleted}, receiverCancelled=${receiver.isCancelled}"
+            System.err.println("PEYVAND_BATCH_TEST_DIAGNOSTIC: $details")
+            System.err.flush()
+            throw AssertionError(details, timeout)
         }
     }
 
