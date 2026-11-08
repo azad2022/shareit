@@ -235,6 +235,12 @@
     <string name="file_transfer_item_rejected">رد شد</string>
     <string name="file_transfer_item_cancelled">لغو شد</string>
     <string name="file_transfer_item_failed">ناموفق</string>
+    <string name="file_transfer_failure_source_unavailable">منبع فایل در دسترس نیست یا مجوز خواندن آن معتبر نیست.</string>
+    <string name="file_transfer_failure_source_read">خواندن کامل فایل از منبع انجام نشد.</string>
+    <string name="file_transfer_failure_storage_unavailable">فضای کافی یا امکان ساخت فایل موقت در گیرنده وجود ندارد.</string>
+    <string name="file_transfer_failure_storage_write">نوشتن یا همگام‌سازی داده در فضای موقت گیرنده ناموفق بود.</string>
+    <string name="file_transfer_failure_destination">ذخیره‌سازی یا بررسی نهایی فایل در پوشهٔ مقصد ناموفق بود.</string>
+    <string name="file_transfer_failure_unknown">علت دقیق خطای این فایل مشخص نشد.</string>
     <string name="file_apps_transfer_pending">فهرست برنامه‌ها فعلاً برای مشاهده است؛ انتقال بستهٔ نصب‌شدنی برنامه‌ها و اجزای Split APK در مرحلهٔ جداگانه پیاده‌سازی می‌شود.</string>
     <string name="file_apps_catalog_scope">این فهرست فقط برنامه‌های دارای فعالیت اجرا را نشان می‌دهد، نه لزوماً تمام بسته‌های نصب‌شدهٔ دستگاه.</string>
 

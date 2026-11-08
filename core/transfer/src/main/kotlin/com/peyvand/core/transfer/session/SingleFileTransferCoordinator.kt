@@ -9,6 +9,7 @@ import com.peyvand.core.transfer.manifest.BatchTransferManifest
 import com.peyvand.core.transfer.manifest.TransferManifestItem
 import com.peyvand.core.transfer.protocol.BatchItemOutcome
 import com.peyvand.core.transfer.protocol.BatchItemOutcomeStatus
+import com.peyvand.core.transfer.protocol.BatchItemFailureCode
 import com.peyvand.core.transfer.protocol.BatchOffer
 import com.peyvand.core.transfer.protocol.TransferFrameCodec
 import com.peyvand.core.transfer.protocol.TransferFrameType
@@ -66,6 +67,7 @@ data class TransferItemSnapshot(
     val transferredBytes: Long = 0L,
     val phase: TransferItemPhase = TransferItemPhase.QUEUED,
     val isSelectedForConsent: Boolean = false,
+    val failureCode: BatchItemFailureCode? = null,
 )
 
 data class TransferSessionSnapshot(
@@ -789,6 +791,7 @@ class SingleFileTransferCoordinator(
                     item.copy(
                         phase = phase,
                         transferredBytes = outcome.actualSizeBytes ?: item.transferredBytes,
+                        failureCode = outcome.failureCode,
                     )
                 } else item
             }

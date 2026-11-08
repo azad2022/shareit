@@ -42,6 +42,7 @@ import com.peyvand.core.transfer.session.TransferSessionPhase
 import com.peyvand.core.transfer.session.TransferSessionSnapshot
 import com.peyvand.core.transfer.session.TransferItemPhase
 import com.peyvand.core.transfer.session.TransferItemSnapshot
+import com.peyvand.core.transfer.protocol.BatchItemFailureCode
 
 @Composable
 fun FileTransferSessionScreen(
@@ -440,6 +441,13 @@ private fun BatchItemsPanel(
                             } else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    item.failureCode?.let { failureCode ->
+                        Text(
+                            text = stringResource(itemFailureLabel(failureCode)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                     val progress = item.totalSizeBytes
                         ?.takeIf { it > 0L }
                         ?.let {
@@ -492,6 +500,15 @@ private fun BatchItemsPanel(
 }
 
 @Composable
+private fun itemFailureLabel(code: BatchItemFailureCode): Int = when (code) {
+    BatchItemFailureCode.SOURCE_UNAVAILABLE -> R.string.file_transfer_failure_source_unavailable
+    BatchItemFailureCode.SOURCE_READ_FAILED -> R.string.file_transfer_failure_source_read
+    BatchItemFailureCode.STORAGE_UNAVAILABLE -> R.string.file_transfer_failure_storage_unavailable
+    BatchItemFailureCode.STORAGE_WRITE_FAILED -> R.string.file_transfer_failure_storage_write
+    BatchItemFailureCode.DESTINATION_FAILED -> R.string.file_transfer_failure_destination
+    BatchItemFailureCode.UNKNOWN_ITEM_FAILURE -> R.string.file_transfer_failure_unknown
+}
+
 private fun itemPhaseLabel(phase: TransferItemPhase): Int = when (phase) {
     TransferItemPhase.QUEUED -> R.string.file_transfer_item_queued
     TransferItemPhase.WAITING_FOR_RECEIVER -> R.string.file_transfer_item_waiting
