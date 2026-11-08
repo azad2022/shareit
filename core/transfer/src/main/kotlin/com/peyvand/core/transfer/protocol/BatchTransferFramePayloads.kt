@@ -1,3 +1,12 @@
+package com.peyvand.core.transfer.protocol
+
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.security.MessageDigest
+import java.util.UUID
+
 data class BatchOffer(val batchId: UUID)
 
 object BatchOfferCodec {
@@ -19,15 +28,6 @@ object BatchOfferCodec {
         return BatchOffer(UUID(input.long, input.long))
     }
 }
-
-package com.peyvand.core.transfer.protocol
-
-import java.io.ByteArrayOutputStream
-import java.io.DataOutputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.security.MessageDigest
-import java.util.UUID
 
 data class BatchItemReference(
     val batchId: UUID,
