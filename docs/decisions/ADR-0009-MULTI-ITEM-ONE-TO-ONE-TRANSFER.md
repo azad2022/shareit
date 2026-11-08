@@ -15,7 +15,7 @@ The existing source adapter is URI-only. `openSource()` obtains metadata without
 ### 1. Scope and queue limits
 
 1. CP-004 supports 2–32 generic `content://` items from one sender to one receiver. `InstalledPackage` sources are rejected; APK and split-APK handling belongs to CP-005.
-2. Exactly one item uses the existing version-1 flow. Two or more items use the new version-2 batch flow. There is no automatic downgrade or plaintext fallback. A peer that does not support version 2 fails closed with a typed unsupported-version result; the user may retry as a one-file transfer using version 1.
+2. Exactly one item uses the existing version-1 flow. Two or more items use the new version-3 batch flow. There is no automatic downgrade or plaintext fallback. A peer that does not support version 3 fails closed with a typed unsupported-version result; the user may retry as a one-file transfer using version 1.
 3. The selected order is captured once and is immutable for the batch. The sender and receiver process items strictly in that order. At most one source handle/stream, one receive staging sink, one publication operation and one item data window may be active at a time.
 4. The maximum of 32 is derived from the 16 KiB control-frame ceiling: at the existing per-item manifest maxima, 32 length-prefixed entries fit below that limit with the batch envelope. The codec must still check the actual encoded byte count before writing and reject over-limit manifests before allocation.
 5. This checkpoint guarantees deterministic order and state during the live operation, not recovery after process death. Durable queue persistence, resume and reconnect belong to CP-007.
@@ -30,13 +30,14 @@ The existing source adapter is URI-only. `openSource()` obtains metadata without
 
 ### 3. Versioned batch control/data protocol
 
-1. Keep version 1 frame meanings and the existing `SingleFileTransferProtocol` implementation intact. Add an explicitly versioned version-2 frame family for metadata-free batch offer/approval, batch manifest/decision, item start/readiness, item data/ACK, item completion/verified receipt, item failure/cancellation and batch completion/receipt.
-2. The receiver dispatches the first authenticated application frame by its version and type. A version-1 MANIFEST is handed to the existing single-file receiver; a version-2 BATCH_OFFER is handed to the batch receiver. The first frame must not be lost or read twice. No v1 message is reinterpreted as a batch message. The offer contains only a random batch UUID; the manifest follows only after the receiver's matching approval frame.
+1. Keep version 1 frame meanings and the existing `SingleFileTransferProtocol` implementation intact. Add an explicitly versioned version-3 frame family for metadata-free batch offer/approval, batch manifest/decision, item start/readiness, item data/ACK, item completion/verified receipt, item failure/cancellation and batch completion/receipt.
+2. The receiver dispatches the first authenticated application frame by its version and type. A version-1 MANIFEST is handed to the existing single-file receiver; a version-3 BATCH_OFFER is handed to the batch receiver. The first frame must not be lost or read twice. No v1 message is reinterpreted as a batch message. The offer contains only a random batch UUID; the manifest follows only after the receiver's matching approval frame.
 3. A batch manifest carries a cryptographically random batch UUID and 2–32 ordered, uniquely identified item manifests. Its exact encoded bytes are SHA-256 hashed. The receiver's decision echoes the batch UUID and manifest digest and includes the selected item IDs (or a bounded bitmap whose bit positions are the immutable manifest order). The codec rejects duplicate IDs, invalid counts, malformed lengths, trailing bytes and oversized frames.
-4. Every version-2 control message and batch data/ACK message is bound to the session ID and batch ID. Every item-scoped message also carries its item ID. Data chunks retain explicit contiguous offsets; ACKs identify the batch, item and next durably committed offset.
+4. Every version-3 control message and batch data/ACK message is bound to the session ID and batch ID. Every item-scoped message also carries its item ID. Data chunks retain explicit contiguous offsets; ACKs identify the batch, item and next durably committed offset.
 5. For each selected item, the order is: sender ITEM_START → receiver creates one bounded private stage → receiver ITEM_READY → sender opens that item's URI stream and sends bounded chunks → receiver syncs each maximum-four-chunk window before cumulative ACK → sender sends the authenticated actual-length/SHA-256 completion record → receiver verifies and seals staging → receiver publishes into the user-selected SAF tree and reads back the exact bytes → receiver sends the item's authenticated integrity receipt. No later item starts until the current item has reached a terminal outcome.
-6. An item receipt binds batch ID, item ID, actual byte count and SHA-256. The terminal batch receipt binds the ordered list of terminal item outcomes/verified receipts. Sender-side batch completion is not reported until the batch receipt is validated.
-7. Control frames remain at or below 16 KiB. Data chunks remain capped at 64 KiB and the outstanding window remains capped at four chunks/256 KiB. The receiver ACKs only after staging sync succeeds. These values are caps inherited from CP-003, not performance promises.
+6. Version 3 uses explicit stable failure codes for source access/read, private-stage allocation/write, integrity verification, stage finalization and SAF destination publication. The new integrity and stage-finalization wire codes are additive but intentionally require the version-3 batch contract; version-2 batch peers fail closed. Version-1 single-file messages remain unchanged.
+7. An item receipt binds batch ID, item ID, actual byte count and SHA-256. The terminal batch receipt binds the ordered list of terminal item outcomes/verified receipts. Sender-side batch completion is not reported until the batch receipt is validated.
+8. Control frames remain at or below 16 KiB. Data chunks remain capped at 64 KiB and the outstanding window remains capped at four chunks/256 KiB. The receiver ACKs only after staging sync succeeds. These values are caps inherited from CP-003, not performance promises.
 
 ### 4. Failure, cancellation and continuation policy
 
@@ -64,17 +65,17 @@ The existing source adapter is URI-only. `openSource()` obtains metadata without
 
 ## Consequences
 
-- Two-file and larger batches require both devices to run a version-2-capable build. Single-file transfers retain the existing version-1 wire contract and code path.
+- Two-file and larger batches require both devices to run a version-3-capable build. Single-file transfers retain the existing version-1 wire contract and code path.
 - The receiver explicitly authorizes metadata disclosure before seeing filenames, then makes one batch-level content decision with per-item selection and independent terminal status.
 - A chosen SAF directory avoids repeated save dialogs but is subject to document-provider limitations and Android's system-enforced directory restrictions.
 - Sequential processing reduces memory, descriptor and disk-pressure risk. It does not claim parallel-file throughput.
-- The version-2 dispatcher and all codecs require negative tests for malformed manifests, duplicate IDs, cross-batch/item frames, invalid decisions, out-of-order items and truncation.
+- The version-3 dispatcher and all codecs require negative tests for malformed manifests, duplicate IDs, cross-batch/item frames, invalid decisions, out-of-order items and truncation.
 
 ## Validation gates
 
 - Codec tests: metadata-free offer exact length/roundtrip, count 2/32/33, exact 16 KiB boundary, malformed UTF-8, duplicate IDs, malformed lengths, duplicate/unknown selections, manifest digest mismatch, unknown item IDs, wrong batch/session binding and trailing bytes.
 - Consent-order tests: receiver rejection sends no metadata approval; sender does not transmit a manifest before a matching offer approval; item contents do not begin before explicit per-item acceptance and ITEM_READY.
-- Protocol tests: version-1 sender/receiver regression; version-2 two/32 item flows; mixed MIME; arbitrary binary; zero-byte; large item; unknown length; Persian/Unicode names; extensionless names; item receipts and terminal batch receipt.
+- Protocol tests: version-1 sender/receiver regression; version-3 two/32 item flows; mixed MIME; arbitrary binary; zero-byte; large item; unknown length; Persian/Unicode names; extensionless names; item receipts and terminal batch receipt.
 - Consent tests: no source stream or stage before consent; selected subset only; reject all; timeout; destination-tree cancellation.
 - Item isolation: provider-open/read failure, low storage, stage/write/sync failure, destination creation/write/read-back failure, active/queued cancellation, cleanup and subsequent-item continuation.
 - Resource tests: maximum one active source stream/stage, four-chunk cap, bounded memory, no descriptor/socket/staging leak, cancellation of a blocking source read.
