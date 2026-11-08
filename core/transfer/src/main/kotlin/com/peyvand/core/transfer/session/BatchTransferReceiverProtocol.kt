@@ -482,8 +482,18 @@ internal class BatchTransferReceiverProtocol(
         cancellations: ReceiveChannel<UUID>,
     ): ReceiverEvent =
         select {
-            reader.frames.onReceiveCatching { ReceiverEvent.FrameReceived(it.getOrElse { cause -> throw cause }) }
-            cancellations.onReceiveCatching { ReceiverEvent.LocalCancellation(it.getOrElse { cause -> throw cause }) }
+            reader.frames.onReceiveCatching { result ->
+                ReceiverEvent.FrameReceived(
+                    result.getOrNull() ?: throw (result.exceptionOrNull()
+                        ?: EOFException("Batch protocol input closed while awaiting a frame")),
+                )
+            }
+            cancellations.onReceiveCatching { result ->
+                ReceiverEvent.LocalCancellation(
+                    result.getOrNull() ?: throw (result.exceptionOrNull()
+                        ?: CancellationException("Batch cancellation channel was closed")),
+                )
+            }
         }
 }
 
