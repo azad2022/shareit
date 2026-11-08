@@ -72,8 +72,9 @@ class BatchTransferFramePayloadsTest {
         val digest = BatchOutcomeDigest.compute(batchId, listOf(first, second), outcomes)
         assertTrue(digest != BatchOutcomeDigest.compute(batchId, listOf(second, first), outcomes.reversed()))
         val storageFailure = outcomes[1].copy(failureCode = BatchItemFailureCode.STORAGE_WRITE_FAILED)
-        assertTrue(
-            digest != BatchOutcomeDigest.compute(batchId, listOf(first, second), listOf(outcomes[0], storageFailure)),
+        assertEquals(
+            digest,
+            BatchOutcomeDigest.compute(batchId, listOf(first, second), listOf(outcomes[0], storageFailure)),
         )
         val record = BatchTerminalRecord(batchId, 2, digest)
         assertEquals(record, BatchTerminalRecordCodec.decode(BatchTerminalRecordCodec.encode(record)))

@@ -286,8 +286,9 @@ data class BatchItemOutcome(
 }
 
 /**
- * Hashes an ordered, canonical representation of every item's terminal state.
- * Both peers compute this after validating each item-specific outcome/receipt.
+ * Hashes the version-2 canonical terminal status and verified receipt.
+ * Diagnostic failure codes travel in authenticated item failure frames and are
+ * deliberately excluded here to preserve the existing version-2 digest contract.
  */
 object BatchOutcomeDigest {
     fun compute(
@@ -299,7 +300,7 @@ object BatchOutcomeDigest {
         require(outcomes.map(BatchItemOutcome::itemId) == orderedItemIds) {
             "Batch outcomes must match the immutable manifest order"
         }
-        val bytes = ByteArrayOutputStream(16 + orderedItemIds.size * 58)
+        val bytes = ByteArrayOutputStream(16 + orderedItemIds.size * 57)
         DataOutputStream(bytes).use { output ->
             output.writeLong(batchId.mostSignificantBits)
             output.writeLong(batchId.leastSignificantBits)
@@ -307,7 +308,6 @@ object BatchOutcomeDigest {
                 output.writeLong(outcome.itemId.mostSignificantBits)
                 output.writeLong(outcome.itemId.leastSignificantBits)
                 output.writeByte(outcome.status.wireCode)
-                output.writeByte(outcome.failureCode?.wireCode ?: 0)
                 if (outcome.status == BatchItemOutcomeStatus.COMPLETED) {
                     output.writeLong(requireNotNull(outcome.actualSizeBytes))
                     output.write(decodeSha256(requireNotNull(outcome.sha256Hex)))
