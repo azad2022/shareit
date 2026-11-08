@@ -78,7 +78,6 @@ class SingleFileTransferCoordinator(
     private var transferJob: Job? = null
 
     @Volatile
-    @Volatile
     private var consentDecision: CompletableDeferred<Boolean>? = null
 
     @Volatile
