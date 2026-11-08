@@ -406,7 +406,7 @@ internal class BatchTransferReceiverProtocol(
                                 )
                             } catch (cancellation: CancellationException) {
                                 throw cancellation
-                            } catch (_: Exception) {
+                            } catch (_: TransferIntegrityException) {
                                 staging.delete()
                                 writeFailure(
                                     output,
