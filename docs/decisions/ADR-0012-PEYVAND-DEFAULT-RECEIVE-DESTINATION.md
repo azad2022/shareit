@@ -53,12 +53,12 @@ This is one logical PEYVAND destination system, but intentionally not one physic
 5. On failure or cancellation, PEYVAND attempts to remove the uncommitted MediaStore row or legacy temporary/final file and deletes private staging. Failure to confirm cleanup is surfaced; no incomplete file is reported as successful.
 6. Filenames are treated only as display names. Path separators, control characters and unsafe characters are sanitized. Unicode is normalized and length-limited without splitting UTF-8 code points. Name collisions never overwrite user data; a deterministic numbered suffix is used on legacy file paths and the MediaStore provider's non-replacement allocation behavior is retained.
 7. Files are streamed with a fixed bounded buffer. No received file is loaded into RAM in full.
-8. The maximum accepted item size is conservatively bounded against both private staging and public destination free space because publication temporarily requires both a stage and a second copy. A safety reserve remains in place.
+8. The maximum accepted item size is conservatively bounded against both private staging and public destination free space because publication temporarily requires both a stage and a second copy. Both stores are rechecked at every stage allocation (including each item in a batch), and a safety reserve remains in place.
 
 ### 5. Permissions and platform policy
 
 1. API 29+ must not request broad shared-storage write access for these app-created MediaStore items. No MANAGE_EXTERNAL_STORAGE or QUERY_ALL_PACKAGES is introduced by this ADR.
-2. API 26–28 declare WRITE_EXTERNAL_STORAGE with maxSdkVersion=28 and request it at runtime only when a user accepts a receive that will publish into public shared storage.
+2. API 26–28 declare READ_EXTERNAL_STORAGE (maxSdkVersion=32) and WRITE_EXTERNAL_STORAGE (maxSdkVersion=28); both are requested together only when a user accepts a receive that must be published and read-back verified in public shared storage.
 3. MediaStore is used for media and public Downloads records on API 29+; direct filesystem paths are not used for public shared-storage writes on API 29+.
 4. The app-private no-backup directory remains the staging area only. It is not the final destination, and final public files are not expected to be deleted when PEYVAND is uninstalled.
 5. SAF remains appropriate for user-authorized source selection and may remain available for explicit future export/import operations; it is no longer the default receive publication provider.

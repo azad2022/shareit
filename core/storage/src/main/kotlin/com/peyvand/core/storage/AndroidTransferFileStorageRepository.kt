@@ -69,9 +69,13 @@ class AndroidTransferFileStorageRepository(
             require(maximumSizeBytes >= 0L) { "Staging limit cannot be negative" }
             ensureStagingDirectory()
             cleanupExpiredStages()
-            val available = availableBytesAfterReserve()
-            if (maximumSizeBytes > available) {
-                throw IOException("Insufficient private storage for the requested transfer limit")
+            val privateAvailable = availableBytesAfterReserve()
+            val publicAvailable = (
+                defaultDestinationPublisher.availableBytes() - MINIMUM_FREE_SPACE_RESERVE_BYTES
+            ).coerceAtLeast(0L)
+            val safeMaximum = minOf(privateAvailable, publicAvailable) / 2L
+            if (maximumSizeBytes > safeMaximum) {
+                throw IOException("Insufficient storage for both the private stage and public destination")
             }
 
             val file = File(

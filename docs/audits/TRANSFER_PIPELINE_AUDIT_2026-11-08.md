@@ -117,7 +117,7 @@
 - ADR-0012 replaces the receiver-selected SAF destination tree in the default receive path with one app-managed PEYVAND destination policy.
 - Media files use their canonical shared-storage roots and matching MediaStore collections: Pictures/PEYVAND/Images, Movies/PEYVAND/Videos and Music/PEYVAND/Audio/{Music,Voice,Other}. General files use Download/PEYVAND/{Documents,Apps,Other} through MediaStore.Downloads.
 - This deliberately implements one logical PEYVAND destination system, not one physical top-level directory. Android MediaStore requires RELATIVE_PATH to be compatible with the media collection. Placing all files in Download would not be an equivalent gallery-integrated media implementation.
-- Android 10+ items remain IS_PENDING until destination write and independent read-back length/SHA-256 verification succeed. API 26–28 use a legacy public shared-storage path with WRITE_EXTERNAL_STORAGE capped at API 28 and requested only after receiver consent. No MANAGE_EXTERNAL_STORAGE permission is introduced.
+- Android 10+ items remain IS_PENDING until destination write and independent read-back length/SHA-256 verification succeed. API 26–28 use a legacy public shared-storage path with READ_EXTERNAL_STORAGE capped at API 32 and WRITE_EXTERNAL_STORAGE capped at API 28, requested only after receiver consent. Both private and public free space are rechecked for each stage allocation. No MANAGE_EXTERNAL_STORAGE permission is introduced.
 - Single-file and batch coordinators now call the same storage abstraction. Destination URI/tree picker dependencies are removed from the normal receive path; SAF remains appropriate for user-selected source URIs.
 
 ### Classification and integrity constraints

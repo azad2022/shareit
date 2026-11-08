@@ -182,12 +182,14 @@ internal class AndroidPeyvandDestinationPublisher(context: Context) {
                 throw exception
             }
 
-            MediaScannerConnection.scanFile(
-                appContext,
-                arrayOf(finalFile.absolutePath),
-                arrayOf(mimeType),
-                null,
-            )
+            runCatching {
+                MediaScannerConnection.scanFile(
+                    appContext,
+                    arrayOf(finalFile.absolutePath),
+                    arrayOf(mimeType),
+                    null,
+                )
+            }
             runCatching { staging.delete() }
             return true
         } catch (exception: Exception) {

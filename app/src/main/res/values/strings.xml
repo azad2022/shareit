@@ -217,7 +217,7 @@
     <string name="file_transfer_batch_finalization_unconfirmed">فایل‌ها جداگانه دریافت و صحت آن‌ها تأیید شده است، اما تأیید نهایی مجموعه کامل نشد. پیش از ارسال دوباره، پوشهٔ مقصد را بررسی کنید.</string>
     <string name="file_transfer_destination_picker">در حال باز کردن محل ذخیره‌سازی…</string>
     <string name="file_transfer_default_destination_info">فایل‌های دریافتی پس از تأیید صحت، در پوشه‌های اختصاصی PEYVAND و در مسیر استاندارد هر نوع رسانه ذخیره می‌شوند؛ اسناد و فایل‌های عمومی در Download/PEYVAND قرار می‌گیرند.</string>
-    <string name="file_transfer_legacy_storage_permission_info">در Android 8 و 9 برای ذخیره در پوشه عمومی PEYVAND، مجوز نوشتن در حافظه مشترک لازم است.</string>
+    <string name="file_transfer_legacy_storage_permission_info">در Android 8 و 9 برای ذخیره و بررسی فایل در پوشه عمومی PEYVAND، مجوزهای محدود خواندن و نوشتن حافظه مشترک لازم است.</string>
     <string name="file_transfer_legacy_storage_permission_denied">مجوز ذخیره‌سازی داده نشد؛ تا زمان اعطای مجوز، فایل دریافتی در حافظه عمومی ذخیره نمی‌شود.</string>
     <string name="file_transfer_open_app_settings">باز کردن تنظیمات برنامه</string>
 

@@ -59,9 +59,11 @@ fun FileTransferSessionScreen(
     val context = LocalContext.current
     var pendingLegacyAcceptance by rememberSaveable { mutableIntStateOf(0) }
     var legacyStoragePermissionDenied by rememberSaveable { mutableStateOf(false) }
-    val legacyStoragePermission = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { granted ->
+    val legacyStoragePermissions = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.READ_EXTERNAL_STORAGE] == true &&
+            permissions[Manifest.permission.WRITE_EXTERNAL_STORAGE] == true
         val pendingAction = pendingLegacyAcceptance
         pendingLegacyAcceptance = 0
         legacyStoragePermissionDenied = !granted
@@ -74,12 +76,19 @@ fun FileTransferSessionScreen(
     }
     val acceptIncoming: (Boolean) -> Unit = { isBatch ->
         val needsLegacyWritePermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
-            context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
-            PackageManager.PERMISSION_GRANTED
+            (context.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) !=
+                PackageManager.PERMISSION_GRANTED ||
+                context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+                PackageManager.PERMISSION_GRANTED)
         if (needsLegacyWritePermission) {
             pendingLegacyAcceptance = if (isBatch) 2 else 1
             legacyStoragePermissionDenied = false
-            legacyStoragePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            legacyStoragePermissions.launch(
+                arrayOf(
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                ),
+            )
         } else {
             legacyStoragePermissionDenied = false
             if (isBatch) {
