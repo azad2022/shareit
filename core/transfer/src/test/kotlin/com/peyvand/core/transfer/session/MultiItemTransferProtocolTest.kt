@@ -41,6 +41,8 @@ class MultiItemTransferProtocolTest {
         val thirdBytes = "متن آزمایشی پیوند".toByteArray(Charsets.UTF_8)
         val fourthBytes = "storage failure".toByteArray(Charsets.UTF_8)
         val fifthBytes = "pdf payload".toByteArray(Charsets.UTF_8)
+        val sixthBytes = byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xd9.toByte())
+        val seventhBytes = "not selected".toByteArray(Charsets.UTF_8)
         val batchId = UUID.randomUUID()
         val items = listOf(
             manifest("large.bin", "application/octet-stream", firstBytes.size.toLong()),
@@ -48,6 +50,8 @@ class MultiItemTransferProtocolTest {
             manifest("یادداشت.txt", "text/plain", thirdBytes.size.toLong()),
             manifest("failure.bin", "application/octet-stream", fourthBytes.size.toLong()),
             manifest("گزارش نهایی.pdf", "application/pdf", fifthBytes.size.toLong()),
+            manifest("تصویر.jpg", "image/jpeg", sixthBytes.size.toLong()),
+            manifest("not-selected.bin", "application/octet-stream", seventhBytes.size.toLong()),
         )
         val manifest = BatchTransferManifest(batchId, items)
         val sourceBytes = mapOf(
@@ -56,6 +60,8 @@ class MultiItemTransferProtocolTest {
             items[2].itemId to thirdBytes,
             items[3].itemId to fourthBytes,
             items[4].itemId to fifthBytes,
+            items[5].itemId to sixthBytes,
+            items[6].itemId to seventhBytes,
         )
         val streams = LoopbackSocketPair.create()
         val senderInput = streams.senderInput
@@ -82,7 +88,14 @@ class MultiItemTransferProtocolTest {
                     channelOutput = receiverOutput,
                     acquireSelection = {
                         BatchReceiverSelection(
-                            acceptedItemIds = setOf(items[0].itemId, items[1].itemId, items[2].itemId, items[3].itemId),
+                            acceptedItemIds = setOf(
+                                items[0].itemId,
+                                items[1].itemId,
+                                items[2].itemId,
+                                items[3].itemId,
+                                items[4].itemId,
+                                items[5].itemId,
+                            ),
                             destinationTreeUri = "content://tree/peyvand",
                         )
                     },
@@ -127,7 +140,7 @@ class MultiItemTransferProtocolTest {
                 "Receiver completed without returning a batch result"
             }
 
-            assertEquals(3, sent.completedCount)
+            assertEquals(5, sent.completedCount)
             assertEquals(1, sent.rejectedCount)
             assertEquals(1, sent.failedCount)
             assertEquals(sent.outcomes, receivedResult.outcomes)
@@ -140,7 +153,9 @@ class MultiItemTransferProtocolTest {
             assertArrayEquals(secondBytes, received[items[1].itemId])
             assertArrayEquals(thirdBytes, received[items[2].itemId])
             assertTrue(items[3].itemId !in received)
-            assertTrue(items[4].itemId !in received)
+            assertArrayEquals(fifthBytes, received[items[4].itemId])
+            assertArrayEquals(sixthBytes, received[items[5].itemId])
+            assertTrue(items[6].itemId !in received)
             assertEquals(1, peakStages)
             assertEquals(0, activeStages)
         } finally {

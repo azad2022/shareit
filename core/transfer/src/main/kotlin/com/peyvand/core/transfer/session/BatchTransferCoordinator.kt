@@ -39,23 +39,19 @@ internal class BatchTransferCoordinator(
         val sourcesByTransferId = LinkedHashMap<UUID, ShareItem>()
         val manifestItems = ArrayList<TransferManifestItem>(selectedItems.size)
 
-        // Read metadata one source at a time and close the adapter immediately.
-        // No provider stream is opened until the receiver has accepted the item start.
+        // The catalog resolved metadata while the user selected these URIs. Avoid a
+        // second provider query for every item before receiver consent: providers may
+        // return transient/incomplete metadata, and failures must remain item-scoped.
+        // Source handles and streams are opened only after the matching READY frame.
         selectedItems.forEach { selected ->
             val transferId = UUID.randomUUID()
-            val source = storageRepository.openSource(selected)
-            val metadata = try {
-                source.metadata
-            } finally {
-                source.close()
-            }
             sourceIds[selected.id] = transferId
             sourcesByTransferId[transferId] = selected
             manifestItems += TransferManifestItem(
                 itemId = transferId,
-                displayName = metadata.displayName,
-                mimeType = metadata.mimeType,
-                sizeBytes = metadata.sizeBytes,
+                displayName = selected.displayName,
+                mimeType = selected.mimeType,
+                sizeBytes = selected.sizeBytes,
             )
         }
 
@@ -70,13 +66,11 @@ internal class BatchTransferCoordinator(
                 val selected = sourcesByTransferId[manifestItem.itemId]
                     ?: throw IOException("Batch source identity is no longer available")
                 val source = storageRepository.openSource(selected)
-                val metadata = source.metadata
-                if (metadata.displayName != manifestItem.displayName ||
-                    metadata.mimeType != manifestItem.mimeType ||
-                    metadata.sizeBytes != manifestItem.sizeBytes
-                ) {
+                val declaredSize = manifestItem.sizeBytes
+                val currentSize = source.metadata.sizeBytes
+                if (declaredSize != null && currentSize != null && currentSize != declaredSize) {
                     runCatching { source.close() }
-                    throw IOException("Source metadata changed after the manifest was sent")
+                    throw IOException("Source byte length changed after the manifest was approved")
                 }
                 source
             },
