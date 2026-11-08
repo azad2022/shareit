@@ -391,9 +391,6 @@ internal class BatchTransferReceiverProtocol(
                             if (pendingChunks > 0) {
                                 try {
                                     staging.sync()
-                                    sendBatchAck(output, sessionId, reference, nextExpectedOffset)
-                                    pendingChunks = 0
-                                    onItemProgress(item.itemId, nextExpectedOffset)
                                 } catch (cancellation: CancellationException) {
                                     throw cancellation
                                 } catch (_: Exception) {
@@ -411,6 +408,9 @@ internal class BatchTransferReceiverProtocol(
                                         failureCode = BatchItemFailureCode.STORAGE_WRITE_FAILED,
                                     )
                                 }
+                                sendBatchAck(output, sessionId, reference, nextExpectedOffset)
+                                pendingChunks = 0
+                                onItemProgress(item.itemId, nextExpectedOffset)
                             }
 
                             val localHash = digest.digest().toLowerHex()
