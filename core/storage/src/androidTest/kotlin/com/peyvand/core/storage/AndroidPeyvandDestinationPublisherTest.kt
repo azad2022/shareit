@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ContentUris
 import android.os.Build
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.provider.BaseColumns
 import android.provider.MediaStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -61,14 +62,8 @@ class AndroidPeyvandDestinationPublisherTest {
         collectionKind: CollectionKind,
     ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
-                context.packageName,
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-            )
-            InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(
-                context.packageName,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            )
+            grantRuntimePermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+            grantRuntimePermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             assertTrue(
                 context.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) ==
                     android.content.pm.PackageManager.PERMISSION_GRANTED,
@@ -140,6 +135,21 @@ class AndroidPeyvandDestinationPublisherTest {
             assertArrayEquals(bytes, file.readBytes())
             assertTrue("Test output cleanup failed", file.delete())
         }
+    }
+
+    private fun grantRuntimePermission(permission: String) {
+        val command = "pm grant ${context.packageName} $permission && " +
+            "echo PEYVAND_PERMISSION_GRANTED"
+        val descriptor = InstrumentationRegistry.getInstrumentation()
+            .uiAutomation
+            .executeShellCommand(command)
+        val output = ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use {
+            it.readText()
+        }
+        assertTrue(
+            "Shell did not confirm granting $permission. Output: $output",
+            output.contains("PEYVAND_PERMISSION_GRANTED"),
+        )
     }
 
     private enum class CollectionKind { IMAGES, DOWNLOADS }
