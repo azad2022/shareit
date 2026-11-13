@@ -350,6 +350,10 @@ private fun ChatConversationRow(
                         text = when {
                             last == null -> stringResource(R.string.chat_row_start_message)
                             last.direction == ChatMessageDirection.OUTGOING &&
+                                last.deliveryState == ChatMessageDeliveryState.WAITING_FOR_CONNECTION &&
+                                isConnected ->
+                                stringResource(R.string.chat_message_syncing)
+                            last.direction == ChatMessageDirection.OUTGOING &&
                                 last.deliveryState == ChatMessageDeliveryState.WAITING_FOR_CONNECTION ->
                                 stringResource(R.string.chat_message_waiting)
                             else -> last.body.replace('\n', ' ')
