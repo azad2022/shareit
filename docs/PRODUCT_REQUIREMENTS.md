@@ -148,6 +148,11 @@ Allowed statuses: `IN_PROGRESS`, `BLOCKED`, `PASSED`. Only mark `PASSED` when th
 - Initial maximum supported group size based on device testing.
 - Whether simultaneous multi-sender group exchange is required in a later release.
 - Transfer history retention and cleanup policy.
+- Chat peer identity, key lifecycle, and authenticated re-pairing policy.
+- Chat pairing bootstrap and binding to the existing secure session.
+- Chat encryption-at-rest, Android backup exclusion, retention, and deletion policy.
+- Chat message ordering, synchronization protocol, cursor semantics, and queue limits.
+- Whether group chat, read receipts, voice/video messaging, or synchronized deletion are required in a later phase.
 - Exact Kurdish locale/script (Sorani/Arabic-based RTL, Kurmanji/Latin LTR, or another explicitly approved variant), and app package/application ID.
 - Quantified throughput and reliability acceptance thresholds after benchmark baselines.
 
