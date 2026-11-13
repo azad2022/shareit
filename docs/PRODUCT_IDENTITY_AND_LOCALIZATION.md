@@ -1,6 +1,6 @@
 # PEYVAND (پیوند) — Product Identity, Localization, and Motion Specification
 
-- **Status:** Confirmed product direction; CP-001/CP-002 and the narrowly scoped CP-003 one-to-one transfer implementation are owner-authorized. Product-wide visual redesign and later group-transfer scope remain milestone-gated.
+- **Status:** Confirmed PEYVAND blue/white design direction; on 2026-11-13 the product owner also approved a chat-first main experience and a polished messenger-style conversation UI. CP-CHAT-002 is authorized on its own implementation branch; full design-system and accessibility acceptance remain gated.
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit` — keep repository name unless separately approved.
 - **Last updated:** 2026-11-01.
@@ -11,7 +11,7 @@ PEYVAND is a native Android product for direct, offline transfer of files and el
 
 ### Color direction
 
-Blue and white are the dominant brand colors. The goal is a clean, energetic, premium interface with high clarity and obvious primary actions. This is a color-direction decision, not permission to reproduce SHAREit's exact screens, artwork, iconography, logo, or motion. Design a distinct PEYVAND visual language.
+Blue and white are the dominant brand colors. The goal is a clean, energetic, premium interface with high clarity and obvious primary actions. This is a color-direction decision, not permission to reproduce SHAREit's or Telegram's exact screens, artwork, iconography, wallpaper, logo, or motion. The uploaded Telegram conversation screenshot is a quality/convention reference only. Design a distinct PEYVAND visual language.
 
 Create semantic tokens rather than per-screen color literals:
 
@@ -24,6 +24,8 @@ Create semantic tokens rather than per-screen color literals:
 Do not decide final HEX values by guesswork. A design-system checkpoint should include palette swatches, contrast evidence, light-surface hierarchy, button/state variants, and actual-device screenshots. Blue must not be the only indicator of state; pair color with text, iconography, and accessibility semantics.
 
 ### Design quality
+
+The owner-approved primary experience is a local one-to-one messenger: the home screen is the conversation list, and a conversation contains the message timeline, composer and attachment entry points. Transfer operations are launched from a conversation rather than from three separate top-level Send/Receive/Files actions.
 
 The design must be original, consistent, fast, legible, accessible, and cohesive across all major flows. Use a stable type scale, spacing scale, shape rules, elevation model, icon family, and component variants. Prefer a small set of refined reusable components over a large collection of one-off screen widgets. Do not allow a screen to invent its own spacing, colors, typography, or button behavior.
 
@@ -147,5 +149,8 @@ No decorative infinite loops without a user purpose; no fake counters; no false 
 - Device performance and battery impact are measured on representative hardware.
 
 ## 8. Governance
+
+The product owner's 2026-11-13 chat-first direction supersedes earlier transfer-first navigation proposals. Voice/video call icons may be displayed as disabled future affordances; call implementation requires its own architecture and security checkpoint.
+
 
 This document adds product specifications; it does not authorize application code, Gradle files, or UI implementation. Keep decisions and evidence in Git. Update the engineering skill when these requirements change. Any implementation milestone must include its scope, acceptance criteria, tests, device/API details, commit SHA, evidence, and honest status. A checkpoint is `PASSED` only with reproducible evidence.

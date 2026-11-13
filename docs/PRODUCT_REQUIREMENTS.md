@@ -103,6 +103,13 @@ See [`LOCAL_CHAT_ARCHITECTURE_AND_UX.md`](LOCAL_CHAT_ARCHITECTURE_AND_UX.md) and
 
 ## 8. Frontend and UX quality
 
+- **Owner decision (2026-11-13):** PEYVAND's primary home screen is a chat/conversation list, not separate Send, Receive and Files buttons. The user enters a one-to-one conversation and sends text or initiates image/video/audio/document/APK transfer from its composer/attachment menu.
+- **Conversation UX:** familiar professional-messenger conventions are approved (conversation header, peer avatar/label, actual connection state, message timeline, empty-conversation state, composer, emoji and attachment affordances). Telegram/WhatsApp are usability references only; PEYVAND must have its own original blue/white visual identity, layout details, iconography, artwork and motion.
+- **Call affordances:** voice/video call icons may appear disabled as future placeholders. They do not authorize or imply call implementation.
+- **Delivery truth:** locally committed, queued, synchronizing, and durably delivered are distinct states. A socket write is not remote delivery.
+- **Attachment truth:** attachment selection delegates to the existing secure file-transfer subsystem. The chat message stream must not carry bulk file bytes.
+
+
 - Premium bespoke visual identity using PEYVAND blue-and-white brand tokens is a core requirement.
 - Build and maintain a centralized design system: typography, color tokens, spacing, shapes, iconography, components, states, and motion principles.
 - Use reusable feature-scoped components and explicit loading, empty, error, connecting, waiting, transferring, paused, recovering, completed, and failed states.

@@ -1,13 +1,13 @@
 # PEYVAND Local Chat — Screen-Level UX Specification
 
-- **Status:** Proposed screen-level UX; based on owner-selected local-history/reconnect-sync behavior.
-- **Date:** 2026-11-13
-- **Design direction:** PEYVAND blue/white identity; original composition; accessible RTL/LTR.
-- **Implementation status:** CP-CHAT-001 implements encrypted local persistence only; Compose screens remain outside this first slice.
+- **Status:** Owner-approved chat-first product direction and screen-level UX.
+- **Date:** 2026-11-13 (owner confirmation with Telegram chat screenshot reference).
+- **Design direction:** PEYVAND's original blue/white visual identity, Persian-first, accessible RTL/LTR. The uploaded Telegram screenshot is a convention/quality reference only; do not copy Telegram artwork, exact layout, wallpaper, branding, or assets.
+- **Implementation status:** Compose conversation-list and conversation screens have been added on feature/cp-chat-002-chat-experience; exact-head CI and two-device validation remain pending. Attachment handoff uses the existing transfer screen/channel; a durable attachment bubble/timeline record is not yet implemented.
 
 ## 1. UX principles
 
-1. PEYVAND remains transfer-first; chat is a peer communication feature, not the app's primary identity.
+1. PEYVAND is chat-first: the main screen is the local conversation list, and each one-to-one conversation is the primary place to exchange text and initiate file transfer.
 2. The interface must distinguish local storage from remote delivery.
 3. Device presence is ephemeral and based on current authenticated connectivity, not last-known discovery.
 4. Chat must never imply internet-style remote delivery.
@@ -15,15 +15,16 @@
 6. Security errors require explicit explanation and must not be hidden behind generic connection failure.
 7. File transfer status remains independent from chat-message status.
 
-## 2. Navigation proposal
+## 2. Primary navigation
 
-Primary destinations:
-- **Nearby:** device discovery, send/receive, pairing, and active connection.
-- **Transfers:** transfer queue and history.
-- **Chats:** trusted-peer conversations.
-- **Settings:** language, trusted devices, privacy, local storage, and diagnostics.
+The product owner has superseded the earlier transfer-first navigation. The primary app entry is now **Chats**.
 
-The final navigation component and placement require a full-app information-architecture review. The four destinations above are a proposal, not an approved fixed tab bar.
+- **Chats (home):** trusted-peer conversation list, search, last locally stored message, pending count and truthful direct-connection state.
+- **Transfers:** active/queued/paused/completed/failed transfer activity.
+- **Nearby / Devices:** discovery, SAS pairing and preparing this device to be found.
+- **Settings:** language, trusted devices, privacy, local storage and diagnostics.
+
+A user opens Nearby only to find or prepare a peer. After successful mutual authentication and stable identity proof, PEYVAND opens that peer's conversation. Send/receive/file browsing are not separate main-home actions.
 
 ## 3. Chats list screen
 
@@ -74,6 +75,9 @@ The final navigation component and placement require a full-app information-arch
 
 ### Composer
 - Multiline text input with accessible label.
+- Attachment menu for sending user-selected images, videos, audio and arbitrary documents/APK files through the existing FILE_TRANSFER flow; receiving is explicitly prepared by the receiver.
+- Emoji control and send action.
+- Voice/video call controls are not messaging controls and remain disabled until a separately approved call subsystem exists.
 - Send action disabled while text is empty or invalid.
 - On send, persist atomically before clearing the composer or showing local-save confirmation.
 - If storage commit fails, preserve the draft and show a recoverable error.
@@ -157,6 +161,8 @@ The initial chat release must communicate these facts in Persian-first user-faci
 
 Do not use wording such as “backed up” or “safe in the cloud”. Local persistence must not be presented as off-device backup.
 
-## 11. Authorization boundary
+## 11. Authorization and implementation boundary
 
-This document is a screen-level design specification only. It does not authorize Android source code, Compose screen implementation, Gradle changes, executable mocks, or protocol implementation.
+The product owner explicitly authorized CP-CHAT-002 implementation on feature/cp-chat-002-chat-experience on 2026-11-13. This supersedes the prior CP-CHAT-001-only authorization note.
+
+The current Compose implementation provides a chat-first home, trusted-peer list, conversation timeline, composer, empty states, and a Nearby hub. Text synchronization uses a separate logical CHAT channel. Attachments currently delegate to the existing FILE_TRANSFER screen/channel and retain the existing consent/integrity pipeline; persistent file attachment message cards, inline previews and background incoming-transfer prompts remain follow-up work. Voice/video icons are disabled placeholders only.

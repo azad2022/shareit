@@ -13,16 +13,22 @@ PEYVAND competes in the same product category as SHAREit and may use blue-and-wh
 
 ### Current repository state and implementation authorization
 
-- The master product specifications are maintained on `main`. CP-004 remains isolated on `feature/cp-004-multi-item-transfer`; PR #3 remains open as Draft and must not be modified or merged by this chat checkpoint.
-- CP-CHAT-001 is separately authorized by the product owner on 2026-11-13 and is implemented on `feature/cp-chat-001-local-persistence`, based on code SHA `cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8`.
-- Continue this task only on `feature/cp-chat-001-local-persistence`. Do not switch branches or fold CP-CHAT changes into CP-004/PR #3. Read the latest skill and product requirements from `main`, then inspect the exact active branch files before each change.
-- CP-CHAT-001 scope is encrypted local text-message persistence, Room storage, an atomic durable outbox, bounded pending-message count, Android backup/device-transfer exclusion, and automated tests. It does not include chat Compose screens, network sync, persistent peer identity, group chat, read receipts, voice/video, message deletion UI, app export, cloud backup, or remote recovery.
-- The product owner's no-server boundary is absolute: no central server, backend, hosted database, account service, push service, cloud message store, relay, or operator-held chat data. Chat data remains only in the participating phones' private app data.
-- The current mTLS pairing uses a session-scoped ephemeral certificate and exposes an exclusively claimed TLS channel to the transfer coordinator. Never use that ephemeral certificate, discovery name, IP/MAC address, or socket endpoint as a persistent chat identity. A separately reviewed stable-identity and channel-multiplexing milestone is required before synchronization.
-- The 2026-11-01 CP-001/CP-002 authorization and 2026-11-04 CP-003 authorization remain valid for their existing scopes; they do not replace the separate CP-CHAT-001 scope above.
-- Never claim a feature works, a test passed, a build succeeded, or a device is supported without direct evidence from repository state or test output.
+- The master product specifications are maintained on main. CP-004 remains isolated on feature/cp-004-multi-item-transfer; PR #3 remains open as Draft and must not be modified or merged by CP-CHAT work.
+- CP-CHAT-001 was separately authorized on 2026-11-13 and implemented on feature/cp-chat-001-local-persistence, based on CP-004 code SHA cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8. It covers local encrypted text-message persistence and durable outbox only.
+- On 2026-11-13, the product owner explicitly authorized CP-CHAT-002 — persistent peer identity, direct one-to-one text-message synchronization, safe channel multiplexing, and the chat-first Compose experience — on feature/cp-chat-002-chat-experience, based on CP-CHAT-001 source head eaa8fad9649362951e9283b91b8d162a26c75488.
+- CP-CHAT-002 must remain on feature/cp-chat-002-chat-experience. Do not switch to or update main, CP-004, feature/secure-file-transfer, or PR #3. Use exact current branch files and record new decisions in ADR/checkpoint documentation.
+- CP-CHAT-002 includes a stable Android Keystore peer identity, identity proof bound to a SAS-approved mutually authenticated TLS session, trusted-peer persistence, bounded chat message/ACK frames, durable receive-before-ACK semantics, reconnect outbox replay, one-reader/one-writer TLS multiplexing for CHAT and FILE_TRANSFER, and the chat-first Compose UI that delegates attachments to the existing file-transfer subsystem.
+- The new user decision supersedes older planning text that describes PEYVAND as transfer-first or chat as a secondary destination. The app's primary home is the local conversation list; Nearby/Devices and Transfers remain supporting destinations. File selection and transfer are initiated from the conversation.
+- Voice/video call controls may appear as disabled future affordances only. Voice/video calls, voice notes, group chat, read receipts, remote deletion, cloud backup, server/relay/account/push delivery, and remote recovery remain outside this authorization.
+- Attachment bytes must remain on the existing FILE_TRANSFER logical channel and use the existing receiver-consent, integrity, and publication flow. Never run a chat reader and a transfer reader directly against the same TLS socket. Only the reviewed multiplexer owns the socket streams; logical channels have one consumer each.
+- The current mTLS certificate is ephemeral and session-scoped. Never use it, a discovery name, an IP/MAC address, or a socket endpoint as persistent peer identity. Trust a stable public-key fingerprint only after bilateral SAS approval, pinned mTLS, and a valid signature proof bound to the current session transcript.
+- The product owner's no-server boundary is absolute: no central server, backend, hosted database, account service, push service, cloud message store, relay, or operator-held chat data. Message content/history/outbox remain in the participating phones' private app data.
+- The 2026-11-01 CP-001/CP-002 and 2026-11-04 CP-003 authorizations remain valid for their original scopes only.
+- Never claim a feature works, a test passed, a build succeeded, or a device is supported without direct evidence from repository state or test output. Green CI does not substitute for physical two-device interoperability.
+- Any extension beyond the CP-CHAT-002 scope needs a separate explicit product-owner decision.
 
 The product owner's explicit, most recent decisions take precedence over stale planning-only wording in older documentation. Update the relevant checkpoint or ADR when a decision or verified implementation state changes.
+
 ## 2. Confirmed product definition
 
 ### Confirmed scope

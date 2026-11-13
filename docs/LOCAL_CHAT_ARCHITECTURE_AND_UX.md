@@ -1,6 +1,6 @@
 # PEYVAND Local Chat — Architecture and UX Design
 
-- **Status:** Owner-selected product behavior; architecture proposal; CP-CHAT-001 local persistence implementation authorized and underway.
+- **Status:** Owner-selected local-chat behavior; chat-first UX approved; CP-CHAT-001 local persistence implemented in isolation; CP-CHAT-002 implementation authorized and underway on a separate branch.
 - **Decision date:** 2026-11-13
 - **Product:** PEYVAND (پیوند)
 - **Repository:** azad2022/shareit (keep repository name unchanged)
@@ -38,13 +38,15 @@ Group file transfer remains a separate capability and does not imply group-chat 
 
 ## 3. Navigation and UX structure
 
-PEYVAND remains file-transfer first. Chat is a distinct destination, not the primary home-screen experience.
+The owner has superseded the earlier transfer-first navigation. PEYVAND is now **chat-first**: the main screen opens to trusted local conversations, and file sharing is initiated from inside a conversation.
 
-Recommended navigation:
-1. **Nearby / Home:** discovery, send, receive, pairing, and active connection.
-2. **Transfers:** active, queued, paused, completed, and failed transfer jobs.
-3. **Chats:** paired peers and local conversations.
-4. **Settings:** language, privacy, trusted devices, storage, and diagnostics.
+Primary navigation:
+1. **Chats (home):** trusted peer list, previews, pending outbox counts and truthful connection state.
+2. **Transfers:** active, queued, paused, completed and failed transfer jobs.
+3. **Nearby / Devices:** discovery, pairing and preparing this device to be found.
+4. **Settings:** language, privacy, trusted devices, storage and diagnostics.
+
+After both devices complete the existing bilateral SAS approval and pinned mTLS plus stable identity proof, the app opens the conversation with that exact peer. Discovery alone never creates a conversation or trusted peer.
 
 ### Chats list
 
@@ -58,9 +60,10 @@ Presence rules:
 ### Conversation screen
 
 Header:
-- Contact label and verified-device indicator.
-- Current direct connection state.
+- Contact/device label and verified-device indicator.
+- Current direct connection state for the exact persistent peer identity.
 - Pending synchronization count when applicable.
+- Disabled future voice/video-call affordances may be visible, but no call action is wired until a separate real-time media checkpoint is approved.
 
 Timeline:
 - Incoming/outgoing text bubbles and localized date separators.
@@ -68,9 +71,11 @@ Timeline:
 - File cards only when backed by a real transfer job or verified local artifact.
 
 Composer:
-- Text composition remains available while disconnected because messages are saved locally.
-- The interface explains that the recipient will not see the message until the devices reconnect.
-- Attachments delegate to the existing transfer flow and its receiver consent/integrity checks.
+- Text composition remains available while disconnected because messages are saved locally in the encrypted Room outbox.
+- The interface explains that the recipient will not see the message until both devices reconnect directly and authenticate the same peer identity.
+- Image/video/audio/document/APK attachments delegate to the existing FILE_TRANSFER flow over a distinct logical channel on the same authenticated TLS session. File bytes never enter chat message bodies.
+- Receiver consent, bounded streaming, byte-count/SHA-256 verification and publication continue to be owned by the existing transfer subsystem.
+- The current Compose flow launches the existing transfer UI from the conversation. Persistent attachment-message references, inline file cards/previews and incoming-transfer notification prompts remain incomplete.
 
 Suggested disconnected-state copy:
 
@@ -100,6 +105,10 @@ Both strings must be localized and populated from real state.
 ## 4. Peer identity and trust
 
 A display name, IP address, MAC address, or discovery advertisement is not a stable identity.
+
+CP-CHAT-002 now implements the first persistent identity slice: a P-256 signing key protected by Android Keystore, a SHA-256 public-key fingerprint, and a session-bound signature proof exchanged only after SAS approval and pinned mutual TLS. The public key/fingerprint and first/last authenticated timestamps are persisted in Room. CI and physical-device security validation are still required.
+
+The current default peer label is generic; user-editable aliases and device-name selection remain follow-up UX work.
 
 Proposed model:
 - Each installation/device identity uses a cryptographic key pair protected by Android Keystore where supported.
@@ -296,6 +305,10 @@ This document records the selected local-history/reconnect-sync behavior, but do
 - [CP-CHAT-001 — Local persistence](checkpoints/CP-CHAT-001-LOCAL-PERSISTENCE.md) — current implementation slice.
 - [Local Chat Screen-Level UX Specification](LOCAL_CHAT_UX_SPEC.md) — detailed screens, state/copy map, accessibility, and validation flows.
 
-## 15. Authorization boundary
+## 15. CP-CHAT-002 implementation and authorization record
 
-This is a product/architecture/UX document only. It does not authorize Kotlin source code, Compose screens, Room entities, Gradle changes, protocol implementation, or build configuration. Implementation requires a separate explicit owner instruction and a scoped checkpoint plan.
+The product owner explicitly authorized CP-CHAT-002 on 2026-11-13 on feature/cp-chat-002-chat-experience. The implementation adds the persistent identity proof, trusted-peer Room store, incoming message transaction, bounded chat message/ACK framing, exclusive CHAT/FILE_TRANSFER logical channels, chat synchronization coordinator and chat-first Compose screens.
+
+The authenticated TLS socket is owned only by AuthenticatedPeerChannelMultiplexer: one bounded reader routes complete frames and one serialized writer emits frames. The chat coordinator receives only CHAT frames; the existing file-transfer coordinator receives only FILE_TRANSFER frames. Logical channel close releases that child without directly closing the parent TLS session. Parent session failure closes both children.
+
+Current limitations: no group chat, read receipts, voice/video calls, cloud/server/relay delivery, or remote deletion. Attachments currently hand off to the existing transfer UI from the conversation; durable attachment bubbles/previews in the chat timeline and automatic incoming-transfer prompts are not yet implemented. Exact-head CI, two-device interoperability, reconnect/replay and security tests remain acceptance gates.
