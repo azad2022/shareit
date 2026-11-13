@@ -96,18 +96,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        // SAF document and directory pickers temporarily background this Activity
-        // while the receiver waits to publish items and return verified receipts.
-        val transferPhase = (startupState as? StartupState.Ready)
-            ?.fileTransferViewModel
-            ?.state
-            ?.value
-            ?.phase
-        if (transferPhase != TransferSessionPhase.AWAITING_DESTINATION &&
-            transferPhase != TransferSessionPhase.AWAITING_DESTINATION_TREE
-        ) {
-            discoveryRepository.stopMonitoring()
-        }
+        // Receive publication uses PEYVAND's app-managed destination; no SAF picker
+        // temporarily backgrounds this Activity during the current transfer flow.
+        discoveryRepository.stopMonitoring()
         networkEnvironmentRepository.stopMonitoring()
         super.onStop()
     }
