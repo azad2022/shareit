@@ -287,6 +287,7 @@
     <string name="chat_message_waiting">در انتظار اتصال مستقیم</string>
     <string name="chat_message_waiting_short">ذخیره‌شده · منتظر اتصال</string>
     <string name="chat_message_syncing">در حال همگام‌سازی</string>
+    <string name="chat_message_channel_unavailable">کانال پیام امن آماده نیست</string>
     <string name="chat_message_delivered">تحویل دستگاه</string>
     <string name="chat_notice_waiting">پیام روی این دستگاه ذخیره شد؛ هنوز به دستگاه مقابل تحویل نشده است.</string>
     <string name="chat_notice_storage_failed">ذخیره پیام انجام نشد؛ متن در کادر نوشتن باقی مانده است.</string>

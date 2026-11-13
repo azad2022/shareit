@@ -216,6 +216,8 @@ fun ChatHomeScreen(
                             preview = preview,
                             isConnected = state.connectedPeerFingerprint ==
                                 preview.peer.identityId.sha256Fingerprint,
+                            isSyncChannelReady = state.activeChatPeerFingerprint ==
+                                preview.peer.identityId.sha256Fingerprint,
                             onClick = { onOpenConversation(preview.peer.identityId) },
                         )
                     }
@@ -311,6 +313,7 @@ private fun NearbyEntryCard(onClick: () -> Unit) {
 private fun ChatConversationRow(
     preview: ChatConversationPreview,
     isConnected: Boolean,
+    isSyncChannelReady: Boolean,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -362,8 +365,12 @@ private fun ChatConversationRow(
                             last == null -> stringResource(R.string.chat_row_start_message)
                             last.direction == ChatMessageDirection.OUTGOING &&
                                 last.deliveryState == ChatMessageDeliveryState.WAITING_FOR_CONNECTION &&
-                                isConnected ->
+                                isConnected && isSyncChannelReady ->
                                 stringResource(R.string.chat_message_syncing)
+                            last.direction == ChatMessageDirection.OUTGOING &&
+                                last.deliveryState == ChatMessageDeliveryState.WAITING_FOR_CONNECTION &&
+                                isConnected ->
+                                stringResource(R.string.chat_message_channel_unavailable)
                             last.direction == ChatMessageDirection.OUTGOING &&
                                 last.deliveryState == ChatMessageDeliveryState.WAITING_FOR_CONNECTION ->
                                 stringResource(R.string.chat_message_waiting)
@@ -591,7 +598,7 @@ fun ChatConversationScreen(
                     )
                 }
             }
-        } else if (state.pendingOutboxCount > 0) {
+        } else if (state.pendingOutboxCount > 0 && state.isSyncChannelReady) {
             Text(
                 text = stringResource(R.string.chat_pending_count, state.pendingOutboxCount),
                 modifier = Modifier
