@@ -47,8 +47,13 @@ data class SecureSessionSnapshot(
     val isNewlyTrustedPeer: Boolean = false,
 )
 
+enum class AuthenticatedPeerChannelPurpose {
+    CHAT,
+    FILE_TRANSFER,
+}
+
 /**
- * Exclusive, session-bound access to the already authenticated TLS byte stream.
+ * Session-bound access to one independently routed protocol stream over the authenticated TLS session.
  * The owner must close the channel and terminate the peer connection on cancellation.
  */
 interface AuthenticatedPeerChannel : Closeable {
@@ -66,6 +71,11 @@ interface PeerSecureSessionRepository {
     /** Rejecting the SAS closes the current unauthenticated socket. */
     fun rejectPairing()
 
-    /** Claims the authenticated session channel once; null means not ready or already claimed. */
-    fun claimAuthenticatedChannel(): AuthenticatedPeerChannel?
+    /**
+     * Opens a single-consumer logical channel. The session multiplexer owns the TLS socket
+     * and guarantees that CHAT and FILE_TRANSFER frames never share competing readers.
+     */
+    fun claimAuthenticatedChannel(
+        purpose: AuthenticatedPeerChannelPurpose,
+    ): AuthenticatedPeerChannel?
 }

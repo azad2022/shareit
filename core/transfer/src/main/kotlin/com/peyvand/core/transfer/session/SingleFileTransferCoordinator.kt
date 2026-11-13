@@ -1,6 +1,7 @@
 package com.peyvand.core.transfer.session
 
 import com.peyvand.core.domain.connection.AuthenticatedPeerChannel
+import com.peyvand.core.domain.connection.AuthenticatedPeerChannelPurpose
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.domain.files.ShareItem
 import com.peyvand.core.domain.files.ShareSource
@@ -157,7 +158,7 @@ class SingleFileTransferCoordinator(
             if (selectedBatchItems.size == 1) selectedItem = selectedBatchItems.single()
         }
 
-        val channel = connectivityRepository.claimAuthenticatedChannel()
+        val channel = connectivityRepository.claimAuthenticatedChannel(AuthenticatedPeerChannelPurpose.FILE_TRANSFER)
         if (channel == null) {
             update(operation) {
                 it.copy(

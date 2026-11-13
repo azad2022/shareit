@@ -1,6 +1,8 @@
 package com.peyvand.core.connectivity.wifi
 
 import com.peyvand.core.domain.connection.AuthenticatedPeerChannel
+import com.peyvand.core.domain.connection.AuthenticatedPeerChannelPurpose
+import com.peyvand.core.transfer.session.AuthenticatedPeerChannelMultiplexer
 import com.peyvand.core.domain.chat.PeerIdentityKeyProvider
 import com.peyvand.core.domain.chat.TrustedPeerRepository
 import com.peyvand.core.domain.chat.TrustedPeerIdentityConflictException
@@ -72,7 +74,7 @@ internal class WifiDirectSecureSessionController(
     private var rawSocket: Socket? = null
     private var secureSocket: SSLSocket? = null
     private var activeSessionId: UUID? = null
-    private var authenticatedChannelClaimed = false
+    private var channelMultiplexer: AuthenticatedPeerChannelMultiplexer? = null
     private var activeKeyAlias: String? = null
     private val staleAliasCleanupJob = scope.launch { cleanupStaleKeyAliases() }
 
@@ -117,37 +119,43 @@ internal class WifiDirectSecureSessionController(
         }
     }
 
-    override fun claimAuthenticatedChannel(): AuthenticatedPeerChannel? = synchronized(lock) {
-        if (mutableState.value.status != SecureSessionStatus.AUTHENTICATED ||
-            authenticatedChannelClaimed
-        ) {
+    override fun claimAuthenticatedChannel(
+        purpose: AuthenticatedPeerChannelPurpose,
+    ): AuthenticatedPeerChannel? = synchronized(lock) {
+        if (mutableState.value.status != SecureSessionStatus.AUTHENTICATED) {
             return@synchronized null
         }
 
         val socket = secureSocket?.takeIf { it.isConnected && !it.isClosed }
             ?: return@synchronized null
         val sessionId = activeSessionId ?: return@synchronized null
-        val input = try {
-            socket.inputStream
-        } catch (_: IOException) {
-            return@synchronized null
-        }
-        val output = try {
-            socket.outputStream
-        } catch (_: IOException) {
-            return@synchronized null
-        }
-
-        authenticatedChannelClaimed = true
-        object : AuthenticatedPeerChannel {
-            override val sessionId: UUID = sessionId
-            override val inputStream = input
-            override val outputStream = output
-
-            override fun close() {
-                runCatching { socket.close() }
+        var multiplexer = channelMultiplexer
+        if (multiplexer == null) {
+            multiplexer = try {
+                AuthenticatedPeerChannelMultiplexer(
+                    sessionId = sessionId,
+                    socketInput = socket.inputStream,
+                    socketOutput = socket.outputStream,
+                    closeUnderlying = { socket.close() },
+                    onFailure = { _ ->
+                        synchronized(lock) {
+                            if (activeSessionId == sessionId &&
+                                mutableState.value.status == SecureSessionStatus.AUTHENTICATED
+                            ) {
+                                closeSessionResourcesLocked()
+                                mutableState.value = SecureSessionSnapshot(
+                                    status = SecureSessionStatus.FAILED,
+                                    failure = SecureSessionFailure.IO_ERROR,
+                                )
+                            }
+                        }
+                    },
+                ).also { channelMultiplexer = it }
+            } catch (_: IOException) {
+                return@synchronized null
             }
         }
+        multiplexer.openChannel(purpose)
     }
 
     fun stop() {
@@ -416,7 +424,6 @@ internal class WifiDirectSecureSessionController(
                 if (generation != expectedGeneration) throw CancellationException()
                 secureSocket = authenticatedTlsSocket
                 activeSessionId = sessionId
-                authenticatedChannelClaimed = false
                 rawSocket = null
                 approval = null
                 mutableState.value = SecureSessionSnapshot(
@@ -732,14 +739,15 @@ internal class WifiDirectSecureSessionController(
                 approval = null
                 rawSocket = null
                 activeSessionId = null
-                authenticatedChannelClaimed = false
-                activeKeyAlias = null
+                        activeKeyAlias = null
                 mutableState.value = snapshot
             }
         }
     }
 
     private fun closeSessionResourcesLocked() {
+        channelMultiplexer?.close()
+        channelMultiplexer = null
         closeQuietly(secureSocket)
         closeQuietly(rawSocket)
         secureSocket = null
