@@ -212,7 +212,7 @@ fun PeyvandApp(
                     subtitle = stringResource(R.string.chat_ready_discovery_subtitle),
                     role = DiscoveryRole.ADVERTISE_ONLY,
                     onBack = {
-                        peerConnectionViewModel.disconnect()
+                        chatViewModel.disconnectCurrentPeer()
                         destination = HomeDestination.NEARBY_HUB
                     },
                     peerConnectionViewModel = peerConnectionViewModel,
