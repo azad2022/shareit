@@ -145,6 +145,18 @@ Final HEX values, fonts, spacing, component shapes, shadow/elevation, and animat
 9. Change app language; conversation data and transfer data remain intact.
 10. Validate TalkBack, large font, RTL/LTR, and reduced-motion.
 
-## 10. Authorization boundary
+## 10. Local-only data and privacy disclosure
+
+The initial chat release must communicate these facts in Persian-first user-facing privacy/help copy:
+
+- Conversations and queued messages are stored only on this phone and the other participating phone after receipt.
+- PEYVAND has no chat server, account, cloud message store, relay, or operator-held conversation history.
+- Messages waiting for the other device remain on the sender's phone; they are not delivered remotely while the devices are apart.
+- Clearing app data, uninstalling the app, losing the phone, or losing a required key may permanently remove that phone's local chat history and unsent queue.
+- The initial release does not provide cloud backup, automatic device migration, or remote recovery for chat history.
+
+Do not use wording such as “backed up” or “safe in the cloud”. Local persistence must not be presented as off-device backup.
+
+## 11. Authorization boundary
 
 This document is a screen-level design specification only. It does not authorize Android source code, Compose screen implementation, Gradle changes, executable mocks, or protocol implementation.
