@@ -13,6 +13,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.peyvand.app.presentation.MainViewModel
+import com.peyvand.app.presentation.chat.ChatViewModel
+import com.peyvand.app.presentation.chat.ChatViewModelFactory
 import com.peyvand.app.presentation.connection.PeerConnectionViewModel
 import com.peyvand.app.presentation.connection.PeerConnectionViewModelFactory
 import com.peyvand.app.presentation.MainViewModelFactory
@@ -46,6 +48,7 @@ class MainActivity : AppCompatActivity() {
             val shareSelectionViewModel: ShareSelectionViewModel,
             val peerConnectionViewModel: PeerConnectionViewModel,
             val fileTransferViewModel: FileTransferViewModel,
+            val chatViewModel: ChatViewModel,
         ) : StartupState
     }
 
@@ -75,6 +78,7 @@ class MainActivity : AppCompatActivity() {
                         shareSelectionViewModel = state.shareSelectionViewModel,
                         peerConnectionViewModel = state.peerConnectionViewModel,
                         fileTransferViewModel = state.fileTransferViewModel,
+                        chatViewModel = state.chatViewModel,
                     )
                 }
             }
@@ -162,6 +166,16 @@ class MainActivity : AppCompatActivity() {
                     ),
                 )[FileTransferViewModel::class.java]
 
+                val peyvandApplication = application as PeyvandApplication
+                val chatViewModel = ViewModelProvider(
+                    this@MainActivity,
+                    ChatViewModelFactory(
+                        chatRepository = peyvandApplication.chatRepository,
+                        trustedPeerRepository = peyvandApplication.trustedPeerRepository,
+                        connectivityRepository = peerConnectivityRepository,
+                    ),
+                )[ChatViewModel::class.java]
+
                 startupState = StartupState.Ready(
                     languageViewModel = languageViewModel,
                     discoveryViewModel = discoveryViewModel,
@@ -169,6 +183,7 @@ class MainActivity : AppCompatActivity() {
                     shareSelectionViewModel = shareSelectionViewModel,
                     peerConnectionViewModel = peerConnectionViewModel,
                     fileTransferViewModel = fileTransferViewModel,
+                    chatViewModel = chatViewModel,
                 )
             } catch (cancellation: CancellationException) {
                 throw cancellation

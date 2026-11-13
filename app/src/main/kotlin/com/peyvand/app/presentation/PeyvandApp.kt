@@ -36,28 +36,33 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.peyvand.app.R
-import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
+import com.peyvand.app.presentation.chat.ChatConversationScreen
+import com.peyvand.app.presentation.chat.ChatHomeScreen
+import com.peyvand.app.presentation.chat.ChatViewModel
+import com.peyvand.app.presentation.chat.NearbyChatHubScreen
 import com.peyvand.app.presentation.connection.PeerConnectionViewModel
+import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
 import com.peyvand.app.presentation.files.FileSelectionScreen
 import com.peyvand.app.presentation.files.ShareSelectionViewModel
 import com.peyvand.app.presentation.home.DeviceDiscoveryScreen
-import com.peyvand.app.presentation.home.MainHomeScreen
 import com.peyvand.app.presentation.language.LanguageSelectionScreen
 import com.peyvand.app.presentation.network.NetworkEnvironmentViewModel
-import com.peyvand.app.presentation.transfer.FileTransferViewModel
 import com.peyvand.app.presentation.transfer.FileTransferSessionScreen
-import com.peyvand.core.domain.connection.SecureSessionStatus
+import com.peyvand.app.presentation.transfer.FileTransferViewModel
 import com.peyvand.core.domain.connection.PeerConnectionStatus
+import com.peyvand.core.domain.connection.SecureSessionStatus
 import com.peyvand.core.domain.discovery.DiscoveryRole
 
 private enum class HomeDestination {
     HOME,
-    SEND_SELECTION,
-    SEND_DISCOVERY,
-    RECEIVE_DISCOVERY,
-    FILES,
+    NEARBY_HUB,
+    CHAT_FIND_DEVICE,
+    CHAT_PREPARE_TO_BE_FOUND,
+    CHAT_CONVERSATION,
+    CHAT_ATTACHMENT_SELECTION,
+    CHAT_ATTACHMENT_SEND,
+    CHAT_ATTACHMENT_RECEIVE,
     ACTIVITY,
-    TRANSFER,
 }
 
 @Composable
@@ -68,32 +73,41 @@ fun PeyvandApp(
     shareSelectionViewModel: ShareSelectionViewModel,
     peerConnectionViewModel: PeerConnectionViewModel,
     fileTransferViewModel: FileTransferViewModel,
+    chatViewModel: ChatViewModel,
 ) {
     val uiState by languageViewModel.uiState.collectAsStateWithLifecycle()
     val connectionState by peerConnectionViewModel.state.collectAsStateWithLifecycle()
     val secureSession by peerConnectionViewModel.secureSession.collectAsStateWithLifecycle()
     val selectionState by shareSelectionViewModel.state.collectAsStateWithLifecycle()
+    val chatHomeState by chatViewModel.homeUiState.collectAsStateWithLifecycle()
+    val conversationState by chatViewModel.conversationUiState.collectAsStateWithLifecycle()
     val selectedItems = selectionState.selectedItems.values.toList()
     var destination by rememberSaveable { mutableStateOf(HomeDestination.HOME) }
 
     LaunchedEffect(
         destination,
         secureSession.status,
+        secureSession.peerIdentityId,
         connectionState.status,
         connectionState.locallyInitiated,
         selectedItems,
     ) {
-        val isDiscoveryRoute = destination == HomeDestination.SEND_DISCOVERY ||
-            destination == HomeDestination.RECEIVE_DISCOVERY
-        if (isDiscoveryRoute && secureSession.status == SecureSessionStatus.AUTHENTICATED) {
-            destination = HomeDestination.TRANSFER
-        } else if (
-            destination == HomeDestination.TRANSFER &&
+        val isChatDiscoveryRoute =
+            destination == HomeDestination.CHAT_FIND_DEVICE ||
+                destination == HomeDestination.CHAT_PREPARE_TO_BE_FOUND
+        if (isChatDiscoveryRoute && secureSession.status == SecureSessionStatus.AUTHENTICATED) {
+            if (chatViewModel.openAuthenticatedConversation() != null) {
+                destination = HomeDestination.CHAT_CONVERSATION
+            }
+        }
+        if (
+            (destination == HomeDestination.CHAT_ATTACHMENT_SEND ||
+                destination == HomeDestination.CHAT_ATTACHMENT_RECEIVE) &&
             secureSession.status == SecureSessionStatus.AUTHENTICATED &&
             connectionState.status == PeerConnectionStatus.GROUP_FORMED
         ) {
             fileTransferViewModel.prepareSession(
-                isSender = connectionState.locallyInitiated,
+                isSender = destination == HomeDestination.CHAT_ATTACHMENT_SEND,
                 selectedItems = selectedItems,
             )
         }
@@ -102,26 +116,38 @@ fun PeyvandApp(
     BackHandler(
         enabled = uiState is MainUiState.Home && destination != HomeDestination.HOME,
     ) {
-        if (destination == HomeDestination.TRANSFER) {
-            fileTransferViewModel.cancelTransfer()
-            fileTransferViewModel.leaveSession()
-            shareSelectionViewModel.clearSelection()
-            peerConnectionViewModel.disconnect()
-        } else if (
-            destination == HomeDestination.SEND_DISCOVERY ||
-            destination == HomeDestination.RECEIVE_DISCOVERY
-        ) {
-            peerConnectionViewModel.disconnect()
-        }
-        destination = when (destination) {
-            HomeDestination.SEND_DISCOVERY -> HomeDestination.SEND_SELECTION
-            HomeDestination.SEND_SELECTION,
-            HomeDestination.RECEIVE_DISCOVERY,
-            HomeDestination.FILES,
+        when (destination) {
+            HomeDestination.CHAT_CONVERSATION -> {
+                chatViewModel.clearConversationSelection()
+                destination = HomeDestination.HOME
+            }
+
+            HomeDestination.CHAT_ATTACHMENT_SELECTION -> {
+                destination = HomeDestination.CHAT_CONVERSATION
+            }
+
+            HomeDestination.CHAT_ATTACHMENT_SEND,
+            HomeDestination.CHAT_ATTACHMENT_RECEIVE,
+            -> {
+                fileTransferViewModel.cancelTransfer()
+                fileTransferViewModel.leaveSession()
+                shareSelectionViewModel.clearSelection()
+                // Release only the FILE_TRANSFER logical channel. The chat channel stays alive.
+                destination = HomeDestination.CHAT_CONVERSATION
+            }
+
+            HomeDestination.CHAT_FIND_DEVICE,
+            HomeDestination.CHAT_PREPARE_TO_BE_FOUND,
+            -> {
+                peerConnectionViewModel.disconnect()
+                destination = HomeDestination.NEARBY_HUB
+            }
+
+            HomeDestination.NEARBY_HUB,
             HomeDestination.ACTIVITY,
-            HomeDestination.TRANSFER,
-            -> HomeDestination.HOME
-            HomeDestination.HOME -> HomeDestination.HOME
+            -> destination = HomeDestination.HOME
+
+            HomeDestination.HOME -> Unit
         }
     }
 
@@ -144,65 +170,88 @@ fun PeyvandApp(
             )
 
             is MainUiState.Home -> when (destination) {
-                HomeDestination.HOME -> MainHomeScreen(
-                    onSend = { destination = HomeDestination.SEND_SELECTION },
-                    onReceive = { destination = HomeDestination.RECEIVE_DISCOVERY },
-                    onFiles = { destination = HomeDestination.FILES },
-                    onActivity = { destination = HomeDestination.ACTIVITY },
-                )
-
-                HomeDestination.SEND_SELECTION -> FileSelectionScreen(
-                    viewModel = shareSelectionViewModel,
-                    selectionMode = true,
-                    onBack = { destination = HomeDestination.HOME },
-                    onContinue = { destination = HomeDestination.SEND_DISCOVERY },
-                )
-
-                HomeDestination.FILES -> FileSelectionScreen(
-                    viewModel = shareSelectionViewModel,
-                    selectionMode = false,
-                    onBack = { destination = HomeDestination.HOME },
-                    onContinue = {},
-                )
-
-                HomeDestination.RECEIVE_DISCOVERY -> DeviceDiscoveryScreen(
-                    viewModel = discoveryViewModel,
-                    networkEnvironmentViewModel = networkEnvironmentViewModel,
-                    title = stringResource(R.string.receive_screen_title),
-                    subtitle = stringResource(R.string.receive_screen_subtitle),
-                    role = DiscoveryRole.ADVERTISE_ONLY,
-                    onBack = {
-                        peerConnectionViewModel.disconnect()
-                        destination = HomeDestination.HOME
+                HomeDestination.HOME -> ChatHomeScreen(
+                    state = chatHomeState,
+                    onOpenConversation = { identity ->
+                        chatViewModel.openConversation(identity)
+                        destination = HomeDestination.CHAT_CONVERSATION
                     },
-                    peerConnectionViewModel = peerConnectionViewModel,
+                    onOpenNearby = { destination = HomeDestination.NEARBY_HUB },
+                    onOpenTransfers = { destination = HomeDestination.ACTIVITY },
                 )
 
-                HomeDestination.SEND_DISCOVERY -> DeviceDiscoveryScreen(
+                HomeDestination.NEARBY_HUB -> NearbyChatHubScreen(
+                    onBack = { destination = HomeDestination.HOME },
+                    onFindPeer = { destination = HomeDestination.CHAT_FIND_DEVICE },
+                    onPrepareToBeFound = {
+                        destination = HomeDestination.CHAT_PREPARE_TO_BE_FOUND
+                    },
+                )
+
+                HomeDestination.CHAT_FIND_DEVICE -> DeviceDiscoveryScreen(
                     viewModel = discoveryViewModel,
                     networkEnvironmentViewModel = networkEnvironmentViewModel,
-                    title = stringResource(R.string.send_discovery_title),
-                    subtitle = stringResource(R.string.send_discovery_subtitle),
+                    title = stringResource(R.string.chat_find_discovery_title),
+                    subtitle = stringResource(R.string.chat_find_discovery_subtitle),
                     role = DiscoveryRole.BROWSE_ONLY,
                     onBack = {
                         peerConnectionViewModel.disconnect()
-                        destination = HomeDestination.SEND_SELECTION
+                        destination = HomeDestination.NEARBY_HUB
                     },
                     peerConnectionViewModel = peerConnectionViewModel,
                 )
 
-                HomeDestination.ACTIVITY -> TransferActivityScreen(
-                    onBack = { destination = HomeDestination.HOME },
+                HomeDestination.CHAT_PREPARE_TO_BE_FOUND -> DeviceDiscoveryScreen(
+                    viewModel = discoveryViewModel,
+                    networkEnvironmentViewModel = networkEnvironmentViewModel,
+                    title = stringResource(R.string.chat_ready_discovery_title),
+                    subtitle = stringResource(R.string.chat_ready_discovery_subtitle),
+                    role = DiscoveryRole.ADVERTISE_ONLY,
+                    onBack = {
+                        peerConnectionViewModel.disconnect()
+                        destination = HomeDestination.NEARBY_HUB
+                    },
+                    peerConnectionViewModel = peerConnectionViewModel,
                 )
 
-                HomeDestination.TRANSFER -> FileTransferSessionScreen(
+                HomeDestination.CHAT_CONVERSATION -> ChatConversationScreen(
+                    state = conversationState,
+                    onBack = {
+                        chatViewModel.clearConversationSelection()
+                        destination = HomeDestination.HOME
+                    },
+                    onConnect = { destination = HomeDestination.NEARBY_HUB },
+                    onSendAttachment = {
+                        shareSelectionViewModel.clearSelection()
+                        destination = HomeDestination.CHAT_ATTACHMENT_SELECTION
+                    },
+                    onPrepareReceive = {
+                        shareSelectionViewModel.clearSelection()
+                        destination = HomeDestination.CHAT_ATTACHMENT_RECEIVE
+                    },
+                    onSendMessage = chatViewModel::sendMessage,
+                )
+
+                HomeDestination.CHAT_ATTACHMENT_SELECTION -> FileSelectionScreen(
+                    viewModel = shareSelectionViewModel,
+                    selectionMode = true,
+                    onBack = { destination = HomeDestination.CHAT_CONVERSATION },
+                    onContinue = { destination = HomeDestination.CHAT_ATTACHMENT_SEND },
+                )
+
+                HomeDestination.CHAT_ATTACHMENT_SEND,
+                HomeDestination.CHAT_ATTACHMENT_RECEIVE,
+                -> FileTransferSessionScreen(
                     viewModel = fileTransferViewModel,
                     onBack = {
                         fileTransferViewModel.leaveSession()
                         shareSelectionViewModel.clearSelection()
-                        peerConnectionViewModel.disconnect()
-                        destination = HomeDestination.HOME
+                        destination = HomeDestination.CHAT_CONVERSATION
                     },
+                )
+
+                HomeDestination.ACTIVITY -> TransferActivityScreen(
+                    onBack = { destination = HomeDestination.HOME },
                 )
             }
         }
