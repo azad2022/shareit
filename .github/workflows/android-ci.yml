@@ -51,6 +51,7 @@ jobs:
         run: |
           ./gradlew --no-daemon --stacktrace --continue \
             :core:domain:testDebugUnitTest \
+            :core:data:testDebugUnitTest \
             :core:storage:testDebugUnitTest \
             :app:lintDebug \
             :core:data:lintDebug \
@@ -138,7 +139,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: ./gradlew --no-daemon --stacktrace :core:storage:connectedDebugAndroidTest :core:connectivity:connectedDebugAndroidTest
+          script: ./gradlew --no-daemon --stacktrace :core:data:connectedDebugAndroidTest :core:storage:connectedDebugAndroidTest :core:connectivity:connectedDebugAndroidTest
 
       - name: Upload instrumented test reports
         if: always()
@@ -146,6 +147,9 @@ jobs:
         with:
           name: android-storage-and-mtls-instrumented-api-${{ matrix.api-level }}
           path: |
+            core/data/build/outputs/androidTest-results/**
+            core/data/build/reports/androidTests/**
+            core/data/schemas/**
             core/storage/build/outputs/androidTest-results/**
             core/storage/build/reports/androidTests/**
             core/connectivity/build/outputs/androidTest-results/**
