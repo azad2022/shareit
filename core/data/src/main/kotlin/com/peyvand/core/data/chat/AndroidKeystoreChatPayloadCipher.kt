@@ -3,6 +3,7 @@ package com.peyvand.core.data.chat
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.security.GeneralSecurityException
+import java.security.InvalidKeyException
 import java.security.KeyStore
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
@@ -90,6 +91,8 @@ class AndroidKeystoreChatPayloadCipher(
             return EncryptedChatPayload(nonce = nonce, ciphertext = ciphertext)
         } catch (exception: ChatPayloadEncryptionException) {
             throw exception
+        } catch (exception: InvalidKeyException) {
+            throw ChatEncryptionKeyUnavailableException(exception)
         } catch (exception: GeneralSecurityException) {
             throw ChatPayloadEncryptionException(exception)
         }
@@ -112,6 +115,8 @@ class AndroidKeystoreChatPayloadCipher(
             return cipher.doFinal(ciphertext)
         } catch (exception: AEADBadTagException) {
             throw ChatPayloadIntegrityException(exception)
+        } catch (exception: InvalidKeyException) {
+            throw ChatEncryptionKeyUnavailableException(exception)
         } catch (exception: GeneralSecurityException) {
             throw ChatPayloadIntegrityException(exception)
         }
