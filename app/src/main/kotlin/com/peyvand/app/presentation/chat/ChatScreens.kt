@@ -474,7 +474,7 @@ fun ChatConversationScreen(
     LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty()) {
             // At most one localized date separator precedes each message.
-            listState.animateScrollToItem((state.messages.size * 2) - 1)
+            listState.animateScrollToItem(state.messages.lastIndex)
         }
     }
 
@@ -886,7 +886,7 @@ private fun ChatConversationEmptyCard(modifier: Modifier = Modifier) {
         modifier = modifier
             .padding(horizontal = 34.dp)
             .widthIn(max = 390.dp),
-        color = Color(0xF5FFFFFF),
+        color = PeyvandColors.Surface.copy(alpha = 0.96f),
         shape = RoundedCornerShape(26.dp),
         shadowElevation = 3.dp,
     ) {
