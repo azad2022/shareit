@@ -2,7 +2,7 @@
 
 - **Status:** Product definition / planning. No application implementation is authorized yet.
 - **Repository:** `azad2022/shareit` (private), default branch `main`.
-- **Last decision update:** 2026-11-01.
+- **Last decision update:** 2026-11-13.
 
 ## 1. Product vision
 
@@ -17,6 +17,7 @@ Build PEYVAND (پیوند), a premium-quality, native Android application for fa
 | Core connectivity | Offline, local peer-to-peer; no central server required |
 | Primary wireless method | Wi-Fi Direct |
 | Transfer modes | One-to-one and one sender to multiple receivers |
+| Chat behavior | Local chat history persisted on-device; pending messages synchronize only after a later direct connection and peer re-authentication; no server, cloud, or relay delivery |
 | Content | User-selected files/media and eligible app packages (APK/split APK where supported) |
 | Performance | Competitive, SHAREit-class performance where hardware and conditions allow; benchmark rather than promise universal parity |
 | Product priorities | Security, integrity, reliability, compatibility, maintainability |
@@ -51,6 +52,20 @@ Two devices discover, authenticate, explicitly approve the session, and exchange
 A sender selects multiple discovered receivers and a set of files. Each receiver must have independent consent, progress, cancellation, failure, resume, and integrity status. Group transfer must not corrupt or block unrelated receiver sessions. Radio capacity is shared; per-receiver throughput is not assumed to equal one-to-one throughput.
 
 Simultaneous multi-sender exchange among all group members is not confirmed for the initial group-transfer scope and requires a separate product decision.
+
+### 4.3 Local chat
+
+The product owner selected local chat with durable local history and synchronization when the same devices reconnect.
+
+- Persist an outgoing message locally before presenting it as saved.
+- Retain unsynchronized messages in a durable local outbox across normal app/process restarts.
+- Synchronize only over a direct local connection after authenticating the previously paired peer.
+- Do not use public internet, accounts, cloud storage, backend services, push delivery, or remote relays for chat delivery.
+- Distinguish local save, waiting for connection, synchronization, and durable remote receipt. A message is not delivered merely because it is stored locally or written to a socket.
+- Do not promise delivery while devices are apart, after app data is cleared, or when Android prevents the application from running.
+- Group chat, read receipts, voice/video communication, remote deletion, and cloud backup behavior are not approved by this decision and require separate design/approval.
+
+See [`LOCAL_CHAT_ARCHITECTURE_AND_UX.md`](LOCAL_CHAT_ARCHITECTURE_AND_UX.md) and the chat ADRs under [`decisions/`](decisions/) for detailed architecture and unresolved decisions.
 
 ## 5. Performance and integrity
 
