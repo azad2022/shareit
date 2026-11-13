@@ -21,13 +21,13 @@ App-private storage protects access through Android's application sandbox but mu
 
 ## Proposed local data-protection measures
 
-1. Encrypt message history and outbox data at rest using a reviewed, maintained implementation. Do not invent cryptography or choose an algorithm/library before dependency and platform review.
+1. Encrypt message bodies at rest using a reviewed, maintained AEAD implementation. Treat database metadata protection as a separate requirement; do not imply that field-level payload encryption is equivalent to full database/file encryption. Do not invent cryptography or choose an algorithm/library before dependency and platform review.
 2. Protect encryption keys through Android Keystore-backed key protection where supported. Detect actual device capability; do not assume hardware-backed or StrongBox protection on all devices.
 3. Keep deletion local in the first release. Do not implement “delete for everyone” without a separate tombstone and conflict-resolution design.
 4. Define a bounded retention/storage policy and show users when cleanup is needed. Never silently delete unsent messages to reclaim space.
 5. On “forget peer”, stop future synchronization immediately. Retention or deletion of that peer's local history still needs an explicit product decision.
 
-The no-server/no-external-retention boundary is accepted from the product owner's clarification. The encryption, retention, key-loss, and local deletion details remain proposals until reviewed.
+The no-server/no-external-retention boundary is accepted from the product owner's clarification. Message-body encryption is implemented in CP-CHAT-001 but still requires CI/device verification. Full database metadata encryption, retention, key-loss, and local deletion details remain proposals until reviewed.
 
 ## UX implications
 
