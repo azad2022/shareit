@@ -20,8 +20,23 @@ interface ChatConversationDao {
     )
     fun observeByPeerFingerprint(peerFingerprint: String): Flow<ChatConversationEntity?>
 
+    @Query("SELECT * FROM chat_conversations ORDER BY last_activity_at_ms DESC")
+    fun observeAll(): Flow<List<ChatConversationEntity>>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertIfAbsent(conversation: ChatConversationEntity)
+
+    @Query(
+        "UPDATE chat_conversations SET last_peer_sequence = :nextSequence, " +
+            "last_activity_at_ms = :activityAtMillis " +
+            "WHERE id = :conversationId AND last_peer_sequence = :expectedSequence",
+    )
+    suspend fun advancePeerSequence(
+        conversationId: String,
+        expectedSequence: Long,
+        nextSequence: Long,
+        activityAtMillis: Long,
+    ): Int
 
     @Query(
         "UPDATE chat_conversations " +

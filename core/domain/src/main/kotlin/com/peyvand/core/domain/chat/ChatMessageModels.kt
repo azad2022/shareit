@@ -159,6 +159,19 @@ interface ChatRepository {
         limit: Int = 32,
     ): List<ChatMessage>
 
+    /**
+     * Stores a remote message atomically and only returns after durable commit.
+     * Duplicate message IDs are accepted only when their immutable metadata matches.
+     */
+    suspend fun acceptIncomingMessage(
+        peerIdentityId: PeerIdentityId,
+        messageId: ChatMessageId,
+        senderSequence: Long,
+        observedPeerSequence: Long,
+        createdAtEpochMillis: Long,
+        body: String,
+    ): ChatMessage
+
     suspend fun confirmDeliveredAfterAuthenticatedReceipt(
         peerIdentityId: PeerIdentityId,
         messageId: ChatMessageId,

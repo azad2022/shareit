@@ -27,6 +27,11 @@ import kotlinx.coroutines.withContext
 
 class ChatLocalDataCorruptionException(message: String) : IllegalStateException(message)
 
+class ChatMessageSequenceException(
+    val expected: Long,
+    val received: Long,
+) : IllegalStateException("Expected incoming chat sequence $expected but received $received.")
+
 class RoomChatRepository(
     private val database: ChatDatabase,
     private val cipher: AndroidKeystoreChatPayloadCipher = AndroidKeystoreChatPayloadCipher(),
@@ -164,6 +169,104 @@ class RoomChatRepository(
                     createdAtEpochMillis = createdAtEpochMillis,
                     body = body,
                     deliveryState = ChatMessageDeliveryState.WAITING_FOR_CONNECTION,
+                )
+            }
+        }
+    }
+
+    override suspend fun acceptIncomingMessage(
+        peerIdentityId: PeerIdentityId,
+        messageId: ChatMessageId,
+        senderSequence: Long,
+        observedPeerSequence: Long,
+        createdAtEpochMillis: Long,
+        body: String,
+    ): ChatMessage {
+        ChatMessageRules.validateBody(body)
+        require(createdAtEpochMillis >= 0L)
+        require(senderSequence > 0L)
+        require(observedPeerSequence >= 0L)
+        require(observedPeerSequence < Long.MAX_VALUE)
+        require(runCatching { UUID.fromString(messageId.value) }.isSuccess)
+
+        return withContext(ioDispatcher) {
+            database.withTransaction {
+                val conversation = getOrCreateConversation(peerIdentityId, createdAtEpochMillis)
+                val existing = messages.findById(messageId.value)
+                if (existing != null) {
+                    if (existing.conversationId != conversation.id ||
+                        existing.direction != PEER_SENDER ||
+                        existing.senderSequence != senderSequence ||
+                        existing.observedPeerSequence != observedPeerSequence ||
+                        existing.createdAtMillis != createdAtEpochMillis
+                    ) {
+                        throw ChatLocalDataCorruptionException(
+                            "A duplicate chat message ID has conflicting immutable metadata.",
+                        )
+                    }
+                    return@withTransaction existing.toDomain(
+                        conversation,
+                        requireExistingEncryptionKey(),
+                    )
+                }
+
+                if (senderSequence != conversation.lastPeerSequence + 1L) {
+                    throw ChatMessageSequenceException(
+                        expected = conversation.lastPeerSequence + 1L,
+                        received = senderSequence,
+                    )
+                }
+                if (observedPeerSequence >= conversation.nextLocalSequence) {
+                    throw ChatLocalDataCorruptionException(
+                        "The remote message acknowledges a local sequence that was never allocated.",
+                    )
+                }
+
+                val key = encryptionKeyForWrite()
+                val aad = associatedData(
+                    peerIdentityFingerprint = peerIdentityId.sha256Fingerprint,
+                    conversationId = conversation.id,
+                    messageId = messageId.value,
+                    direction = PEER_SENDER,
+                    senderSequence = senderSequence,
+                    observedPeerSequence = observedPeerSequence,
+                    createdAtEpochMillis = createdAtEpochMillis,
+                )
+                val encrypted = body.toByteArray(StandardCharsets.UTF_8).useAndErase { plaintext ->
+                    cipher.encrypt(plaintext, aad, key)
+                }
+                messages.insert(
+                    ChatMessageEntity(
+                        id = messageId.value,
+                        conversationId = conversation.id,
+                        direction = PEER_SENDER,
+                        senderSequence = senderSequence,
+                        observedPeerSequence = observedPeerSequence,
+                        createdAtMillis = createdAtEpochMillis,
+                        payloadNonce = encrypted.nonce,
+                        payloadCiphertext = encrypted.ciphertext,
+                        deliveryState = STATE_RECEIVED,
+                    ),
+                )
+                val advanced = conversations.advancePeerSequence(
+                    conversationId = conversation.id,
+                    expectedSequence = conversation.lastPeerSequence,
+                    nextSequence = senderSequence,
+                    activityAtMillis = maxOf(conversation.lastActivityAtMillis, createdAtEpochMillis),
+                )
+                check(advanced == 1) {
+                    "The remote chat sequence changed unexpectedly inside its transaction."
+                }
+                ChatMessage(
+                    id = messageId,
+                    conversationId = ChatConversationId(conversation.id),
+                    peerIdentityId = peerIdentityId,
+                    direction = ChatMessageDirection.INCOMING,
+                    senderSequence = senderSequence,
+                    observedPeerSequence = observedPeerSequence,
+                    createdAtEpochMillis = createdAtEpochMillis,
+                    body = body,
+                    deliveryState = ChatMessageDeliveryState.RECEIVED,
                 )
             }
         }
@@ -385,7 +488,7 @@ class RoomChatRepository(
 
     companion object {
         private const val MIN_QUERY_LIMIT = 1
-        private const val MAX_QUERY_LIMIT = 100
+        private const val MAX_QUERY_LIMIT = 1024
         private const val AAD_VERSION = "peyvand-chat-payload-v1"
         private const val LOCAL_SENDER = 0
         private const val PEER_SENDER = 1
