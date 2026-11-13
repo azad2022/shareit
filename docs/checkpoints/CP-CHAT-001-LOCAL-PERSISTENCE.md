@@ -4,7 +4,8 @@
 - **Branch:** `feature/cp-chat-001-local-persistence`
 - **Base:** CP-004 branch code at `cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8`
 - **Product authorization:** Explicitly granted by the product owner on 2026-11-13 for this local-persistence implementation slice only.
-- **Objective:** Persist one-to-one text messages exclusively on the participating Android devices, encrypted at rest, with an atomic durable outgoing outbox. No network or UI implementation is included in this checkpoint.
+- **Objective:** Persist one-to-one text messages exclusively on participating Android devices, encrypt message bodies at rest, and atomically maintain a durable outgoing outbox. No network or UI implementation is included.
+- **Latest implementation head:** `2bb8cd51082428b4c1223cf38260d2672ca0dfb4` (CI-validated; documentation updates follow this code SHA).
 
 ## 1. Implemented scope
 
@@ -16,7 +17,7 @@
 - Atomic outgoing enqueue transaction: allocate local sequence, encrypt, insert message row, insert outbox row and advance sequence in one Room transaction. Repository returns only after transaction completion.
 - Idempotent local transition to Delivered after the synchronization layer validates a durable receiver receipt; no socket-write shortcut exists in this repository.
 - Initial bounded outbox quota: 1,024 pending outgoing messages per peer. This is an engineering guardrail; product retention/deletion policy remains separate and is not silently implemented.
-- Android manifest disables backup and adds exclusions for legacy cloud backup plus Android 12+ cloud-backup and device-transfer rules.
+- Android manifest sets `allowBackup=false` and references legacy backup rules plus Android 12+ data-extraction rules. The current rules exclude root, files, databases, shared preferences and external app data for both cloud backup and device transfer; this is app-wide, not chat-only.
 - App exposes the local ChatRepository lazily. Accessing the repository does not open a socket, discover peers, or connect to any external system.
 - CI extended to run data-module unit/lint and Android instrumentation tests on API 26 and API 36; reports and Room schemas are included in test artifacts.
 
@@ -47,27 +48,41 @@ Do not present CP-CHAT-001 as a functioning end-to-end chat feature until the id
 
 ## 4. Automated tests added
 
-- Domain JVM tests: fingerprint normalization/validation, Persian/multiline acceptance, blank message rejection, UTF-8 byte-size limit, forbidden control characters, and malformed surrogate rejection.
-- Android instrumentation tests in `:core:data`: encrypted payload storage, database reopen/outbox persistence, sequence monotonicity, receipt behavior, wrong-peer isolation, missing-key fail-closed behavior, oversized message rejection, and ciphertext tamper detection.
-- CI matrix: Android API 26 and API 36 instrumentation.
+- Domain JVM tests (`ChatMessageRulesTest`, 8 cases): fingerprint normalization/validation, Persian and multiline acceptance, blank/oversized input rejection, exact UTF-8 limit, forbidden controls and malformed surrogate rejection.
+- Room/Keystore instrumentation (`RoomChatRepositoryTest`, 16 cases per API): encrypted payload storage, database reopen/outbox persistence, monotonic sequences, receipt behavior, wrong-peer isolation, missing-key fail-closed behavior, oversized input rejection, ciphertext/metadata/peer/sequence tampering, unsupported key version, missing crypto metadata, and temporary plaintext byte-array cleanup on success and exception.
+- Adjacent Android instrumentation: storage publication and mTLS loopback suites on API 26 and API 36.
+- CI matrix: Android API 26 and API 36 emulator instrumentation. Emulator evidence is not physical-device evidence.
 
 ## 5. Validation evidence
 
-- **Exact-head source:** commit `0d9a927e878e5d1af92a6f6de18b6852dec00172` on `feature/cp-chat-001-local-persistence`; branch contents were fetched from GitHub before this update.
-- **Exact-head workflow:** GitHub Actions run [#408](https://github.com/azad2022/shareit/actions/runs/43445471038) used this exact SHA. The overall workflow conclusion is **failure**; the results below distinguish the passing CP-CHAT tests from unrelated baseline failures.
-- **Domain JVM tests:** `ChatMessageRulesTest` — **8 tests, 0 failures, 0 errors, 0 skipped**. The exact 4 KiB UTF-8 boundary cases for Persian, emoji and ASCII passed.
-- **Room/Keystore instrumentation, API 26:** `RoomChatRepositoryTest` — **9 tests, 0 failures, 0 errors, 0 skipped**. This includes encrypted payload storage, database reopen/outbox persistence, monotonic sequences, peer isolation, authenticated receipt handling, bounded outbox behavior, missing-key fail-closed behavior, oversized-message rejection and ciphertext tamper detection.
-- **Room/Keystore instrumentation, API 36:** the same **9 tests, 0 failures, 0 errors, 0 skipped**. The data instrumentation task completed on both API levels because the workflow uses Gradle `--continue`.
-- **mTLS instrumentation:** API 36 — **4 tests passed, 0 failures, 0 skips**, including TLS 1.2, TLS 1.3, Android Keystore ECDSA signing and rejection of an incorrect peer fingerprint. API 26 — **3 passed, 0 failed, 1 conditional skip** for TLS 1.3 when unsupported by the runtime; TLS 1.2, Keystore signing and incorrect-fingerprint rejection passed.
-- **Existing Storage instrumentation:** API 36 — **2 tests passed**. API 26 — both existing `AndroidPeyvandDestinationPublisherTest` cases failed before reaching their assertions with `NoSuchMethodError: UiAutomation.grantRuntimePermission` at test line 64. This is a test-platform/API compatibility failure in `:core:storage`, not a CP-CHAT data test.
-- **General Build/Lint job:** failed outside this checkpoint. `:app:compileDebugKotlin` reports unresolved `AWAITING_DESTINATION` and `AWAITING_DESTINATION_TREE` references in `MainActivity.kt:106-107`; `:core:storage:lintDebug` reports an unguarded API-29 `MediaStore.Downloads.getContentUri` call at `AndroidPeyvandDestinationPublisher.kt:209` while minSdk is 26. These app/transfer baseline files are not modified by CP-CHAT-001.
-- **API 26 instrumentation job:** overall failure is due to the two Storage tests above; the Room and connectivity instrumentation tasks did execute and produced reports.
-- **API 36 instrumentation job:** completed successfully; Room, Storage and connectivity reports were uploaded.
-- **Debug APK:** none was produced by run #408 because the general build job failed. Do not install or describe an artifact for this run.
-- **Physical devices:** not yet tested for this local chat persistence slice. Emulator instrumentation does not verify OEM Keystore behavior, backup/device-transfer exclusions or physical-device key invalidation.
-- **Security review:** source-level review remains distinct from Android runtime/physical-device validation. No security certification or release readiness is claimed.
+### 5.1 Historical baseline — CI run #408
 
-The `--continue` change is effective: a failed independent Storage instrumentation task no longer prevents the Room chat and connectivity tasks from executing. It does not suppress failures or turn the overall API 26 job green.
+- Earlier exact-head source SHA: `0d9a927e878e5d1af92a6f6de18b6852dec00172`; workflow [#408](https://github.com/azad2022/shareit/actions/runs/43445471038) failed due to unrelated app/Storage baseline failures. Its results are historical and superseded for current acceptance by run #43477138714 below.
+- At that point the chat-specific suites were 8/8 domain and 9/9 Room tests per API, but the general build and API 26 Storage instrumentation were red. Those old failures were subsequently repaired on this isolated branch; do not treat #408 as the current result.
+
+### 5.2 Latest exact-head validation — CI run #43477138714
+
+- **Source SHA:** `2bb8cd51082428b4c1223cf38260d2672ca0dfb4`, exact current code head at time of validation.
+- **Workflow:** [GitHub Actions #43477138714](https://github.com/azad2022/shareit/actions/runs/43477138714) — overall conclusion **success**. All three jobs passed: Build/unit tests/lint, Android API 26 instrumentation, Android API 36 instrumentation.
+- **JVM unit tests:** **148 passed, 0 failed, 0 skipped** across the configured domain, storage and transfer test tasks. `ChatMessageRulesTest` specifically passed **8/8**.
+- **Chat Room/Keystore instrumentation:** `RoomChatRepositoryTest` passed **16/16** on API 26 and independently **16/16** on API 36; both reports show zero failures, errors or skips.
+- The five new tests added on SHA `2bb8cd5` passed on both API levels:
+  - `changingSenderSequenceFailsIntegrityCheck`
+  - `missingCryptoMetadataWithPersistedMessagesFailsClosed`
+  - `unsupportedCryptoKeyVersionFailsClosed`
+  - `temporaryPlaintextBytesAreErasedAfterSuccessfulUse`
+  - `temporaryPlaintextBytesAreErasedWhenUseFails`
+- **Storage instrumentation:** `AndroidPeyvandDestinationPublisherTest` passed **2/2** on API 26 and **2/2** on API 36. This resolves the earlier API 26 test-runner failure on this branch; it does not constitute a physical OEM storage-provider test.
+- **mTLS instrumentation:** API 26 reports 4 tests, 0 failures and 1 conditional skip (TLS 1.3 when the runtime does not support it); API 36 reports **4/4** with no skip. TLS 1.2, Keystore ECDSA signing and pinned-peer rejection passed on both.
+- **Lint:** 0 errors. The combined reports contain 16 warnings: 13 in `:app`, one in `:core:connectivity`, one in `:core:designsystem`, and one in `:core:storage`. `:core:data`, `:core:domain` and `:core:transfer` report no lint issues. Relevant warnings include the custom `X509TrustManager` review warning, package-visibility guidance, target-SDK/manifest-attribute warnings, and an obsolete library lint-check warning. CI success does not mean these warnings were waived or proven harmless.
+- **Debug APK:** produced successfully; APK size **14,720,844 bytes**. SHA-256: `6944412768a0af66945888adaa68b98e2c413423d94c1956fd70699716c2a33c`. This is a standard Debug build, not a Release artifact.
+- **Artifacts:** [Debug APK ZIP — artifact 14063403573](https://github.com/azad2022/shareit/actions/runs/43477138714/artifacts/14063403573); [API 26 instrumented reports — artifact 14064365761](https://github.com/azad2022/shareit/actions/runs/43477138714/artifacts/14064365761); [API 36 instrumented reports — artifact 14063811912](https://github.com/azad2022/shareit/actions/runs/43477138714/artifacts/14063811912); [build/unit/lint reports — artifact 14064585146](https://github.com/azad2022/shareit/actions/runs/43477138714/artifacts/14064585146).
+- **Environment:** Android instrumentation ran on CI emulators at API 26 and API 36. No physical handset, OEM Keystore, physical backup/device-transfer or real two-device chat synchronization test was part of this workflow.
+- **Evidence integrity:** the uploaded API 26/API 36 XML reports were inspected directly. The reported Room, Storage and connectivity test counts above come from those XML files, not estimates from job status alone. The APK sidecar checksum was also independently recalculated from the extracted APK and matched.
+
+### 5.3 Acceptance interpretation
+
+The automated local-persistence and emulator acceptance cases passed on the exact SHA above. CP-CHAT-001 nevertheless remains `IN_PROGRESS`: physical-device Keystore/key-invalidation and backup/device-transfer behavior, complete security review, and data-lifecycle decisions are still open. No release readiness or full end-to-end chat claim is made.
 
 ## 6. Risks and open decisions
 
@@ -80,9 +95,11 @@ The `--continue` change is effective: a failed independent Storage instrumentati
 
 ## 7. Next gate
 
-1. **Completed:** run API 26/API 36 instrumentation with Gradle `--continue`; both isolated Room chat reports are now available.
-2. **Completed for automated chat tests:** all 9 Room/Keystore instrumentation tests passed on API 26 and API 36, and all 8 chat domain tests passed. No chat-specific automated test failure remains in run #408.
-3. Keep the unrelated app compile and Storage Lint/API 26 instrumentation failures visible. Do not patch those files from this checkpoint; they need a separately scoped CP-004/baseline repair.
-4. Perform the remaining physical-device validation for Keystore key availability/invalidation and backup/device-transfer exclusion behavior on representative supported OEM devices. Record device/API/build evidence; do not infer this from emulator results.
-5. Finish the source-level security review and record any remaining findings before considering CP-CHAT-001 complete.
-6. Only after this checkpoint is accepted, move to the separately reviewed stable-peer-identity, re-pairing and authenticated channel-multiplexing milestone. That work is not authorized by CP-CHAT-001 and has not started.
+1. Perform repeatable physical-device validation on at least two Android OEMs. Record exact handset model, Android/API level, build fingerprint, installed APK SHA-256 and test result.
+2. On physical devices, verify Keystore persistence through process death/restart, behavior after key invalidation or loss, and fail-closed recovery. Do not claim StrongBox/hardware backing unless queried and evidenced on each device.
+3. Verify cloud-backup and device-to-device-transfer exclusion behavior on physical devices for the supported target-SDK/OEM matrix. Current exclusions are app-wide and must not be mistaken for chat-only rules.
+4. Complete a focused review of encryption/key lifecycle, plaintext metadata exposure, memory lifetime, Room WAL/journal handling, and the `CustomX509TrustManager` lint warning. The temporary byte-array wipe is best-effort only; immutable `String` values and runtime/provider copies cannot be guaranteed erased.
+5. Obtain product decisions for local history retention, storage quota, local deletion, and “forget peer” behavior. No automatic history pruning or silent deletion is implemented.
+6. Keep stable peer identity, re-pairing, synchronization protocol, channel multiplexing and Compose chat UI outside this checkpoint. They require their own reviewed ADR/milestone and explicit owner authorization.
+
+CP-CHAT-001 may be considered for acceptance only after the physical validation and review gates above have reproducible evidence. Do not change status to `PASSED` based solely on emulator CI.
