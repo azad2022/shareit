@@ -38,6 +38,7 @@ class ChatSessionCoordinator(
 ) : AutoCloseable {
 
     private val outputMutex = Mutex()
+    private val outgoingQueueMutex = Mutex()
     private val closed = AtomicBoolean(false)
     private val failureReported = AtomicBoolean(false)
     private val sentMessageIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -75,36 +76,59 @@ class ChatSessionCoordinator(
         }
     }
 
-    /** The message must already be durably enqueued before this method is called. */
+    /**
+     * The message must already be durably enqueued. Serialize queue draining by sender sequence
+     * so concurrently scheduled sends or reconnect replay cannot put sequence N+1 on the wire
+     * before N. The Room outbox is the ordering source of truth.
+     */
     suspend fun sendPersistedMessage(message: ChatMessage) =
         kotlinx.coroutines.withContext(Dispatchers.IO) {
             check(!closed.get()) { "Chat session is closed." }
             require(message.peerIdentityId == peerIdentityId)
             require(message.direction == ChatMessageDirection.OUTGOING)
-            if (!sentMessageIds.add(message.id.value)) return@withContext
 
-            try {
-                val frame = ChatMessageFrameCodec.encodeMessage(
-                    sessionId = channel.sessionId,
-                    message = ChatWireMessage(
-                        messageId = message.id,
-                        senderSequence = message.senderSequence,
-                        observedPeerSequence = message.observedPeerSequence,
-                        createdAtEpochMillis = message.createdAtEpochMillis,
-                        body = message.body,
-                    ),
+            outgoingQueueMutex.withLock {
+                check(!closed.get()) { "Chat session is closed." }
+                val pending = repository.loadPendingOutgoingMessages(
+                    peerIdentityId = peerIdentityId,
+                    limit = CHAT_OUTBOX_BATCH_LIMIT,
                 )
-                outputMutex.withLock {
-                    check(!closed.get()) { "Chat session is closed." }
-                    TransferFrameCodec.write(frame, channel.outputStream)
-                    channel.outputStream.flush()
-                }
-            } catch (exception: Exception) {
-                sentMessageIds.remove(message.id.value)
-                if (exception !is CancellationException) fail(exception)
-                throw exception
+                if (pending.none { it.id == message.id }) return@withLock
+
+                pending.asSequence()
+                    .filter { it.senderSequence <= message.senderSequence }
+                    .sortedBy { it.senderSequence }
+                    .forEach { queued ->
+                        currentCoroutineContext().ensureActive()
+                        sendOnePersistedMessage(queued)
+                    }
             }
         }
+
+    private suspend fun sendOnePersistedMessage(message: ChatMessage) {
+        if (!sentMessageIds.add(message.id.value)) return
+        try {
+            val frame = ChatMessageFrameCodec.encodeMessage(
+                sessionId = channel.sessionId,
+                message = ChatWireMessage(
+                    messageId = message.id,
+                    senderSequence = message.senderSequence,
+                    observedPeerSequence = message.observedPeerSequence,
+                    createdAtEpochMillis = message.createdAtEpochMillis,
+                    body = message.body,
+                ),
+            )
+            outputMutex.withLock {
+                check(!closed.get()) { "Chat session is closed." }
+                TransferFrameCodec.write(frame, channel.outputStream)
+                channel.outputStream.flush()
+            }
+        } catch (exception: Exception) {
+            sentMessageIds.remove(message.id.value)
+            if (exception !is CancellationException) fail(exception)
+            throw exception
+        }
+    }
 
     private suspend fun readLoop() {
         while (!closed.get()) {
@@ -156,6 +180,7 @@ class ChatSessionCoordinator(
                             "The peer acknowledged an unknown or mismatched chat message.",
                         )
                     }
+                    sentMessageIds.remove(ack.messageId.value)
                     onOutgoingDelivered(ack.messageId, ack.senderSequence)
                 }
 
