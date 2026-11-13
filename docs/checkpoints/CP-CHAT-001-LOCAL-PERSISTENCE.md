@@ -53,11 +53,17 @@ Do not present CP-CHAT-001 as a functioning end-to-end chat feature until the id
 
 ## 5. Validation evidence
 
-- **Local Gradle:** Not run. The current execution environment failed to resolve github.com via DNS, so the repository could not be cloned for local Gradle execution.
-- **GitHub Actions:** workflow updated to include the new data-module tasks. Intermediate runs #373–#390 were generated while commits were being pushed; they were cancelled or reference earlier source SHAs. No run is yet accepted as exact-head evidence for this checkpoint.
-- **APK:** Not produced or claimed for the final CP-CHAT-001 source SHA.
-- **Physical devices:** Not tested. The Galaxy A12 / ASUS device pair has not been used for this chat persistence slice.
-- **Security audit:** code-level review still required; no security certification or release readiness is claimed.
+- **Exact-head source:** commit `8e0c57761a26500aea00ed73770825e8d2337a0f`; branch head was re-read from GitHub after the push.
+- **Domain JVM tests:** GitHub Actions run #407 executed `:core:domain:testDebugUnitTest`. The dedicated `ChatMessageRulesTest` report records **8 tests, 0 failures, 0 errors, 0 skipped**. The exact-4-KiB boundary cases for Persian, emoji and ASCII passed.
+- **Room/Keystore instrumentation:** the test APK and KSP sources compiled on API 26, but `:core:data:connectedDebugAndroidTest` did not produce a test report in run #407. The combined instrumentation job stopped at the earlier storage test task. Therefore Room, Keystore, outbox quota, database-reopen and ciphertext-tamper instrumentation are **not verified**.
+- **API 26 unrelated instrumentation failure:** both existing `AndroidPeyvandDestinationPublisherTest` cases failed before exercising their assertions with `NoSuchMethodError: UiAutomation.grantRuntimePermission` at test line 64. This is in the existing `:core:storage` suite, not the chat module.
+- **API 36 instrumentation:** no tests ran; Gradle project configuration failed during dependency resolution for multiple Maven artifacts in the runner.
+- **Build/lint:** the general CI job failed on pre-existing shared-branch issues outside CP-CHAT-001: unresolved `AWAITING_DESTINATION` and `AWAITING_DESTINATION_TREE` references in `MainActivity.kt`, and an unguarded API-29 `MediaStore.Downloads.getContentUri` call while minSdk is 26. These files belong to the transfer/app baseline and are not changed by this checkpoint.
+- **APK:** no Debug APK was produced by run #407.
+- **Physical devices:** not tested for this chat persistence slice.
+- **Security review:** source-level review is ongoing; no security certification or release readiness is claimed.
+
+The instrumentation Gradle command now uses `--continue` so independent module test tasks can still execute and publish reports when another module's instrumentation task fails. This is test-runner isolation, not a suppression of failures.
 
 ## 6. Risks and open decisions
 
@@ -70,7 +76,8 @@ Do not present CP-CHAT-001 as a functioning end-to-end chat feature until the id
 
 ## 7. Next gate
 
-1. Run exact-head CI for unit tests, lint, Debug APK, Room/KSP compilation and Android instrumentation API 26/36.
-2. Fix every compile/test/lint issue before marking persistence acceptance as passed.
-3. Review the local database/key-loss and Android backup/device-transfer behavior.
-4. Design and approve stable peer identity, re-pairing and authenticated sync-channel multiplexing before network synchronization.
+1. Re-run API 26/API 36 instrumentation with the updated `--continue` task execution so the isolated `:core:data:connectedDebugAndroidTest` result is captured even if storage or connectivity tests fail.
+2. Fix any chat-specific Room/Keystore instrumentation failures. Do not treat a compiled instrumentation APK as a passed test.
+3. Keep the shared transfer/app build blockers visible and isolated. They require a separately authorized CP-004/baseline repair and must not be hidden or silently patched in this checkpoint.
+4. Review local database/key-loss and backup/device-transfer behavior on representative physical devices.
+5. Only after CP-CHAT-001 is verified, proceed to the separately reviewed stable-peer-identity, re-pairing and authenticated channel-multiplexing milestone.

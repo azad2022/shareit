@@ -139,7 +139,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: ./gradlew --no-daemon --stacktrace :core:data:connectedDebugAndroidTest :core:storage:connectedDebugAndroidTest :core:connectivity:connectedDebugAndroidTest
+          script: ./gradlew --no-daemon --stacktrace --continue :core:data:connectedDebugAndroidTest :core:storage:connectedDebugAndroidTest :core:connectivity:connectedDebugAndroidTest
 
       - name: Upload instrumented test reports
         if: always()
