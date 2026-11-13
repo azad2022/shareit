@@ -228,15 +228,16 @@ Voice messages, audio/video calls, and walkie-talkie behavior require separate p
 
 ## 10. Persistence and deletion
 
-“Durable history” means surviving normal app/process restarts while app data and keys remain intact. It does not mean backup, reinstall recovery, or synchronization to a third device.
+“Durable history” means local persistence inside each participating phone's private app storage, surviving normal process/app restarts while that phone's app data and required keys remain intact. It does not mean a server copy, cloud backup, Android device migration, reinstall recovery, or synchronization to a third device.
+
+The product operator does not store chat messages, chat history, queued content, contacts, or message metadata. The first release has no central server/backend, remote database, cloud backup, Android-managed D2D history migration, app-managed export, or external backup path for chat data. Android backup/device-transfer exclusions must be configured for the supported OS/target-SDK matrix and verified on physical devices.
 
 Before implementation, decide:
 - Local history retention and storage limits.
 - Single-message deletion and local conversation clearing.
 - Whether remote deletion is ever supported (not recommended initially).
-- Whether forgetting a peer retains, exports, or deletes local history.
-- Backup exclusion and encryption-at-rest behavior.
-- Behavior after app-data restore without the original Keystore identity.
+- Whether forgetting a peer retains or deletes local history.
+- Encryption-at-rest and local key-loss behavior.
 
 Recommended first-release behavior: local deletion only; no “delete for everyone”. Local deletion must not imply remote deletion. Synchronized deletion would require tombstones and a separate conflict design.
 
