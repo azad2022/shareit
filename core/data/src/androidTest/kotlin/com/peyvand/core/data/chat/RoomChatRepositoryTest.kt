@@ -244,6 +244,46 @@ class RoomChatRepositoryTest {
         assertTrue(failedAuthentication)
     }
 
+    @Test
+    fun changingAuthenticatedMessageMetadataFailsIntegrityCheck() = runBlocking {
+        repository.enqueueOutgoingMessage(peerIdentity, "metadata integrity", 100L)
+
+        database.openHelper.writableDatabase.execSQL(
+            "UPDATE chat_messages SET created_at_ms = ?",
+            arrayOf(101L),
+        )
+
+        var failedAuthentication = false
+        try {
+            repository.observeRecentMessages(peerIdentity).first()
+        } catch (_: ChatPayloadIntegrityException) {
+            failedAuthentication = true
+        }
+
+        assertTrue(failedAuthentication)
+    }
+
+    @Test
+    fun ciphertextCannotBeReassignedToAnotherPeer() = runBlocking {
+        repository.enqueueOutgoingMessage(peerIdentity, "peer binding integrity", 100L)
+        val otherPeer = PeerIdentityId.fromSha256Fingerprint("b".repeat(64))
+
+        database.openHelper.writableDatabase.execSQL(
+            "UPDATE chat_conversations SET peer_identity_fingerprint = ? " +
+                "WHERE peer_identity_fingerprint = ?",
+            arrayOf(otherPeer.sha256Fingerprint, peerIdentity.sha256Fingerprint),
+        )
+
+        var failedAuthentication = false
+        try {
+            repository.observeRecentMessages(otherPeer).first()
+        } catch (_: ChatPayloadIntegrityException) {
+            failedAuthentication = true
+        }
+
+        assertTrue(failedAuthentication)
+    }
+
     private fun openRepository() {
         database = ChatDatabaseFactory.open(context, databaseName)
         repository = RoomChatRepository(
