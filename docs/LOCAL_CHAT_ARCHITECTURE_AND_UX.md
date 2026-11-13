@@ -1,6 +1,6 @@
 # PEYVAND Local Chat — Architecture and UX Design
 
-- **Status:** Owner-selected product behavior; architecture and UX proposal; implementation not authorized.
+- **Status:** Owner-selected product behavior; architecture and UX proposal; CP-CHAT-001 encrypted local persistence implementation authorized.
 - **Decision date:** 2026-11-13
 - **Product:** PEYVAND (پیوند)
 - **Repository:** azad2022/shareit (keep repository name unchanged)
