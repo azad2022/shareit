@@ -204,10 +204,16 @@ class RoomChatRepository(
                             "A duplicate chat message ID has conflicting immutable metadata.",
                         )
                     }
-                    return@withTransaction existing.toDomain(
+                    val existingMessage = existing.toDomain(
                         conversation,
                         requireExistingEncryptionKey(),
                     )
+                    if (existingMessage.body != body) {
+                        throw ChatLocalDataCorruptionException(
+                            "A duplicate chat message ID carries different authenticated content.",
+                        )
+                    }
+                    return@withTransaction existingMessage
                 }
 
                 if (senderSequence != conversation.lastPeerSequence + 1L) {
