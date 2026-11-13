@@ -75,11 +75,15 @@ class InvalidChatMessageException(
     val reason: ChatMessageValidationError,
 ) : IllegalArgumentException("Chat message failed input validation: " + reason.name)
 
+class ChatOutboxLimitExceededException :
+    IllegalStateException("The local outgoing message queue is full. Existing messages were preserved.")
+
 /**
  * The original message text is preserved. It is not trimmed or normalized before storage.
  */
 object ChatMessageRules {
     const val MAX_MESSAGE_UTF8_BYTES = 4096
+    const val MAX_PENDING_OUTGOING_MESSAGES_PER_PEER = 1024
 
     fun validateBody(body: String) {
         if (body.isBlank()) {
