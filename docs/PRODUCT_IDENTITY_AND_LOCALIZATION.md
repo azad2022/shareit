@@ -1,6 +1,6 @@
 # PEYVAND (پیوند) — Product Identity, Localization, and Motion Specification
 
-- **Status:** Confirmed product direction; implementation not yet authorized.
+- **Status:** Confirmed product direction; CP-CHAT-001 local-persistence implementation authorized on 2026-11-13; other implementation scopes remain subject to explicit approval.
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit` — keep repository name unless separately approved.
 - **Last updated:** 2026-11-01.
@@ -148,4 +148,4 @@ No decorative infinite loops without a user purpose; no fake counters; no false 
 
 ## 8. Governance
 
-This document adds product specifications; it does not authorize application code, Gradle files, or UI implementation. Keep decisions and evidence in Git. Update the engineering skill when these requirements change. Any implementation milestone must include its scope, acceptance criteria, tests, device/API details, commit SHA, evidence, and honest status. A checkpoint is `PASSED` only with reproducible evidence.
+This document defines product identity, localization and motion requirements. The product owner has separately authorized CP-CHAT-001 local persistence; this does not authorize chat UI, networking, or unrelated implementation. Keep decisions and evidence in Git. Update the engineering skill when requirements change. Any implementation milestone must include scope, acceptance criteria, tests, device/API details, commit SHA, evidence, and honest status. A checkpoint is `PASSED` only with reproducible evidence.
