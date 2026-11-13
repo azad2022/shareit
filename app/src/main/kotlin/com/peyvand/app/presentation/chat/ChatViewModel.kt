@@ -143,7 +143,22 @@ class ChatViewModel(
                     }
                     ChatConversationUiState(
                         peer = peer,
-                        messages = messages,
+                        messages = messages.map { message ->
+                            if (
+                                session.status == SecureSessionStatus.AUTHENTICATED &&
+                                connectedPeer == identityId &&
+                                message.direction == com.peyvand.core.domain.chat.ChatMessageDirection.OUTGOING &&
+                                message.deliveryState ==
+                                    com.peyvand.core.domain.chat.ChatMessageDeliveryState.WAITING_FOR_CONNECTION
+                            ) {
+                                message.copy(
+                                    deliveryState =
+                                        com.peyvand.core.domain.chat.ChatMessageDeliveryState.SYNCHRONIZING,
+                                )
+                            } else {
+                                message
+                            }
+                        },
                         pendingOutboxCount = pending,
                         isConnected = session.status == SecureSessionStatus.AUTHENTICATED &&
                             connectedPeer == identityId,
