@@ -41,9 +41,8 @@ The no-server/no-external-retention boundary is accepted from the product owner'
 
 1. Should clearing/forgetting a conversation retain its local messages by default, delete them, or ask every time?
 2. What history retention limit is acceptable (unlimited, time-based, or storage quota)?
-3. Confirm whether exclusion from Android cloud backup is the desired default.
-4. Confirm whether users need an encrypted manual export/backup feature in a later release.
-5. Should local deletion of a pending unsent message cancel it permanently in the outbox?
+3. Should local deletion of a pending unsent message cancel it permanently in the outbox?
+4. What supported Android API/device matrix will be used to verify that OS-managed cloud backup and device-to-device migration do not export chat data?
 
 ## Android platform references
 
@@ -56,5 +55,6 @@ Important implementation note: Android documents that for apps targeting API 31+
 
 - Data-flow and threat model covering database, WAL/journal files, temporary files, backups, and keys.
 - Verification that backup/restore does not orphan or silently replace identity keys.
-- Tests for key invalidation, device restore, app-data clear, peer forgetting, and pending-message cleanup.
+- Tests for key invalidation, app-data clear, peer forgetting, and pending-message cleanup.
+- Physical-device verification that app chat data is excluded from applicable Android cloud-backup and device-to-device migration paths for the supported API/target-SDK/OEM matrix.
 - User-facing privacy copy reviewed in Persian and English before enabling chat.
