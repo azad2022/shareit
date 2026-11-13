@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -8,6 +9,7 @@ android {
 
     defaultConfig {
         minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     sourceSets {
@@ -17,6 +19,9 @@ android {
         named("test") {
             kotlin.directories.add("src/test/kotlin")
         }
+        named("androidTest") {
+            kotlin.directories.add("src/androidTest/kotlin")
+        }
     }
 
     compileOptions {
@@ -25,11 +30,20 @@ android {
     }
 }
 
-
 dependencies {
     implementation(project(":core:domain"))
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.datastore.preferences)
-    // This module directly calls Dispatchers.Main.immediate for its Android locale adapter.
     implementation(libs.kotlinx.coroutines.android)
+
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
