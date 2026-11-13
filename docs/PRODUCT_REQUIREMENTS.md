@@ -1,6 +1,6 @@
 # PEYVAND (پیوند) — Android Product Requirements
 
-- **Status:** Product definition / planning. No application implementation is authorized yet.
+- **Status:** Product definition with owner-authorized, checkpoint-scoped implementation.
 - **Repository:** `azad2022/shareit` (private), default branch `main`.
 - **Last decision update:** 2026-11-13.
 
@@ -165,4 +165,4 @@ See [`PRODUCT_IDENTITY_AND_LOCALIZATION.md`](PRODUCT_IDENTITY_AND_LOCALIZATION.m
 
 ## 14. Implementation authorization
 
-This document records product requirements only. It does not authorize coding. Begin Android project scaffolding or implementation only after explicit product-owner approval.
+This document records product requirements and implementation boundaries. The product owner explicitly authorized CP-CHAT-001 local-persistence implementation on 2026-11-13. That authorization is limited to encrypted on-device storage and a durable local outbox; it does not authorize Compose chat screens, network synchronization, persistent peer identity, group chat, remote services, cloud backup, export, release signing, or unrelated feature expansion.
