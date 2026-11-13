@@ -1,6 +1,9 @@
 package com.peyvand.core.connectivity.wifi
 
 import com.peyvand.core.domain.connection.AuthenticatedPeerChannel
+import com.peyvand.core.domain.chat.PeerIdentityKeyProvider
+import com.peyvand.core.domain.chat.TrustedPeerRepository
+import com.peyvand.core.domain.chat.TrustedPeerIdentityConflictException
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
 import com.peyvand.core.domain.connection.PeerTransferRole
 import com.peyvand.core.domain.connection.SecureSessionFailure
@@ -54,6 +57,8 @@ internal class WifiDirectSecureSessionController(
         com.peyvand.core.domain.connection.P2pTcpChannelSnapshot
     >,
     private val rawSocketProvider: () -> Socket?,
+    private val peerIdentityKeyProvider: PeerIdentityKeyProvider,
+    private val trustedPeerRepository: TrustedPeerRepository,
 ) : com.peyvand.core.domain.connection.PeerSecureSessionRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -382,16 +387,48 @@ internal class WifiDirectSecureSessionController(
                 isGroupOwner = groupOwner,
                 diagnostics = diagnostics,
             )
+            val authenticatedTlsSocket = tlsSocket
+                ?: throw SessionSetupException(SecureSessionFailure.TLS_HANDSHAKE_FAILED)
             ensureCurrent(expectedGeneration)
+
+            currentStage = "PERSISTENT_PEER_IDENTITY"
+            val groupOwnerFingerprint = if (groupOwner) localFingerprint else peerFingerprint
+            val groupClientFingerprint = if (groupOwner) peerFingerprint else localFingerprint
+            val authenticatedPeer = try {
+                PeerIdentityHandshake(
+                    keyProvider = peerIdentityKeyProvider,
+                    trustedPeers = trustedPeerRepository,
+                ).exchange(
+                    socket = authenticatedTlsSocket,
+                    sessionId = sessionId,
+                    localRole = participantRole,
+                    groupOwnerCertificateFingerprint = groupOwnerFingerprint,
+                    groupClientCertificateFingerprint = groupClientFingerprint,
+                )
+            } catch (exception: TrustedPeerIdentityConflictException) {
+                throw SessionSetupException(SecureSessionFailure.PEER_IDENTITY_MISMATCH, exception)
+            } catch (exception: PeerIdentityHandshakeException) {
+                throw SessionSetupException(SecureSessionFailure.PEER_IDENTITY_PROOF_INVALID, exception)
+            }
+            ensureCurrent(expectedGeneration)
+
             synchronized(lock) {
                 if (generation != expectedGeneration) throw CancellationException()
-                secureSocket = tlsSocket
+                secureSocket = authenticatedTlsSocket
                 activeSessionId = sessionId
                 authenticatedChannelClaimed = false
                 rawSocket = null
                 approval = null
-                mutableState.value = SecureSessionSnapshot(SecureSessionStatus.AUTHENTICATED)
-                diagnostics.event("SECURE_SESSION_AUTHENTICATED")
+                mutableState.value = SecureSessionSnapshot(
+                    status = SecureSessionStatus.AUTHENTICATED,
+                    peerIdentityId = authenticatedPeer.identityId.sha256Fingerprint,
+                    peerDisplayName = authenticatedPeer.displayName,
+                    isNewlyTrustedPeer = authenticatedPeer.isNewlyTrusted,
+                )
+                diagnostics.event(
+                    "SECURE_SESSION_AUTHENTICATED",
+                    "persistentPeerIdentityBound=true newlyTrusted=${authenticatedPeer.isNewlyTrusted}",
+                )
             }
         } catch (exception: CancellationException) {
             diagnostics.event("SESSION_CANCELLED", "stage=$currentStage")

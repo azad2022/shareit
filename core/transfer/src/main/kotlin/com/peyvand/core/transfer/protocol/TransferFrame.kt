@@ -51,7 +51,10 @@ enum class TransferFrameType(
     BATCH_RECEIPT(28, 16 + 4 + 32, 16 + 4 + 32),
     BATCH_ABORT(29, 16, 16),
     BATCH_OFFER(30, 16, 16),
-    BATCH_OFFER_ACCEPTED(31, 16, 16);
+    BATCH_OFFER_ACCEPTED(31, 16, 16),
+    PEER_IDENTITY_HELLO(32, 2 * 1024, 80),
+    CHAT_MESSAGE(33, 16 + 8 + 8 + 8 + 4 + 4096, 16 + 8 + 8 + 8 + 4 + 1),
+    CHAT_ACK(34, 24, 24);
 
     companion object {
         internal fun fromWireCode(code: Int): TransferFrameType =
@@ -165,7 +168,8 @@ object TransferFrameCodec {
         if (version !in CURRENT_PROTOCOL_VERSION..BATCH_PROTOCOL_VERSION) {
             throw TransferProtocolException("Unsupported protocol version: $version")
         }
-        val isBatchFrame = type.wireCode >= TransferFrameType.BATCH_MANIFEST.wireCode
+        val isBatchFrame = type.wireCode in
+            TransferFrameType.BATCH_MANIFEST.wireCode..TransferFrameType.BATCH_OFFER_ACCEPTED.wireCode
         val isBatchProtocol = version > CURRENT_PROTOCOL_VERSION
         if (isBatchFrame != isBatchProtocol) {
             throw TransferProtocolException(

@@ -32,6 +32,8 @@ enum class SecureSessionFailure {
     PROTOCOL_ERROR,
     KEYSTORE_ERROR,
     IO_ERROR,
+    PEER_IDENTITY_PROOF_INVALID,
+    PEER_IDENTITY_MISMATCH,
 }
 
 data class SecureSessionSnapshot(
@@ -39,6 +41,10 @@ data class SecureSessionSnapshot(
     /** Short authentication string is present only while local approval is pending. */
     val sasCode: String? = null,
     val failure: SecureSessionFailure? = null,
+    /** Persistent public-key identity established inside the SAS-approved mTLS session. */
+    val peerIdentityId: String? = null,
+    val peerDisplayName: String? = null,
+    val isNewlyTrustedPeer: Boolean = false,
 )
 
 /**

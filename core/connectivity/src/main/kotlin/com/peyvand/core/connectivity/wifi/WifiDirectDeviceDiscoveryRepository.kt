@@ -19,6 +19,8 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.UUID
 import com.peyvand.core.domain.connection.AuthenticatedPeerChannel
+import com.peyvand.core.domain.chat.PeerIdentityKeyProvider
+import com.peyvand.core.domain.chat.TrustedPeerRepository
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.domain.connection.SecureSessionSnapshot
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +48,8 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class WifiDirectDeviceDiscoveryRepository(
     context: Context,
+    private val peerIdentityKeyProvider: PeerIdentityKeyProvider,
+    private val trustedPeerRepository: TrustedPeerRepository,
 ) : DeviceDiscoveryRepository, PeerConnectivityRepository {
 
     private val appContext = context.applicationContext
@@ -96,6 +100,8 @@ class WifiDirectDeviceDiscoveryRepository(
         WifiDirectSecureSessionController(
             tcpChannelProvider = { tcpChannelController.value.tcpChannel },
             rawSocketProvider = { tcpChannelController.value.connectedSocketForSecurityUpgrade() },
+            peerIdentityKeyProvider = peerIdentityKeyProvider,
+            trustedPeerRepository = trustedPeerRepository,
         )
     }
 
