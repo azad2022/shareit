@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.peyvand.core.domain.chat.ChatMessageDeliveryState
+import com.peyvand.core.domain.chat.ChatMessageId
 import com.peyvand.core.domain.chat.ChatMessageRules
 import com.peyvand.core.domain.chat.ChatOutboxLimitExceededException
 import com.peyvand.core.domain.chat.ChatRepository
@@ -66,6 +67,102 @@ class RoomChatRepositoryTest {
     }
 
     @Test
+    fun incomingMessageIsDurablyStoredAndDuplicateDeliveryIsIdempotent() = runBlocking {
+        val messageId = ChatMessageId(UUID.randomUUID().toString())
+
+        val first = repository.acceptIncomingMessage(
+            peerIdentityId = peerIdentity,
+            messageId = messageId,
+            senderSequence = 1L,
+            observedPeerSequence = 0L,
+            createdAtEpochMillis = 100L,
+            body = "پیام ورودی پایدار",
+        )
+        val duplicate = repository.acceptIncomingMessage(
+            peerIdentityId = peerIdentity,
+            messageId = messageId,
+            senderSequence = 1L,
+            observedPeerSequence = 0L,
+            createdAtEpochMillis = 100L,
+            body = "پیام ورودی پایدار",
+        )
+
+        assertEquals(first.id, duplicate.id)
+        assertEquals(first.body, duplicate.body)
+        assertEquals(ChatMessageDeliveryState.RECEIVED, duplicate.deliveryState)
+        val history = repository.observeRecentMessages(peerIdentity).first()
+        assertEquals(1, history.size)
+        assertEquals(messageId, history.single().id)
+        assertEquals("پیام ورودی پایدار", history.single().body)
+    }
+
+    @Test
+    fun incomingMessageWithGapInSenderSequenceIsRejected() = runBlocking {
+        val error = org.junit.Assert.assertThrows(ChatMessageSequenceException::class.java) {
+            runBlocking {
+                repository.acceptIncomingMessage(
+                    peerIdentityId = peerIdentity,
+                    messageId = ChatMessageId(UUID.randomUUID().toString()),
+                    senderSequence = 2L,
+                    observedPeerSequence = 0L,
+                    createdAtEpochMillis = 100L,
+                    body = "پیام با توالی ناقص",
+                )
+            }
+        }
+
+        assertEquals(1L, error.expected)
+        assertEquals(2L, error.received)
+        assertTrue(repository.observeRecentMessages(peerIdentity).first().isEmpty())
+    }
+
+    @Test
+    fun duplicateMessageIdWithDifferentBodyIsRejected() = runBlocking {
+        val messageId = ChatMessageId(UUID.randomUUID().toString())
+        repository.acceptIncomingMessage(
+            peerIdentityId = peerIdentity,
+            messageId = messageId,
+            senderSequence = 1L,
+            observedPeerSequence = 0L,
+            createdAtEpochMillis = 100L,
+            body = "محتوای معتبر",
+        )
+
+        org.junit.Assert.assertThrows(ChatLocalDataCorruptionException::class.java) {
+            runBlocking {
+                repository.acceptIncomingMessage(
+                    peerIdentityId = peerIdentity,
+                    messageId = messageId,
+                    senderSequence = 1L,
+                    observedPeerSequence = 0L,
+                    createdAtEpochMillis = 100L,
+                    body = "محتوای متفاوت",
+                )
+            }
+        }
+        assertEquals(1, repository.observeRecentMessages(peerIdentity).first().size)
+    }
+
+    @Test
+    fun incomingMessageAndLocalOutboxUseIndependentSequenceSpaces() = runBlocking {
+        val outgoing = repository.enqueueOutgoingMessage(peerIdentity, "outgoing", 100L)
+        val incoming = repository.acceptIncomingMessage(
+            peerIdentityId = peerIdentity,
+            messageId = ChatMessageId(UUID.randomUUID().toString()),
+            senderSequence = 1L,
+            observedPeerSequence = 1L,
+            createdAtEpochMillis = 101L,
+            body = "incoming",
+        )
+        val nextOutgoing = repository.enqueueOutgoingMessage(peerIdentity, "next outgoing", 102L)
+
+        assertEquals(1L, outgoing.senderSequence)
+        assertEquals(1L, incoming.senderSequence)
+        assertEquals(2L, nextOutgoing.senderSequence)
+        assertEquals(1, repository.loadPendingOutgoingMessages(peerIdentity).size)
+    }
+
+    @Test
     fun outgoingSequencesAreMonotonicAcrossMessagesAndReopen() = runBlocking {
         val first = repository.enqueueOutgoingMessage(peerIdentity, "one", 100L)
         val second = repository.enqueueOutgoingMessage(peerIdentity, "two", 101L)
@@ -83,7 +180,7 @@ class RoomChatRepositoryTest {
         val message = repository.enqueueOutgoingMessage(peerIdentity, "receipt", 100L)
 
         assertTrue(
-            repository.confirmDeliveredAfterAuthenticatedReceipt(peerIdentity, message.id),
+            repository.confirmDeliveredAfterAuthenticatedReceipt(peerIdentity, message.id, message.senderSequence),
         )
         assertTrue(repository.loadPendingOutgoingMessages(peerIdentity).isEmpty())
         val history = repository.observeRecentMessages(peerIdentity).first()
@@ -100,7 +197,7 @@ class RoomChatRepositoryTest {
         val otherPeer = PeerIdentityId.fromSha256Fingerprint("b".repeat(64))
 
         assertFalse(
-            repository.confirmDeliveredAfterAuthenticatedReceipt(otherPeer, message.id),
+            repository.confirmDeliveredAfterAuthenticatedReceipt(otherPeer, message.id, message.senderSequence),
         )
         assertEquals(1, repository.loadPendingOutgoingMessages(peerIdentity).size)
         assertTrue(repository.observeRecentMessages(otherPeer).first().isEmpty())
