@@ -54,7 +54,8 @@ enum class AuthenticatedPeerChannelPurpose {
 
 /**
  * Session-bound access to one independently routed protocol stream over the authenticated TLS session.
- * The owner must close the channel and terminate the peer connection on cancellation.
+ * Closing this child channel releases only its logical stream. The connectivity/session owner
+ * decides when the parent authenticated TLS session is terminated.
  */
 interface AuthenticatedPeerChannel : Closeable {
     val sessionId: UUID

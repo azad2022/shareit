@@ -753,7 +753,6 @@ internal class WifiDirectSecureSessionController(
         secureSocket = null
         rawSocket = null
         activeSessionId = null
-        authenticatedChannelClaimed = false
         activeKeyAlias?.let(::deleteKeyAlias)
         activeKeyAlias = null
     }
