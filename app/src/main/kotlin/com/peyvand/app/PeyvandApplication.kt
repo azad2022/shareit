@@ -10,6 +10,10 @@ import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.storage.AndroidShareCatalogRepository
 import com.peyvand.core.storage.AndroidTransferFileStorageRepository
 import com.peyvand.core.domain.transfer.TransferFileStorageRepository
+import com.peyvand.core.domain.chat.ChatRepository
+import com.peyvand.core.data.chat.ChatDatabaseFactory
+import com.peyvand.core.data.chat.AndroidKeystoreChatPayloadCipher
+import com.peyvand.core.data.chat.RoomChatRepository
 
 class PeyvandApplication : Application() {
     private val wifiDirectRepository by lazy(
@@ -40,5 +44,16 @@ class PeyvandApplication : Application() {
         LazyThreadSafetyMode.SYNCHRONIZED,
     ) {
         AndroidTransferFileStorageRepository(applicationContext)
+    }
+
+    /**
+     * Device-local chat persistence. Accessing this repository creates no socket,
+     * network session, server connection, or backup destination.
+     */
+    val chatRepository: ChatRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        RoomChatRepository(
+            database = ChatDatabaseFactory.open(applicationContext),
+            cipher = AndroidKeystoreChatPayloadCipher(),
+        )
     }
 }
