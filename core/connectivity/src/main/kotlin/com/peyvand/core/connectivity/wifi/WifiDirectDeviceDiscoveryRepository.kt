@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.os.Build
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
@@ -52,6 +53,18 @@ class WifiDirectDeviceDiscoveryRepository(
     private val peerIdentityKeyProvider: PeerIdentityKeyProvider,
     private val trustedPeerRepository: TrustedPeerRepository,
 ) : DeviceDiscoveryRepository, PeerConnectivityRepository {
+
+    private val localDeviceDisplayName: String
+        get() {
+            val manufacturer = Build.MANUFACTURER.trim()
+                .takeIf { it.isNotEmpty() && !it.equals("unknown", ignoreCase = true) }
+            val model = Build.MODEL.trim()
+            val combined = listOfNotNull(manufacturer, model.takeIf(String::isNotEmpty))
+                .distinct()
+                .joinToString(" ")
+                .take(32)
+            return combined.ifBlank { "Android device" }
+        }
 
     private val appContext = context.applicationContext
     private val packageManager = appContext.packageManager
@@ -103,6 +116,7 @@ class WifiDirectDeviceDiscoveryRepository(
             rawSocketProvider = { tcpChannelController.value.connectedSocketForSecurityUpgrade() },
             peerIdentityKeyProvider = peerIdentityKeyProvider,
             trustedPeerRepository = trustedPeerRepository,
+            localDeviceDisplayName = localDeviceDisplayName,
         )
     }
 

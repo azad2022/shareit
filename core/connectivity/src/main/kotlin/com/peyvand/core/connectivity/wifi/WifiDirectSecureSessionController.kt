@@ -61,6 +61,7 @@ internal class WifiDirectSecureSessionController(
     private val rawSocketProvider: () -> Socket?,
     private val peerIdentityKeyProvider: PeerIdentityKeyProvider,
     private val trustedPeerRepository: TrustedPeerRepository,
+    private val localDeviceDisplayName: String,
 ) : com.peyvand.core.domain.connection.PeerSecureSessionRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -406,6 +407,7 @@ internal class WifiDirectSecureSessionController(
                 PeerIdentityHandshake(
                     keyProvider = peerIdentityKeyProvider,
                     trustedPeers = trustedPeerRepository,
+                    localDisplayName = localDeviceDisplayName,
                 ).exchange(
                     socket = authenticatedTlsSocket,
                     sessionId = sessionId,

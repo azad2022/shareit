@@ -31,6 +31,7 @@ import javax.net.ssl.SSLSocket
 internal class PeerIdentityHandshake(
     private val keyProvider: PeerIdentityKeyProvider,
     private val trustedPeers: TrustedPeerRepository,
+    private val localDisplayName: String,
 ) {
     suspend fun exchange(
         socket: SSLSocket,
@@ -54,7 +55,7 @@ internal class PeerIdentityHandshake(
         val localHello = encodeHello(
             role = localRole,
             publicKey = local.publicKeyEncoded,
-            displayName = DEFAULT_DEVICE_NAME,
+            displayName = sanitizeDisplayName(localDisplayName),
             signature = signature,
         )
 
@@ -156,6 +157,20 @@ internal class PeerIdentityHandshake(
             output.write(publicKey)
         }
         return bytes.toByteArray()
+    }
+
+    private fun sanitizeDisplayName(value: String): String {
+        val candidate = value.trim().take(32)
+        val encoded = candidate.toByteArray(StandardCharsets.UTF_8)
+        return if (
+            candidate.isNotBlank() &&
+            encoded.size <= MAX_NAME_BYTES &&
+            candidate.none { Character.isISOControl(it) }
+        ) {
+            candidate
+        } else {
+            DEFAULT_DEVICE_NAME
+        }
     }
 
     private fun encodeHello(
