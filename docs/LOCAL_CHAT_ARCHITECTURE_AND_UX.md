@@ -1,7 +1,7 @@
 # PEYVAND Local Chat — Architecture and UX Design
 
 - **Status:** Owner-selected product behavior; architecture and UX proposal; implementation not authorized.
-- **Decision date:** 2026-11-08
+- **Decision date:** 2026-11-13
 - **Product:** PEYVAND (پیوند)
 - **Repository:** azad2022/shareit (keep repository name unchanged)
 
@@ -286,6 +286,14 @@ This document records the selected local-history/reconnect-sync behavior, but do
 - Background execution expectations and notification policy.
 - Minimum Android API and compatibility constraints.
 
-## 14. Authorization boundary
+## 14. Related decisions and UX specification
+
+- [ADR-0001 — Local Chat Delivery Model](decisions/ADR-0001-local-chat-delivery-model.md) — accepted owner decision.
+- [ADR-0002 — Stable Peer Identity](decisions/ADR-0002-stable-peer-identity.md) — proposed; security review/owner approval required.
+- [ADR-0003 — Message Persistence and Synchronization Semantics](decisions/ADR-0003-message-sync-semantics.md) — proposed; protocol review required.
+- [ADR-0004 — Local Chat Data Protection, Backup, and Deletion](decisions/ADR-0004-chat-data-protection.md) — proposed; privacy/product decisions required.
+- [Local Chat Screen-Level UX Specification](LOCAL_CHAT_UX_SPEC.md) — detailed screens, state/copy map, accessibility, and validation flows.
+
+## 15. Authorization boundary
 
 This is a product/architecture/UX document only. It does not authorize Kotlin source code, Compose screens, Room entities, Gradle changes, protocol implementation, or build configuration. Implementation requires a separate explicit owner instruction and a scoped checkpoint plan.
