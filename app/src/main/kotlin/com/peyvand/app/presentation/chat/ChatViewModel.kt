@@ -198,6 +198,11 @@ class ChatViewModel(
                     return@collect
                 }
 
+                val coordinatorPeer = synchronized(sessionLock) { activeCoordinatorPeer }
+                if (coordinatorPeer != null && coordinatorPeer != authenticatedId) {
+                    closeActiveCoordinator()
+                }
+
                 if (selectedPeer.value == authenticatedId) {
                     ensureCoordinatorFor(authenticatedId)
                 }
@@ -277,13 +282,21 @@ class ChatViewModel(
         ) return
 
         synchronized(sessionLock) {
-            if (activeCoordinator != null) {
-                // A claimed peer channel is exclusive per purpose. Never silently replace it.
+            if (activeCoordinatorPeer == identityId && activeCoordinator != null) {
                 return
             }
+            // A logical CHAT lease belongs to exactly one authenticated peer session.
+            // Release a stale child before claiming the replacement session's channel.
+            activeCoordinator?.close()
+            activeCoordinator = null
+            activeCoordinatorPeer = null
+
             val channel = connectivityRepository.claimAuthenticatedChannel(
                 AuthenticatedPeerChannelPurpose.CHAT,
-            ) ?: return
+            ) ?: run {
+                notice.value = ChatUiNotice.SECURE_SESSION_UNAVAILABLE
+                return
+            }
 
             lateinit var created: ChatSessionCoordinator
             created = ChatSessionCoordinator(

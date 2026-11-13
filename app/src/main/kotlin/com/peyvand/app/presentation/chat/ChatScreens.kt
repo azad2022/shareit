@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -22,9 +23,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
@@ -61,6 +66,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.peyvand.app.R
@@ -69,6 +75,7 @@ import com.peyvand.core.domain.chat.ChatMessageDeliveryState
 import com.peyvand.core.domain.chat.ChatMessageDirection
 import com.peyvand.core.domain.chat.PeerIdentityId
 import java.text.DateFormat
+import java.util.Calendar
 import java.util.Date
 import kotlinx.coroutines.launch
 
@@ -464,14 +471,33 @@ fun ChatConversationScreen(
     val sendDescription = stringResource(R.string.chat_accessibility_send)
 
     LaunchedEffect(state.messages.size) {
-        if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.lastIndex)
+        if (state.messages.isNotEmpty()) {
+            // At most one localized date separator precedes each message.
+            listState.animateScrollToItem((state.messages.size * 2) - 1)
+        }
+    }
+
+    fun submitDraft() {
+        val content = draft
+        if (sending || content.isBlank()) return
+        sending = true
+        scope.launch {
+            try {
+                if (onSendMessage(content) == ChatSendResult.Saved && draft == content) {
+                    draft = ""
+                }
+            } finally {
+                sending = false
+            }
+        }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(ChatCanvas)
-            .windowInsetsPadding(WindowInsets.statusBars),
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .imePadding(),
     ) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Row(
@@ -592,7 +618,19 @@ fun ChatConversationScreen(
                         .padding(horizontal = 12.dp, vertical = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(9.dp),
                 ) {
-                    items(state.messages, key = { it.id.value }) { message ->
+                    itemsIndexed(
+                        items = state.messages,
+                        key = { _, message -> message.id.value },
+                    ) { index, message ->
+                        val previous = state.messages.getOrNull(index - 1)
+                        if (previous == null ||
+                            !isSameLocalCalendarDay(
+                                previous.createdAtEpochMillis,
+                                message.createdAtEpochMillis,
+                            )
+                        ) {
+                            ChatDateSeparator(message.createdAtEpochMillis)
+                        }
                         ChatMessageBubble(message)
                     }
                 }
@@ -677,6 +715,8 @@ fun ChatConversationScreen(
                                 shape = RoundedCornerShape(22.dp),
                                 minLines = 1,
                                 maxLines = 4,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = { submitDraft() }),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     unfocusedContainerColor = Color(0xFFF7F9FC),
                                     focusedContainerColor = Color(0xFFF7F9FC),
@@ -718,17 +758,7 @@ fun ChatConversationScreen(
                             }
                         }
                         IconButton(
-                            onClick = {
-                                if (!sending && draft.isNotBlank()) {
-                                    val content = draft
-                                    sending = true
-                                    scope.launch {
-                                        val result = onSendMessage(content)
-                                        if (result == ChatSendResult.Saved) draft = ""
-                                        sending = false
-                                    }
-                                }
-                            },
+                            onClick = ::submitDraft,
                             enabled = draft.isNotBlank() && !sending,
                             modifier = Modifier
                                 .padding(bottom = 3.dp)
@@ -748,6 +778,38 @@ fun ChatConversationScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ChatDateSeparator(timestamp: Long) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 7.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            color = Color.White.copy(alpha = 0.92f),
+            shape = RoundedCornerShape(50),
+            shadowElevation = 1.dp,
+        ) {
+            Text(
+                text = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(timestamp)),
+                modifier = Modifier.padding(horizontal = 13.dp, vertical = 6.dp),
+                color = Color(0xFF52677F),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+    }
+}
+
+private fun isSameLocalCalendarDay(first: Long, second: Long): Boolean {
+    val firstDay = Calendar.getInstance().apply { timeInMillis = first }
+    val secondDay = Calendar.getInstance().apply { timeInMillis = second }
+    return firstDay.get(Calendar.ERA) == secondDay.get(Calendar.ERA) &&
+        firstDay.get(Calendar.YEAR) == secondDay.get(Calendar.YEAR) &&
+        firstDay.get(Calendar.DAY_OF_YEAR) == secondDay.get(Calendar.DAY_OF_YEAR)
 }
 
 @Composable
@@ -774,11 +836,13 @@ private fun ChatMessageBubble(message: ChatMessage) {
                     modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
                     verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
-                    Text(
-                        text = message.body,
-                        color = Color(0xFF20364F),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+                    SelectionContainer {
+                        Text(
+                            text = message.body,
+                            color = Color(0xFF20364F),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -821,7 +885,7 @@ private fun ChatConversationEmptyCard(modifier: Modifier = Modifier) {
         modifier = modifier
             .padding(horizontal = 34.dp)
             .widthIn(max = 390.dp),
-        color = Color(0xD92C5B51),
+        color = Color(0xF5FFFFFF),
         shape = RoundedCornerShape(26.dp),
         shadowElevation = 3.dp,
     ) {
@@ -830,16 +894,16 @@ private fun ChatConversationEmptyCard(modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            PeyvandConnectionGlyph(Modifier.size(100.dp), inverted = true)
+            PeyvandConnectionGlyph(Modifier.size(88.dp))
             Text(
                 stringResource(R.string.chat_empty_conversation_title),
-                color = Color.White,
+                color = Color(0xFF20364F),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
             Text(
                 stringResource(R.string.chat_empty_conversation_body),
-                color = Color.White.copy(alpha = 0.92f),
+                color = ChatMuted,
                 style = MaterialTheme.typography.bodyMedium,
                 lineHeight = 24.sp,
             )
