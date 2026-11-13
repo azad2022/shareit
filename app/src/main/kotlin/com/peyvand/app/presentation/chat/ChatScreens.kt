@@ -139,7 +139,7 @@ fun ChatHomeScreen(
                     .background(ChatPaleBlue, CircleShape)
                     .semantics { contentDescription = nearbyDescription },
             ) {
-                Text("＋", color = ChatBlue, fontSize = 28.sp, fontWeight = FontWeight.Light)
+                PeyvandChatIcon(PeyvandChatIconType.ADD, ChatBlue)
             }
         }
 
@@ -170,7 +170,7 @@ fun ChatHomeScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(18.dp),
                 placeholder = { Text(stringResource(R.string.chat_search_placeholder)) },
-                leadingIcon = { Text("⌕", fontSize = 25.sp, color = ChatMuted) },
+                leadingIcon = { PeyvandChatIcon(PeyvandChatIconType.SEARCH, ChatMuted) },
                 colors = OutlinedTextFieldDefaults.colors(
                     unfocusedContainerColor = Color.White,
                     focusedContainerColor = Color.White,
@@ -248,19 +248,19 @@ private fun ChatBottomNavigation(
         NavigationBarItem(
             selected = selected == ChatBottomDestination.CHATS,
             onClick = onChats,
-            icon = { Text("▤", fontSize = 20.sp) },
+            icon = { PeyvandChatIcon(PeyvandChatIconType.CHATS, if (selected == ChatBottomDestination.CHATS) ChatBlue else ChatMuted) },
             label = { Text(stringResource(R.string.chat_tab_chats)) },
         )
         NavigationBarItem(
             selected = selected == ChatBottomDestination.TRANSFERS,
             onClick = onTransfers,
-            icon = { Text("⇄", fontSize = 22.sp) },
+            icon = { PeyvandChatIcon(PeyvandChatIconType.TRANSFERS, if (selected == ChatBottomDestination.TRANSFERS) ChatBlue else ChatMuted) },
             label = { Text(stringResource(R.string.chat_tab_transfers)) },
         )
         NavigationBarItem(
             selected = selected == ChatBottomDestination.NEARBY,
             onClick = onNearby,
-            icon = { Text("⌖", fontSize = 22.sp) },
+            icon = { PeyvandChatIcon(PeyvandChatIconType.NEARBY, if (selected == ChatBottomDestination.NEARBY) ChatBlue else ChatMuted) },
             label = { Text(stringResource(R.string.chat_tab_nearby)) },
         )
     }
@@ -286,7 +286,7 @@ private fun NearbyEntryCard(onClick: () -> Unit) {
                     .background(Color.White.copy(alpha = 0.16f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("⌖", color = Color.White, fontSize = 28.sp)
+                PeyvandChatIcon(PeyvandChatIconType.NEARBY, Color.White, Modifier.size(27.dp))
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
@@ -301,7 +301,7 @@ private fun NearbyEntryCard(onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Text("‹", color = Color.White, fontSize = 30.sp)
+            PeyvandChatIcon(PeyvandChatIconType.BACK, Color.White, Modifier.size(22.dp))
         }
     }
 }
@@ -508,7 +508,7 @@ fun ChatConversationScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
-                    Text("‹", color = Color(0xFF1D3552), fontSize = 34.sp)
+                    PeyvandChatIcon(PeyvandChatIconType.BACK, Color(0xFF1D3552), Modifier.size(24.dp))
                 }
                 PeerAvatar(
                     label = peer?.displayName.orEmpty(),
@@ -547,14 +547,14 @@ fun ChatConversationScreen(
                     modifier = Modifier.semantics {
                         contentDescription = voiceCallDescription
                     },
-                ) { Text("☎", color = Color(0xFF8291A3), fontSize = 22.sp) }
+                ) { PeyvandChatIcon(PeyvandChatIconType.VOICE_CALL, Color(0xFF8291A3), Modifier.size(22.dp)) }
                 IconButton(
                     enabled = false,
                     onClick = {},
                     modifier = Modifier.semantics {
                         contentDescription = videoCallDescription
                     },
-                ) { Text("▣", color = Color(0xFF8291A3), fontSize = 21.sp) }
+                ) { PeyvandChatIcon(PeyvandChatIconType.VIDEO_CALL, Color(0xFF8291A3), Modifier.size(22.dp)) }
             }
         }
 
@@ -700,7 +700,7 @@ fun ChatConversationScreen(
                                 contentDescription = emojiDescription
                             },
                         ) {
-                            Text("☺", color = ChatMuted, fontSize = 25.sp)
+                            PeyvandChatIcon(PeyvandChatIconType.EMOJI, ChatMuted, Modifier.size(24.dp))
                         }
                         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                             OutlinedTextField(
@@ -733,7 +733,7 @@ fun ChatConversationScreen(
                                     contentDescription = attachmentDescription
                                 },
                             ) {
-                                Text("＋", color = if (state.isConnected) ChatBlue else ChatMuted, fontSize = 27.sp)
+                                PeyvandChatIcon(PeyvandChatIconType.ATTACHMENT, if (state.isConnected) ChatBlue else ChatMuted, Modifier.size(24.dp))
                             }
                             DropdownMenu(
                                 expanded = attachmentMenuExpanded,
@@ -745,7 +745,7 @@ fun ChatConversationScreen(
                                         attachmentMenuExpanded = false
                                         onSendAttachment()
                                     },
-                                    leadingIcon = { Text("↗", color = ChatBlue, fontSize = 20.sp) },
+                                    leadingIcon = { PeyvandChatIcon(PeyvandChatIconType.SEND, ChatBlue) },
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.chat_attach_receive)) },
@@ -753,7 +753,7 @@ fun ChatConversationScreen(
                                         attachmentMenuExpanded = false
                                         onPrepareReceive()
                                     },
-                                    leadingIcon = { Text("↓", color = ChatBlue, fontSize = 20.sp) },
+                                    leadingIcon = { PeyvandChatIcon(PeyvandChatIconType.RECEIVE, ChatBlue) },
                                 )
                             }
                         }
@@ -771,7 +771,7 @@ fun ChatConversationScreen(
                                     contentDescription = sendDescription
                                 },
                         ) {
-                            Text("➤", color = Color.White, fontSize = 22.sp)
+                            PeyvandChatIcon(PeyvandChatIconType.SEND, Color.White, Modifier.size(22.dp))
                         }
                     }
                 }
@@ -926,7 +926,7 @@ fun NearbyChatHubScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Text("‹", fontSize = 34.sp, color = Color(0xFF1D3552)) }
+            IconButton(onClick = onBack) { PeyvandChatIcon(PeyvandChatIconType.BACK, Color(0xFF1D3552), Modifier.size(24.dp)) }
             Text(
                 stringResource(R.string.chat_nearby_title),
                 style = MaterialTheme.typography.titleLarge,
@@ -941,14 +941,14 @@ fun NearbyChatHubScreen(
             lineHeight = 23.sp,
         )
         NearbyRoleCard(
-            glyph = "⌕",
+            glyph = PeyvandChatIconType.SEARCH,
             title = stringResource(R.string.chat_nearby_find_title),
             description = stringResource(R.string.chat_nearby_find_body),
             action = stringResource(R.string.chat_nearby_find_action),
             onClick = onFindPeer,
         )
         NearbyRoleCard(
-            glyph = "⌁",
+            glyph = PeyvandChatIconType.NEARBY,
             title = stringResource(R.string.chat_nearby_ready_title),
             description = stringResource(R.string.chat_nearby_ready_body),
             action = stringResource(R.string.chat_nearby_ready_action),
@@ -966,7 +966,7 @@ fun NearbyChatHubScreen(
 
 @Composable
 private fun NearbyRoleCard(
-    glyph: String,
+    glyph: PeyvandChatIconType,
     title: String,
     description: String,
     action: String,
@@ -990,7 +990,7 @@ private fun NearbyRoleCard(
                         .background(ChatPaleBlue, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(glyph, color = ChatBlue, fontSize = 26.sp)
+                    PeyvandChatIcon(glyph, ChatBlue, Modifier.size(26.dp))
                 }
                 Text(
                     title,
