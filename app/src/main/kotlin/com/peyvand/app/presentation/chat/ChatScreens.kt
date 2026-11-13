@@ -494,24 +494,26 @@ fun ChatConversationScreen(
                         .padding(start = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    Text(
-                        text = peer?.displayName ?: stringResource(R.string.chat_conversation_title),
-                        color = Color(0xFF162D49),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                    Text(
-                        text = when {
-                            state.isConnected -> stringResource(R.string.chat_status_connected)
-                            state.isConnectedToDifferentPeer ->
-                                stringResource(R.string.chat_status_other_peer_connected)
-                            else -> stringResource(R.string.chat_status_not_connected)
-                        },
-                        color = if (state.isConnected) Color(0xFF16835A) else ChatMuted,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                    )
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        Text(
+                            text = peer?.displayName ?: stringResource(R.string.chat_conversation_title),
+                            color = Color(0xFF162D49),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = when {
+                                state.isConnected -> stringResource(R.string.chat_status_connected)
+                                state.isConnectedToDifferentPeer ->
+                                    stringResource(R.string.chat_status_other_peer_connected)
+                                else -> stringResource(R.string.chat_status_not_connected)
+                            },
+                            color = if (state.isConnected) Color(0xFF16835A) else ChatMuted,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                        )
+                    }
                 }
                 IconButton(
                     enabled = false,
@@ -742,7 +744,8 @@ fun ChatConversationScreen(
                             Text("➤", color = Color.White, fontSize = 22.sp)
                         }
                     }
-                }            }
+                }
+            }
         }
     }
 }
