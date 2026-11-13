@@ -480,8 +480,14 @@ fun ChatConversationScreen(
 
     LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty()) {
-            // At most one localized date separator precedes each message.
-            listState.animateScrollToItem(state.messages.lastIndex)
+            val separatorCount = state.messages.indices.count { index ->
+                index == 0 || !isSameLocalCalendarDay(
+                    state.messages[index - 1].createdAtEpochMillis,
+                    state.messages[index].createdAtEpochMillis,
+                )
+            }
+            val lastMessageItemIndex = state.messages.lastIndex + separatorCount
+            listState.animateScrollToItem(lastMessageItemIndex)
         }
     }
 
