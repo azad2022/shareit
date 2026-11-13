@@ -270,3 +270,15 @@ The ordering is a proposed dependency-aware plan, not authorization to skip arch
 - The source and publication paths remain URI-based where Android exposes provider-backed content; no whole-file RAM buffering or all-files permission is added.
 - JVM category tests and Android storage instrumentation tests are authored for API 26 and API 36 validation. The exact follow-up CI run, APK SHA and physical Galaxy A12 ↔ ASUS retest are pending.
 - CP-004 remains IN_PROGRESS. The ASUS-to-Galaxy-A12 JPG failure is not marked resolved until the exact new build is tested on both physical devices.
+
+
+## 2026-11-13 — CP-CHAT-001 local persistence validation update
+
+- **Status:** `IN_PROGRESS`. Work remains isolated to `feature/cp-chat-001-local-persistence`; main and PR #3 were not changed.
+- **Source/CI:** exact source SHA `0d9a927e878e5d1af92a6f6de18b6852dec00172`; GitHub Actions run [#408](https://github.com/azad2022/shareit/actions/runs/43445471038).
+- **Chat domain:** `ChatMessageRulesTest` passed **8/8** (0 failures, errors or skips).
+- **Chat persistence:** `RoomChatRepositoryTest` passed **9/9** on Android API 26 and independently **9/9** on API 36 (0 failures, errors or skips at each API). The coverage includes encrypted Room payload, persisted outbox/database reopen, sequence monotonicity, wrong-peer isolation, delivery receipt transaction, outbox quota, missing-key fail-closed behavior, oversized-message rejection and ciphertext authentication failure.
+- **Adjacent instrumentation evidence:** API 36 mTLS passed 4/4, including TLS 1.2/1.3 and pinned-peer rejection. API 26 mTLS passed 3 tests with the TLS 1.3 conditional case skipped by runtime capability. API 36 Storage passed 2/2. API 26 Storage still fails in two pre-existing publisher tests due to `NoSuchMethodError: UiAutomation.grantRuntimePermission`; API 26 Room tests nevertheless executed and passed.
+- **Overall CI remains failed:** the general build job reports unresolved `AWAITING_DESTINATION` and `AWAITING_DESTINATION_TREE` references at `MainActivity.kt:106-107`, plus Storage Lint `NewApi` at `AndroidPeyvandDestinationPublisher.kt:209` (`MediaStore.Downloads.getContentUri`, API 29 while minSdk is 26). These are outside CP-CHAT-001 and were not changed here. The API 26 instrumentation job is also red due to the Storage test failure.
+- **Artifact/device status:** no Debug APK was produced by this run. No physical-device Keystore or backup/device-transfer test has yet been performed for chat persistence.
+- **Next:** complete physical-device key lifecycle and backup exclusion verification, finish the security review, and keep stable peer identity/network sync/channel multiplexing out of scope until separately authorized.
