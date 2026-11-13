@@ -175,5 +175,6 @@ interface ChatRepository {
     suspend fun confirmDeliveredAfterAuthenticatedReceipt(
         peerIdentityId: PeerIdentityId,
         messageId: ChatMessageId,
+        senderSequence: Long,
     ): Boolean
 }

@@ -302,6 +302,7 @@ class RoomChatRepository(
     override suspend fun confirmDeliveredAfterAuthenticatedReceipt(
         peerIdentityId: PeerIdentityId,
         messageId: ChatMessageId,
+        senderSequence: Long,
     ): Boolean = withContext(ioDispatcher) {
         database.withTransaction {
             val conversation = conversations.findByPeerFingerprint(
@@ -312,7 +313,8 @@ class RoomChatRepository(
                 ?: return@withTransaction false
 
             if (message.conversationId != conversation.id ||
-                message.direction != LOCAL_SENDER
+                message.direction != LOCAL_SENDER ||
+                message.senderSequence != senderSequence
             ) {
                 return@withTransaction false
             }
