@@ -139,7 +139,7 @@ fun PeyvandApp(
             HomeDestination.CHAT_FIND_DEVICE,
             HomeDestination.CHAT_PREPARE_TO_BE_FOUND,
             -> {
-                peerConnectionViewModel.disconnect()
+                chatViewModel.disconnectCurrentPeer()
                 destination = HomeDestination.NEARBY_HUB
             }
 
@@ -182,8 +182,12 @@ fun PeyvandApp(
 
                 HomeDestination.NEARBY_HUB -> NearbyChatHubScreen(
                     onBack = { destination = HomeDestination.HOME },
-                    onFindPeer = { destination = HomeDestination.CHAT_FIND_DEVICE },
+                    onFindPeer = {
+                        chatViewModel.disconnectCurrentPeer()
+                        destination = HomeDestination.CHAT_FIND_DEVICE
+                    },
                     onPrepareToBeFound = {
+                        chatViewModel.disconnectCurrentPeer()
                         destination = HomeDestination.CHAT_PREPARE_TO_BE_FOUND
                     },
                 )
@@ -195,7 +199,7 @@ fun PeyvandApp(
                     subtitle = stringResource(R.string.chat_find_discovery_subtitle),
                     role = DiscoveryRole.BROWSE_ONLY,
                     onBack = {
-                        peerConnectionViewModel.disconnect()
+                        chatViewModel.disconnectCurrentPeer()
                         destination = HomeDestination.NEARBY_HUB
                     },
                     peerConnectionViewModel = peerConnectionViewModel,
