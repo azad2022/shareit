@@ -901,8 +901,9 @@ class SingleFileTransferCoordinator(
         runCatching { source?.close() }
         val channel = authenticatedChannel
         authenticatedChannel = null
+        // Closing this logical FILE_TRANSFER channel must not tear down the parent TLS
+        // session; a CHAT channel may still be active on the same authenticated peer.
         runCatching { channel?.close() }
-        connectivityRepository.disconnect()
     }
 
     private fun TransferSessionPhase.isTerminal(): Boolean = when (this) {

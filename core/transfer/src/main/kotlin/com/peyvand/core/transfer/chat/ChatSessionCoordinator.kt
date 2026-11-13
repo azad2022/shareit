@@ -40,6 +40,7 @@ class ChatSessionCoordinator(
     private val outputMutex = Mutex()
     private val closed = AtomicBoolean(false)
     private val failureReported = AtomicBoolean(false)
+    private val sentMessageIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private var readerJob: Job? = null
     private var replayJob: Job? = null
 
@@ -75,27 +76,35 @@ class ChatSessionCoordinator(
     }
 
     /** The message must already be durably enqueued before this method is called. */
-    suspend fun sendPersistedMessage(message: ChatMessage) {
-        check(!closed.get()) { "Chat session is closed." }
-        require(message.peerIdentityId == peerIdentityId)
-        require(message.direction == ChatMessageDirection.OUTGOING)
-
-        val frame = ChatMessageFrameCodec.encodeMessage(
-            sessionId = channel.sessionId,
-            message = ChatWireMessage(
-                messageId = message.id,
-                senderSequence = message.senderSequence,
-                observedPeerSequence = message.observedPeerSequence,
-                createdAtEpochMillis = message.createdAtEpochMillis,
-                body = message.body,
-            ),
-        )
-        outputMutex.withLock {
+    suspend fun sendPersistedMessage(message: ChatMessage) =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
             check(!closed.get()) { "Chat session is closed." }
-            TransferFrameCodec.write(frame, channel.outputStream)
-            channel.outputStream.flush()
+            require(message.peerIdentityId == peerIdentityId)
+            require(message.direction == ChatMessageDirection.OUTGOING)
+            if (!sentMessageIds.add(message.id.value)) return@withContext
+
+            try {
+                val frame = ChatMessageFrameCodec.encodeMessage(
+                    sessionId = channel.sessionId,
+                    message = ChatWireMessage(
+                        messageId = message.id,
+                        senderSequence = message.senderSequence,
+                        observedPeerSequence = message.observedPeerSequence,
+                        createdAtEpochMillis = message.createdAtEpochMillis,
+                        body = message.body,
+                    ),
+                )
+                outputMutex.withLock {
+                    check(!closed.get()) { "Chat session is closed." }
+                    TransferFrameCodec.write(frame, channel.outputStream)
+                    channel.outputStream.flush()
+                }
+            } catch (exception: Exception) {
+                sentMessageIds.remove(message.id.value)
+                if (exception !is CancellationException) fail(exception)
+                throw exception
+            }
         }
-    }
 
     private suspend fun readLoop() {
         while (!closed.get()) {
