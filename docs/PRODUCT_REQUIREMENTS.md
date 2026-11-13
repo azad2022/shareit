@@ -1,8 +1,8 @@
 # PEYVAND (پیوند) — Android Product Requirements
 
-- **Status:** CP-001/CP-002 foundation and discovery implementation were authorized on 2026-11-01. The owner separately authorized CP-003 on 2026-11-04: a staged, one-to-one secure transfer of one user-selected file over Wi-Fi Direct under ADR-0007. The active CP-003B substage also includes the raw TCP channel restricted to the P2P interface under ADR-0008. This does not authorize unapproved fallback transports, group-transfer implementation, APK extraction, release signing, or unrelated scope.
+- **Status:** Product definition with owner-authorized, checkpoint-scoped Android implementation.
 - **Repository:** `azad2022/shareit` (private), default branch `main`.
-- **Last decision update:** 2026-11-04.
+- **Last decision update:** 2026-11-13.
 
 ## 1. Product vision
 
@@ -17,6 +17,7 @@ Build PEYVAND (پیوند), a premium-quality, native Android application for fa
 | Core connectivity | Offline, local peer-to-peer; no central server required |
 | Primary wireless method | Wi-Fi Direct |
 | Transfer modes | One-to-one and one sender to multiple receivers |
+| Chat behavior | Local chat history persisted on-device; pending messages synchronize only after a later direct connection and peer re-authentication; no server, cloud, or relay delivery |
 | Content | User-selected files/media and eligible app packages (APK/split APK where supported) |
 | Performance | Competitive, SHAREit-class performance where hardware and conditions allow; benchmark rather than promise universal parity |
 | Product priorities | Security, integrity, reliability, compatibility, maintainability |
@@ -51,6 +52,23 @@ Two devices discover, authenticate, explicitly approve the session, and exchange
 A sender selects multiple discovered receivers and a set of files. Each receiver must have independent consent, progress, cancellation, failure, resume, and integrity status. Group transfer must not corrupt or block unrelated receiver sessions. Radio capacity is shared; per-receiver throughput is not assumed to equal one-to-one throughput.
 
 Simultaneous multi-sender exchange among all group members is not confirmed for the initial group-transfer scope and requires a separate product decision.
+
+### 4.3 Local chat
+
+The product owner selected local chat with durable local history and synchronization when the same devices reconnect.
+
+- Persist an outgoing message locally before presenting it as saved.
+- Retain unsynchronized messages in a durable local outbox across normal app/process restarts.
+- Synchronize only over a direct local connection after authenticating the previously paired peer.
+- Do not use public internet, accounts, cloud storage, backend services, push delivery, central servers, hosted databases, remote relays, or operator-managed message storage for chat.
+- Store chat history and the pending outbox only in the private local app storage of the participating phones. PEYVAND/the product operator must not receive or retain chat content, history, contacts, or message metadata on external infrastructure.
+- The only message synchronization path is direct local Wi-Fi Direct after peer authentication.
+- The initial chat scope includes no cloud backup, Android-managed device migration, app-managed export, or third-party backup path for chat history/outbox/identity data; apply and physically verify Android backup exclusions for supported OS/target-SDK combinations.
+- Distinguish local save, waiting for connection, synchronization, and durable remote receipt. A message is not delivered merely because it is stored locally or written to a socket.
+- Do not promise delivery while devices are apart, after app data is cleared, or when Android prevents the application from running. Local history is recoverable only while the relevant phone's app data and required keys remain available.
+- Group chat, read receipts, voice/video communication, and remote deletion are not approved by this decision and require separate design/approval.
+
+See [`LOCAL_CHAT_ARCHITECTURE_AND_UX.md`](LOCAL_CHAT_ARCHITECTURE_AND_UX.md) and the chat ADRs under [`decisions/`](decisions/) for detailed architecture and unresolved decisions.
 
 ## 5. Performance and integrity
 
@@ -133,6 +151,11 @@ Allowed statuses: `IN_PROGRESS`, `BLOCKED`, `PASSED`. Only mark `PASSED` when th
 - Initial maximum supported group size based on device testing.
 - Whether simultaneous multi-sender group exchange is required in a later release.
 - Transfer history retention and cleanup policy.
+- Chat peer identity, key lifecycle, and authenticated re-pairing policy.
+- Chat pairing bootstrap and binding to the existing secure session.
+- Chat encryption-at-rest, Android backup exclusion, retention, and deletion policy.
+- Chat message ordering, synchronization protocol, cursor semantics, and queue limits.
+- Whether group chat, read receipts, voice/video messaging, or synchronized deletion are required in a later phase.
 - Exact Kurdish locale/script (Sorani/Arabic-based RTL, Kurmanji/Latin LTR, or another explicitly approved variant), and app package/application ID.
 - Quantified throughput and reliability acceptance thresholds after benchmark baselines.
 
@@ -142,4 +165,4 @@ See [`PRODUCT_IDENTITY_AND_LOCALIZATION.md`](PRODUCT_IDENTITY_AND_LOCALIZATION.m
 
 ## 14. Implementation authorization
 
-This document records product requirements and scope boundaries. CP-001/CP-002 implementation and the narrowly defined CP-003 secure one-to-one transfer have explicit product-owner authorization recorded in their checkpoints and ADR-0007. Continue only within those accepted milestones. Any fallback transport, expansion of group-transfer behavior, APK extraction/installation work, release signing, or unrelated implementation requires its own explicit approval.
+This document records product requirements and implementation boundaries. The product owner explicitly authorized CP-CHAT-001 local-persistence implementation on 2026-11-13. That authorization is limited to the scoped local-storage milestone and does not approve chat networking, persistent peer identity, Compose chat screens, group chat, remote services, cloud backup, app export, release signing, or unrelated feature expansion.
