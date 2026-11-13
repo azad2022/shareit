@@ -138,17 +138,16 @@ class AndroidPeyvandDestinationPublisherTest {
     }
 
     private fun grantRuntimePermission(permission: String) {
-        val command = "pm grant ${context.packageName} $permission && " +
-            "echo PEYVAND_PERMISSION_GRANTED"
         val descriptor = InstrumentationRegistry.getInstrumentation()
             .uiAutomation
-            .executeShellCommand(command)
+            .executeShellCommand("pm grant ${context.packageName} $permission")
         val output = ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use {
             it.readText()
         }
         assertTrue(
-            "Shell did not confirm granting $permission. Output: $output",
-            output.contains("PEYVAND_PERMISSION_GRANTED"),
+            "Android did not grant $permission. Shell output: $output",
+            context.checkSelfPermission(permission) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED,
         )
     }
 
