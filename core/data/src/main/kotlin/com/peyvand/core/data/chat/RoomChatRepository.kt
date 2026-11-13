@@ -116,11 +116,13 @@ class RoomChatRepository(
                     observedPeerSequence = conversation.lastPeerSequence,
                     createdAtEpochMillis = createdAtEpochMillis,
                 )
-                val encrypted = cipher.encrypt(
-                    plaintext = body.toByteArray(StandardCharsets.UTF_8),
-                    associatedData = associatedData,
-                    key = key,
-                )
+                val encrypted = body.toByteArray(StandardCharsets.UTF_8).useAndErase { plaintext ->
+                    cipher.encrypt(
+                        plaintext = plaintext,
+                        associatedData = associatedData,
+                        key = key,
+                    )
+                }
 
                 messages.insert(
                     ChatMessageEntity(
@@ -325,14 +327,16 @@ class RoomChatRepository(
             associatedData = aad,
             key = key,
         )
-        val body = try {
-            StandardCharsets.UTF_8.newDecoder()
-                .onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT)
-                .decode(ByteBuffer.wrap(plaintext))
-                .toString()
-        } catch (exception: Exception) {
-            throw ChatPayloadIntegrityException(exception)
+        val body = plaintext.useAndErase { decryptedBytes ->
+            try {
+                StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(decryptedBytes))
+                    .toString()
+            } catch (exception: Exception) {
+                throw ChatPayloadIntegrityException(exception)
+            }
         }
 
         return ChatMessage(

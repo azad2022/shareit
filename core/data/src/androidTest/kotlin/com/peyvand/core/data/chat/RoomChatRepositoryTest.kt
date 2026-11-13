@@ -13,6 +13,7 @@ import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -282,6 +283,84 @@ class RoomChatRepositoryTest {
         }
 
         assertTrue(failedAuthentication)
+    }
+
+    @Test
+    fun changingSenderSequenceFailsIntegrityCheck() = runBlocking {
+        repository.enqueueOutgoingMessage(peerIdentity, "sequence integrity", 100L)
+
+        database.openHelper.writableDatabase.execSQL(
+            "UPDATE chat_messages SET sender_sequence = ?",
+            arrayOf(99L),
+        )
+
+        var failedAuthentication = false
+        try {
+            repository.observeRecentMessages(peerIdentity).first()
+        } catch (_: ChatPayloadIntegrityException) {
+            failedAuthentication = true
+        }
+
+        assertTrue(failedAuthentication)
+    }
+
+    @Test
+    fun missingCryptoMetadataWithPersistedMessagesFailsClosed() = runBlocking {
+        repository.enqueueOutgoingMessage(peerIdentity, "metadata loss", 100L)
+        database.openHelper.writableDatabase.execSQL("DELETE FROM chat_crypto_state")
+
+        var failedClosed = false
+        try {
+            repository.loadPendingOutgoingMessages(peerIdentity)
+        } catch (_: ChatLocalDataCorruptionException) {
+            failedClosed = true
+        }
+
+        assertTrue(failedClosed)
+    }
+
+    @Test
+    fun unsupportedCryptoKeyVersionFailsClosed() = runBlocking {
+        repository.enqueueOutgoingMessage(peerIdentity, "key version", 100L)
+        database.openHelper.writableDatabase.execSQL(
+            "UPDATE chat_crypto_state SET key_version = ? WHERE id = ?",
+            arrayOf(999, ChatCryptoStateEntity.SINGLETON_ID),
+        )
+
+        var failedClosed = false
+        try {
+            repository.loadPendingOutgoingMessages(peerIdentity)
+        } catch (_: ChatLocalDataCorruptionException) {
+            failedClosed = true
+        }
+
+        assertTrue(failedClosed)
+    }
+
+    @Test
+    fun temporaryPlaintextBytesAreErasedAfterSuccessfulUse() {
+        val temporaryBytes = "private".toByteArray(Charsets.UTF_8)
+
+        val result = temporaryBytes.useAndErase { bytes ->
+            assertEquals("private", String(bytes, Charsets.UTF_8))
+            "processed"
+        }
+
+        assertEquals("processed", result)
+        assertArrayEquals(ByteArray("private".length), temporaryBytes)
+    }
+
+    @Test
+    fun temporaryPlaintextBytesAreErasedWhenUseFails() {
+        val temporaryBytes = "private".toByteArray(Charsets.UTF_8)
+
+        org.junit.Assert.assertThrows(IllegalStateException::class.java) {
+            temporaryBytes.useAndErase {
+                throw IllegalStateException("expected test failure")
+            }
+        }
+
+        assertArrayEquals(ByteArray("private".length), temporaryBytes)
     }
 
     private fun openRepository() {
