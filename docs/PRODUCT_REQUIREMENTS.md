@@ -60,10 +60,13 @@ The product owner selected local chat with durable local history and synchroniza
 - Persist an outgoing message locally before presenting it as saved.
 - Retain unsynchronized messages in a durable local outbox across normal app/process restarts.
 - Synchronize only over a direct local connection after authenticating the previously paired peer.
-- Do not use public internet, accounts, cloud storage, backend services, push delivery, or remote relays for chat delivery.
+- Do not use public internet, accounts, cloud storage, backend services, push delivery, central servers, hosted databases, remote relays, or operator-managed message storage for chat.
+- Store chat history and the pending outbox only in the private local app storage of the participating phones. PEYVAND/the product operator must not receive or retain chat content, history, contacts, or message metadata on external infrastructure.
+- The only message synchronization path is direct local Wi-Fi Direct after peer authentication.
+- The initial chat scope includes no cloud backup, Android-managed device migration, app-managed export, or third-party backup path for chat history/outbox/identity data; apply and physically verify Android backup exclusions for supported OS/target-SDK combinations.
 - Distinguish local save, waiting for connection, synchronization, and durable remote receipt. A message is not delivered merely because it is stored locally or written to a socket.
-- Do not promise delivery while devices are apart, after app data is cleared, or when Android prevents the application from running.
-- Group chat, read receipts, voice/video communication, remote deletion, and cloud backup behavior are not approved by this decision and require separate design/approval.
+- Do not promise delivery while devices are apart, after app data is cleared, or when Android prevents the application from running. Local history is recoverable only while the relevant phone's app data and required keys remain available.
+- Group chat, read receipts, voice/video communication, and remote deletion are not approved by this decision and require separate design/approval.
 
 See [`LOCAL_CHAT_ARCHITECTURE_AND_UX.md`](LOCAL_CHAT_ARCHITECTURE_AND_UX.md) and the chat ADRs under [`decisions/`](decisions/) for detailed architecture and unresolved decisions.
 
