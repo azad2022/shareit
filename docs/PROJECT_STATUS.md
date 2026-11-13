@@ -3,10 +3,21 @@
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
-- **Current checkpoint:** CP-CHAT-001 — Local encrypted chat persistence (separate, isolated implementation track)
-- **Current branch:** `feature/cp-chat-001-local-persistence`; CP-004 base code SHA `cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8`; latest CP-CHAT head `2bb8cd51082428b4c1223cf38260d2672ca0dfb4`
+- **Current checkpoint:** CP-CHAT-002 — Persistent peer identity, one-to-one message synchronization, and chat-first Compose experience (`IN_PROGRESS`)
+- **Current branch:** `feature/cp-chat-002-messaging-ui`; base `eaa8fad9649362951e9283b91b8d162a26c75488`; documentation commits `99fefde71c48abd128ea7c7905756b6b2cf96bab`, `5dd46fdb1eaee09fafe03f8136eab94b1ba6f983`, `11e2c1a524005494c56f30e05654b1a287f8cfef`
 - **Last updated:** 2026-11-13
 - **Parallel transfer track:** CP-004 remains `IN_PROGRESS` on `feature/cp-004-multi-item-transfer`; PR #3 remains open as Draft and has not been changed or merged.
+
+## CP-CHAT-002 — Persistent peer identity, message sync, and chat-first UI
+
+- **Status:** `IN_PROGRESS`; owner explicitly approved persistent identity, real one-to-one messaging, reconnect synchronization, and Compose chat UI on 2026-11-13.
+- **Branch:** `feature/cp-chat-002-messaging-ui`, created from CP-CHAT-001 workflow head `eaa8fad9649362951e9283b91b8d162a26c75488`.
+- **Accepted UX decision:** `docs/decisions/ADR-0017-CHAT-FIRST-UX.md`; replaces the former transfer-first home-screen proposal.
+- **Updated UX spec:** `docs/LOCAL_CHAT_UX_SPEC.md` now specifies Chats as the primary destination, real trusted-peer rows, one-to-one conversation UI, attachment delegation, and disabled future call affordances.
+- **Reference:** Product-owner-provided Telegram conversation screenshot is an interaction-quality reference only; all PEYVAND composition, artwork, wallpaper, icons, and styling remain original.
+- **Implementation evidence so far:** documentation and scope only. No Kotlin/Compose source has yet changed on this branch; no new build, APK, or test run exists for CP-CHAT-002.
+- **Security gates:** ADR-0014 stable identity and ADR-0015 synchronization semantics remain Proposed and require detailed threat/protocol review before wire implementation. Existing file-transfer TLS certificate and channel remain exclusively owned by file transfer.
+- **Next:** review identity bootstrap and protocol framing, then implement trusted identity/pairing and synchronization slices; implement UI against real trusted-peer and ChatRepository state without fabricated content.
 
 ## CP-CHAT-001 — Local encrypted persistence
 
