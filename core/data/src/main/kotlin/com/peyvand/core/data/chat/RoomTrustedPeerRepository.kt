@@ -15,7 +15,7 @@ class RoomTrustedPeerRepository(
 ) : TrustedPeerRepository {
     override fun observeTrustedPeers(): Flow<List<TrustedPeerIdentity>> =
         database.trustedPeers().observeAll().map { rows ->
-            rows.map(ChatTrustedPeerEntity::toDomain)
+            rows.map { it.toDomain() }
         }
 
     override suspend fun findTrustedPeer(
