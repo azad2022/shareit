@@ -70,6 +70,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.peyvand.app.R
+import com.peyvand.core.designsystem.theme.PeyvandColors
 import com.peyvand.core.domain.chat.ChatMessage
 import com.peyvand.core.domain.chat.ChatMessageDeliveryState
 import com.peyvand.core.domain.chat.ChatMessageDirection
@@ -79,10 +80,10 @@ import java.util.Calendar
 import java.util.Date
 import kotlinx.coroutines.launch
 
-private val ChatCanvas = Color(0xFFF4F8FD)
-private val ChatBlue = Color(0xFF1769D2)
-private val ChatPaleBlue = Color(0xFFE4F0FF)
-private val ChatMuted = Color(0xFF718198)
+private val ChatCanvas = PeyvandColors.Background
+private val ChatBlue = PeyvandColors.PrimaryBlue
+private val ChatPaleBlue = PeyvandColors.PrimaryBlueContainer
+private val ChatMuted = PeyvandColors.OnSurfaceVariant
 
 @Composable
 fun ChatHomeScreen(
@@ -153,7 +154,7 @@ fun ChatHomeScreen(
             Text(
                 text = stringResource(R.string.chat_home_title),
                 style = MaterialTheme.typography.headlineMedium,
-                color = Color(0xFF172A43),
+                color = PeyvandColors.OnSurface,
                 fontWeight = FontWeight.Bold,
             )
             Text(
@@ -174,7 +175,7 @@ fun ChatHomeScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     unfocusedContainerColor = Color.White,
                     focusedContainerColor = Color.White,
-                    unfocusedBorderColor = Color(0xFFE4EAF2),
+                    unfocusedBorderColor = PeyvandColors.SurfaceVariant,
                     focusedBorderColor = ChatBlue,
                 ),
             )
@@ -191,7 +192,7 @@ fun ChatHomeScreen(
                 Text(
                     text = stringResource(R.string.chat_recent_title),
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF24374E),
+                    color = PeyvandColors.OnSurface,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
@@ -272,7 +273,7 @@ private fun NearbyEntryCard(onClick: () -> Unit) {
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
-        color = Color(0xFF1769D2),
+        color = PeyvandColors.PrimaryBlue,
         shadowElevation = 2.dp,
     ) {
         Row(
@@ -341,7 +342,7 @@ private fun ChatConversationRow(
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = Color(0xFF172A43),
+                        color = PeyvandColors.OnSurface,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -391,7 +392,7 @@ private fun ChatConversationRow(
                         Text(
                             text = if (isConnected) stringResource(R.string.chat_status_connected)
                             else stringResource(R.string.chat_status_trusted),
-                            color = if (isConnected) Color(0xFF16835A) else ChatMuted,
+                            color = if (isConnected) PeyvandColors.Success else ChatMuted,
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
@@ -428,7 +429,7 @@ private fun ChatEmptyHomeState(onOpenNearby: () -> Unit) {
         Spacer(Modifier.height(14.dp))
         Text(
             stringResource(R.string.chat_empty_title),
-            color = Color(0xFF223650),
+            color = PeyvandColors.OnSurface,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
         )
@@ -508,7 +509,7 @@ fun ChatConversationScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onBack) {
-                    PeyvandChatIcon(PeyvandChatIconType.BACK, Color(0xFF1D3552), Modifier.size(24.dp))
+                    PeyvandChatIcon(PeyvandChatIconType.BACK, PeyvandColors.OnSurface, Modifier.size(24.dp))
                 }
                 PeerAvatar(
                     label = peer?.displayName.orEmpty(),
@@ -523,7 +524,7 @@ fun ChatConversationScreen(
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         Text(
                             text = peer?.displayName ?: stringResource(R.string.chat_conversation_title),
-                            color = Color(0xFF162D49),
+                            color = PeyvandColors.OnSurface,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -535,7 +536,7 @@ fun ChatConversationScreen(
                                     stringResource(R.string.chat_status_other_peer_connected)
                                 else -> stringResource(R.string.chat_status_not_connected)
                             },
-                            color = if (state.isConnected) Color(0xFF16835A) else ChatMuted,
+                            color = if (state.isConnected) PeyvandColors.Success else ChatMuted,
                             style = MaterialTheme.typography.labelSmall,
                             maxLines = 1,
                         )
@@ -547,20 +548,20 @@ fun ChatConversationScreen(
                     modifier = Modifier.semantics {
                         contentDescription = voiceCallDescription
                     },
-                ) { PeyvandChatIcon(PeyvandChatIconType.VOICE_CALL, Color(0xFF8291A3), Modifier.size(22.dp)) }
+                ) { PeyvandChatIcon(PeyvandChatIconType.VOICE_CALL, PeyvandColors.Outline, Modifier.size(22.dp)) }
                 IconButton(
                     enabled = false,
                     onClick = {},
                     modifier = Modifier.semantics {
                         contentDescription = videoCallDescription
                     },
-                ) { PeyvandChatIcon(PeyvandChatIconType.VIDEO_CALL, Color(0xFF8291A3), Modifier.size(22.dp)) }
+                ) { PeyvandChatIcon(PeyvandChatIconType.VIDEO_CALL, PeyvandColors.Outline, Modifier.size(22.dp)) }
             }
         }
 
         if (!state.isConnected) {
             Surface(
-                color = if (state.isConnectedToDifferentPeer) Color(0xFFFFF1E8) else Color(0xFFEAF3FF),
+                color = if (state.isConnectedToDifferentPeer) PeyvandColors.SurfaceVariant else PeyvandColors.PrimaryBlueContainer,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
@@ -575,7 +576,7 @@ fun ChatConversationScreen(
                             stringResource(R.string.chat_offline_banner)
                         },
                         modifier = Modifier.weight(1f),
-                        color = if (state.isConnectedToDifferentPeer) Color(0xFF9A4C1A) else Color(0xFF365C88),
+                        color = if (state.isConnectedToDifferentPeer) PeyvandColors.Warning else PeyvandColors.OnPrimaryBlueContainer,
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Text(
@@ -595,9 +596,9 @@ fun ChatConversationScreen(
                 text = stringResource(R.string.chat_pending_count, state.pendingOutboxCount),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFEAF3FF))
+                    .background(PeyvandColors.PrimaryBlueContainer)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                color = Color(0xFF365C88),
+                color = PeyvandColors.OnPrimaryBlueContainer,
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -654,9 +655,9 @@ fun ChatConversationScreen(
                 text = noticeText,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFFFF4E7))
+                    .background(PeyvandColors.SurfaceVariant)
                     .padding(horizontal = 16.dp, vertical = 7.dp),
-                color = Color(0xFF8B571D),
+                color = PeyvandColors.Warning,
                 style = MaterialTheme.typography.labelSmall,
             )
         }
@@ -718,10 +719,10 @@ fun ChatConversationScreen(
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                                 keyboardActions = KeyboardActions(onSend = { submitDraft() }),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    unfocusedContainerColor = Color(0xFFF7F9FC),
-                                    focusedContainerColor = Color(0xFFF7F9FC),
-                                    unfocusedBorderColor = Color(0xFFE5EBF2),
-                                    focusedBorderColor = Color(0xFF9CC2F0),
+                                    unfocusedContainerColor = PeyvandColors.Background,
+                                    focusedContainerColor = PeyvandColors.Background,
+                                    unfocusedBorderColor = PeyvandColors.SurfaceVariant,
+                                    focusedBorderColor = PeyvandColors.Outline,
                                 ),
                             )
                         }
@@ -764,7 +765,7 @@ fun ChatConversationScreen(
                                 .padding(bottom = 3.dp)
                                 .size(48.dp)
                                 .background(
-                                    color = if (draft.isNotBlank() && !sending) ChatBlue else Color(0xFFB7C5D6),
+                                    color = if (draft.isNotBlank() && !sending) ChatBlue else PeyvandColors.Outline,
                                     shape = CircleShape,
                                 )
                                 .semantics {
@@ -796,7 +797,7 @@ private fun ChatDateSeparator(timestamp: Long) {
             Text(
                 text = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(timestamp)),
                 modifier = Modifier.padding(horizontal = 13.dp, vertical = 6.dp),
-                color = Color(0xFF52677F),
+                color = PeyvandColors.OnSurfaceVariant,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
             )
@@ -824,7 +825,7 @@ private fun ChatMessageBubble(message: ChatMessage) {
             horizontalAlignment = if (outgoing) Alignment.End else Alignment.Start,
         ) {
             Surface(
-                color = if (outgoing) Color(0xFFE1EEFF) else Color.White,
+                color = if (outgoing) PeyvandColors.PrimaryBlueContainer else Color.White,
                 shape = if (outgoing) {
                     RoundedCornerShape(20.dp, 20.dp, 5.dp, 20.dp)
                 } else {
@@ -839,7 +840,7 @@ private fun ChatMessageBubble(message: ChatMessage) {
                     SelectionContainer {
                         Text(
                             text = message.body,
-                            color = Color(0xFF20364F),
+                            color = PeyvandColors.OnSurface,
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     }
@@ -865,7 +866,7 @@ private fun ChatMessageBubble(message: ChatMessage) {
                                         stringResource(R.string.chat_message_waiting_short)
                                 },
                                 color = if (message.deliveryState == ChatMessageDeliveryState.DELIVERED) {
-                                    Color(0xFF1672C9)
+                                    PeyvandColors.PrimaryBlue
                                 } else {
                                     ChatMuted
                                 },
@@ -897,7 +898,7 @@ private fun ChatConversationEmptyCard(modifier: Modifier = Modifier) {
             PeyvandConnectionGlyph(Modifier.size(88.dp))
             Text(
                 stringResource(R.string.chat_empty_conversation_title),
-                color = Color(0xFF20364F),
+                color = PeyvandColors.OnSurface,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
@@ -926,12 +927,12 @@ fun NearbyChatHubScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { PeyvandChatIcon(PeyvandChatIconType.BACK, Color(0xFF1D3552), Modifier.size(24.dp)) }
+            IconButton(onClick = onBack) { PeyvandChatIcon(PeyvandChatIconType.BACK, PeyvandColors.OnSurface, Modifier.size(24.dp)) }
             Text(
                 stringResource(R.string.chat_nearby_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF182D47),
+                color = PeyvandColors.OnSurface,
             )
         }
         Text(
@@ -994,7 +995,7 @@ private fun NearbyRoleCard(
                 }
                 Text(
                     title,
-                    color = Color(0xFF1D3450),
+                    color = PeyvandColors.OnSurface,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -1014,7 +1015,7 @@ private fun PeerAvatar(
     Box(
         modifier = modifier
             .clip(CircleShape)
-            .background(Color(0xFFDCEBFF)),
+            .background(PeyvandColors.PrimaryBlueContainer),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -1064,7 +1065,7 @@ private fun PeyvandConnectionGlyph(
     inverted: Boolean = false,
 ) {
     val primary = if (inverted) Color.White else ChatBlue
-    val secondary = if (inverted) Color.White.copy(alpha = 0.62f) else Color(0xFF8BB8EC)
+    val secondary = if (inverted) Color.White.copy(alpha = 0.62f) else PeyvandColors.PrimaryBlue
     Canvas(modifier) {
         val stroke = size.minDimension * 0.035f
         val left = Offset(size.width * 0.23f, size.height * 0.50f)
@@ -1086,8 +1087,8 @@ private fun PeyvandConnectionGlyph(
 
 @Composable
 private fun PeyvandChatWallpaper(modifier: Modifier = Modifier) {
-    val ink = Color(0xFF5A82AA).copy(alpha = 0.11f)
-    Canvas(modifier.background(Color(0xFFEAF2F8))) {
+    val ink = PeyvandColors.Outline.copy(alpha = 0.11f)
+    Canvas(modifier.background(PeyvandColors.Background)) {
         val stepX = size.width / 4f
         val stepY = size.height / 6f
         for (row in 0..6) {
