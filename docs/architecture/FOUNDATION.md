@@ -22,7 +22,7 @@ CP-002 discovery itself only finds PEYVAND service advertisements. CP-003B conta
 
 - `:app`: Android entry point, Compose presentation, lifecycle ownership and explicit composition.
 - `:core:domain`: Android-free language, discovery, peer-connection and network-diagnostic models/policies. It exposes `StateFlow` in repository contracts and must not import Android or Compose APIs.
-- `:core:data`: Preferences DataStore and AppCompat per-app locale adapter.
+- `:core:data`: Preferences DataStore and AppCompat per-app locale adapter; CP-CHAT-001 adds Room-backed local chat persistence and an Android Keystore AES-GCM payload cipher. The chat repository is exposed lazily by the app and does not initialize a network connection.
 - `:core:connectivity`: Android `WifiP2pManager` adapter, one shared P2P channel/receiver, DNS-SD advertisement/discovery, `WifiDirectPeerConnectionController`, runtime capability reporting and app-default network diagnostics through `ConnectivityManager`. It does not depend on app presentation.
 - `:core:designsystem`: PEYVAND semantic colors and Compose theme.
 - `:core:transfer`: transport-independent, bounded transfer frames, manifest validation, pairing transcript/SAS derivation, lifecycle policy, and streaming/hash primitives. It must not import Android UI or Wi-Fi P2P framework types.
@@ -88,6 +88,22 @@ CP-002 discovery does not own peer connection, pairing, TLS, local sockets, tran
 - The owner-reported group-formation observation is a smoke test only; it does not replace a recorded handset/API/APK/role matrix or a successful disconnect/reconnect cycle.
 - Transport decision: `docs/decisions/ADR-0008-WIFI-DIRECT-TCP-CHANNEL.md`.
 - Checkpoint and validation evidence: `docs/checkpoints/CP-003-SECURE-FILE-TRANSFER.md`.
+
+## CP-CHAT-001 — Local chat persistence
+
+The first chat implementation slice is isolated on `feature/cp-chat-001-local-persistence`, based on the validated CP-004 code baseline `cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8`.
+
+- `:core:domain` defines Android-free chat message, conversation, peer-fingerprint and repository contracts. The persistent peer identifier is a SHA-256 fingerprint value; discovery names and transient network addresses are not accepted as identity.
+- `:core:data` owns the Room entities/DAOs/database, the durable outgoing outbox and message repository. The message row, outbox row and next local sequence are committed in one Room transaction before the repository reports local save.
+- Message bodies are encrypted with AES-256-GCM through a non-exportable Android Keystore key. Authenticated associated data binds the peer fingerprint, conversation ID, message ID, direction, sender sequence, observed peer sequence and timestamp. Hardware-backed/StrongBox storage is not assumed.
+- If chat crypto metadata exists but the Keystore key is missing/invalidated, the repository fails closed. It must not silently create a replacement key or show old history as empty.
+- The pending outgoing queue is capped at 1,024 messages per peer as an initial bounded-resource policy. Message text is capped at 4 KiB UTF-8. No unsent messages or local history are silently pruned.
+- The app manifest disables Android backup and declares exclusions for cloud backup and device transfer. Actual behavior still requires API/OEM physical-device verification.
+- No chat Compose screen, incoming-message protocol, persistent peer identity, synchronization coordinator, socket sharing/multiplexing, or network send/receive is included in CP-CHAT-001.
+- **Important existing boundary:** the current mTLS certificate is session-scoped and `AuthenticatedPeerChannel` is exclusively claimed by the transfer coordinator. Chat must not reuse the ephemeral certificate or take the transfer channel. A separate stable-identity and protocol/channel-multiplexing design is required before reconnect synchronization.
+- Acceptance tests cover message validation, encrypted storage, database reopen, monotonic local sequencing, receipt state, wrong-peer isolation, tampered ciphertext and missing-key failure. The first exact-head GitHub Actions result and physical-device validation remain pending.
+
+This checkpoint does not create a server, backend, cloud database, relay, account service, or remote storage. Chat content and queued messages remain only in the participating phones' private app data.
 
 ## Transfer permission gate
 
