@@ -1,6 +1,7 @@
 package com.peyvand.core.transfer.session
 
 import com.peyvand.core.domain.connection.AuthenticatedPeerChannel
+import com.peyvand.core.domain.connection.AuthenticatedPeerChannelPurpose
 import com.peyvand.core.domain.connection.P2pTcpChannelSnapshot
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
@@ -239,8 +240,10 @@ class SingleFileTransferCoordinatorTest {
 
         override fun rejectPairing() = Unit
 
-        override fun claimAuthenticatedChannel(): AuthenticatedPeerChannel? {
-            if (claimed) return null
+        override fun claimAuthenticatedChannel(
+            purpose: AuthenticatedPeerChannelPurpose,
+        ): AuthenticatedPeerChannel? {
+            if (purpose != AuthenticatedPeerChannelPurpose.FILE_TRANSFER || claimed) return null
             claimed = true
             return channel
         }

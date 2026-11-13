@@ -13,7 +13,6 @@ import android.location.LocationManager
 import android.net.wifi.p2p.WifiP2pManager
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest
-import android.os.Build
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
