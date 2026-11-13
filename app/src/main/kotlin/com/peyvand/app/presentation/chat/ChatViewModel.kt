@@ -123,6 +123,7 @@ class ChatViewModel(
 
     private val selectedPeer = MutableStateFlow<PeerIdentityId?>(null)
     private val notice = MutableStateFlow<ChatUiNotice?>(null)
+    private val activeCoordinatorPeerState = MutableStateFlow<PeerIdentityId?>(null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val conversationUiState: StateFlow<ChatConversationUiState> = selectedPeer
@@ -136,7 +137,8 @@ class ChatViewModel(
                     chatRepository.observePendingOutboxCount(identityId),
                     connectivityRepository.secureSession,
                     notice,
-                ) { peers, messages, pending, session, currentNotice ->
+                    activeCoordinatorPeerState,
+                ) { peers, messages, pending, session, currentNotice, coordinatorPeer ->
                     val peer = peers.firstOrNull { it.identityId == identityId }
                     val connectedPeer = session.peerIdentityId?.let {
                         runCatching { PeerIdentityId.fromSha256Fingerprint(it) }.getOrNull()
@@ -147,6 +149,7 @@ class ChatViewModel(
                             if (
                                 session.status == SecureSessionStatus.AUTHENTICATED &&
                                 connectedPeer == identityId &&
+                                coordinatorPeer == identityId &&
                                 message.direction == com.peyvand.core.domain.chat.ChatMessageDirection.OUTGOING &&
                                 message.deliveryState ==
                                     com.peyvand.core.domain.chat.ChatMessageDeliveryState.WAITING_FOR_CONNECTION
@@ -290,6 +293,7 @@ class ChatViewModel(
             activeCoordinator?.close()
             activeCoordinator = null
             activeCoordinatorPeer = null
+            activeCoordinatorPeerState.value = null
 
             val channel = connectivityRepository.claimAuthenticatedChannel(
                 AuthenticatedPeerChannelPurpose.CHAT,
@@ -309,6 +313,7 @@ class ChatViewModel(
                         if (activeCoordinator === created) {
                             activeCoordinator = null
                             activeCoordinatorPeer = null
+                            activeCoordinatorPeerState.value = null
                         }
                     }
                     notice.value = ChatUiNotice.MESSAGE_SAVED_WAITING_FOR_DIRECT_CONNECTION
@@ -317,6 +322,7 @@ class ChatViewModel(
             )
             activeCoordinator = created
             activeCoordinatorPeer = identityId
+            activeCoordinatorPeerState.value = identityId
             created.start()
         }
     }
@@ -326,6 +332,7 @@ class ChatViewModel(
             activeCoordinator?.close()
             activeCoordinator = null
             activeCoordinatorPeer = null
+            activeCoordinatorPeerState.value = null
         }
     }
 
