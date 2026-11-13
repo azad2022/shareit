@@ -34,6 +34,7 @@ data class ChatConversationPreview(
 data class ChatHomeUiState(
     val conversations: List<ChatConversationPreview> = emptyList(),
     val connectedPeerFingerprint: String? = null,
+    val activeChatPeerFingerprint: String? = null,
     val isLoading: Boolean = true,
 )
 
@@ -42,6 +43,7 @@ data class ChatConversationUiState(
     val messages: List<ChatMessage> = emptyList(),
     val pendingOutboxCount: Int = 0,
     val isConnected: Boolean = false,
+    val isSyncChannelReady: Boolean = false,
     val isConnectedToDifferentPeer: Boolean = false,
     val notice: ChatUiNotice? = null,
 )
@@ -105,7 +107,8 @@ class ChatViewModel(
     val homeUiState: StateFlow<ChatHomeUiState> = combine(
         conversationPreviews,
         connectivityRepository.secureSession,
-    ) { previews, session ->
+        activeCoordinatorPeerState,
+    ) { previews, session, coordinatorPeer ->
         ChatHomeUiState(
             conversations = previews,
             connectedPeerFingerprint = if (session.status == SecureSessionStatus.AUTHENTICATED) {
@@ -113,6 +116,7 @@ class ChatViewModel(
             } else {
                 null
             },
+            activeChatPeerFingerprint = coordinatorPeer?.sha256Fingerprint,
             isLoading = false,
         )
     }.stateIn(
@@ -165,6 +169,7 @@ class ChatViewModel(
                         pendingOutboxCount = pending,
                         isConnected = session.status == SecureSessionStatus.AUTHENTICATED &&
                             connectedPeer == identityId,
+                        isSyncChannelReady = coordinatorPeer == identityId,
                         isConnectedToDifferentPeer =
                             session.status == SecureSessionStatus.AUTHENTICATED &&
                                 connectedPeer != null && connectedPeer != identityId,
