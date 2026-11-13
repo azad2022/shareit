@@ -1,6 +1,6 @@
 # ADR-0004: Local Chat Data Protection, Backup, and Deletion
 
-- **Status:** Proposed — privacy and product-owner decisions required
+- **Status:** Partially accepted — no server/cloud/external retention is a confirmed product constraint; local encryption and exact lifecycle policies remain proposed
 - **Date:** 2026-11-13
 - **Scope:** Local chat database, outbox, peer identity references, and deletion behavior
 
@@ -10,18 +10,24 @@ The selected chat model intentionally persists private conversations on-device. 
 
 App-private storage protects access through Android's application sandbox but must not be described as equivalent to database-level encryption.
 
-## Proposed defaults for review
+## Confirmed product boundary
 
-1. Encrypt message history and outbox data at rest using a reviewed, maintained implementation. Do not invent cryptography or choose an algorithm/library before a dependency and platform review.
-2. Protect encryption keys through Android Keystore-backed key wrapping where supported. Define behavior when a key becomes invalid or unavailable.
-3. Exclude chat history, pending outbox content, and identity secrets from cloud backup by default. Treat cloud backup and device-to-device (D2D) transfer as separate backup channels with separately reviewed rules. Do not assume that `android:allowBackup="false"` alone blocks D2D migration on every Android 12+ device/OEM combination.
-4. Do not back up identity private keys as ordinary app data. Define a deliberate D2D history-migration policy separately; restored history must not silently inherit trust in a device identity whose private key was not migrated securely.
-5. Explain to users that clearing app data, uninstalling, losing the device, or invalidating the required key may permanently remove local history and queued messages.
-6. Keep message deletion local in the first release. Do not implement “delete for everyone” without a separate tombstone and conflict-resolution design.
-7. Define a bounded retention/storage policy and show users when cleanup is needed. Never silently delete unsent messages to reclaim space.
-8. On “forget peer”, stop future synchronization immediately. Retain or remove local history only according to an explicit user choice and approved retention policy.
+1. PEYVAND will not operate or depend on a central server, backend, hosted database, cloud message store, push service, account service, or relay for chat.
+2. PEYVAND/the product operator will not receive or retain chat messages, chat history, message metadata, contact lists, or queued content on external infrastructure.
+3. Chat data exists only on the participating Android devices: the sender's private app storage for its local history/outbox, and the recipient's private app storage after durable receipt.
+4. The only synchronization path is the direct local Wi-Fi Direct connection after peer authentication. No Android Auto Backup, cloud backup, app-managed export, or automatic device-migration path is included in the initial chat scope.
+5. The implementation must explicitly exclude chat history, outbox data, peer metadata, and identity material from Android backup/device-transfer channels where the relevant Android version and target SDK expose those controls. Verify effective behavior on physical devices and supported OEMs; do not assume one manifest flag is sufficient.
+6. If a user clears app data, uninstalls PEYVAND, loses the device, or loses an essential key, local history and unsynchronized messages may be permanently lost. No server-side copy exists to restore them.
 
-These are recommendations, not approved product decisions.
+## Proposed local data-protection measures
+
+1. Encrypt message history and outbox data at rest using a reviewed, maintained implementation. Do not invent cryptography or choose an algorithm/library before dependency and platform review.
+2. Protect encryption keys through Android Keystore-backed key protection where supported. Detect actual device capability; do not assume hardware-backed or StrongBox protection on all devices.
+3. Keep deletion local in the first release. Do not implement “delete for everyone” without a separate tombstone and conflict-resolution design.
+4. Define a bounded retention/storage policy and show users when cleanup is needed. Never silently delete unsent messages to reclaim space.
+5. On “forget peer”, stop future synchronization immediately. Retention or deletion of that peer's local history still needs an explicit product decision.
+
+The no-server/no-external-retention boundary is accepted from the product owner's clarification. The encryption, retention, key-loss, and local deletion details remain proposals until reviewed.
 
 ## UX implications
 
