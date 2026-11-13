@@ -82,6 +82,13 @@ interface ChatOutboxDao {
     )
     fun observeCount(conversationId: String): Flow<Int>
 
+    @Query(
+        "SELECT COUNT(*) FROM chat_outbox AS o " +
+            "INNER JOIN chat_messages AS m ON m.id = o.message_id " +
+            "WHERE m.conversation_id = :conversationId",
+    )
+    suspend fun countPending(conversationId: String): Int
+
     @Query("DELETE FROM chat_outbox WHERE message_id = :messageId")
     suspend fun delete(messageId: String)
 }
