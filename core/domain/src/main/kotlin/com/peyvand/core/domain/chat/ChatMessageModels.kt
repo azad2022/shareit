@@ -91,6 +91,7 @@ object ChatMessageRules {
         }
 
         var index = 0
+        var utf8ByteCount = 0
         while (index < body.length) {
             val current = body[index]
             when {
@@ -98,8 +99,8 @@ object ChatMessageRules {
                     if (index + 1 >= body.length || !Character.isLowSurrogate(body[index + 1])) {
                         throw InvalidChatMessageException(ChatMessageValidationError.INVALID_UNICODE)
                     }
+                    utf8ByteCount += 4
                     index += 2
-                    continue
                 }
                 Character.isLowSurrogate(current) -> {
                     throw InvalidChatMessageException(ChatMessageValidationError.INVALID_UNICODE)
@@ -115,12 +116,19 @@ object ChatMessageRules {
                         ChatMessageValidationError.FORBIDDEN_CONTROL_CHARACTER,
                     )
                 }
+                else -> {
+                    utf8ByteCount += when (current.code) {
+                        in 0x0000..0x007F -> 1
+                        in 0x0080..0x07FF -> 2
+                        else -> 3
+                    }
+                    index += 1
+                }
             }
-            index += 1
-        }
 
-        if (body.toByteArray(Charsets.UTF_8).size > MAX_MESSAGE_UTF8_BYTES) {
-            throw InvalidChatMessageException(ChatMessageValidationError.TOO_LARGE)
+            if (utf8ByteCount > MAX_MESSAGE_UTF8_BYTES) {
+                throw InvalidChatMessageException(ChatMessageValidationError.TOO_LARGE)
+            }
         }
     }
 }

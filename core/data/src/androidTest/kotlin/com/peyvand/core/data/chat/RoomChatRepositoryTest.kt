@@ -1,9 +1,11 @@
 package com.peyvand.core.data.chat
 
+import androidx.room.withTransaction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.peyvand.core.domain.chat.ChatMessageDeliveryState
 import com.peyvand.core.domain.chat.ChatMessageRules
+import com.peyvand.core.domain.chat.ChatOutboxLimitExceededException
 import com.peyvand.core.domain.chat.ChatRepository
 import com.peyvand.core.domain.chat.PeerIdentityId
 import java.security.KeyStore
@@ -152,6 +154,62 @@ class RoomChatRepositoryTest {
         }
 
         assertTrue(repository.loadPendingOutgoingMessages(peerIdentity).isEmpty())
+    }
+
+    @Test
+    fun pendingOutboxLimitPreservesExistingMessagesForThatPeer() = runBlocking {
+        val conversationId = UUID.randomUUID().toString()
+        val maximumPending = ChatMessageRules.MAX_PENDING_OUTGOING_MESSAGES_PER_PEER
+
+        database.withTransaction {
+            database.conversations().insertIfAbsent(
+                ChatConversationEntity(
+                    id = conversationId,
+                    peerIdentityFingerprint = peerIdentity.sha256Fingerprint,
+                    createdAtMillis = 100L,
+                    lastActivityAtMillis = 100L,
+                    nextLocalSequence = maximumPending.toLong() + 1L,
+                    lastPeerSequence = 0L,
+                ),
+            )
+
+            repeat(maximumPending) { index ->
+                val messageId = "seeded-outbox-$index"
+                database.messages().insert(
+                    ChatMessageEntity(
+                        id = messageId,
+                        conversationId = conversationId,
+                        direction = 0,
+                        senderSequence = index.toLong() + 1L,
+                        observedPeerSequence = 0L,
+                        createdAtMillis = 100L + index,
+                        payloadNonce = ByteArray(12),
+                        payloadCiphertext = ByteArray(16),
+                        deliveryState = "WAITING_FOR_CONNECTION",
+                    ),
+                )
+                database.outbox().insert(
+                    ChatOutboxEntity(
+                        messageId = messageId,
+                        queuedAtMillis = 100L + index,
+                    ),
+                )
+            }
+        }
+
+        var rejectedByQuota = false
+        try {
+            repository.enqueueOutgoingMessage(
+                peerIdentityId = peerIdentity,
+                body = "This message must not replace queued data.",
+                createdAtEpochMillis = 10_000L,
+            )
+        } catch (_: ChatOutboxLimitExceededException) {
+            rejectedByQuota = true
+        }
+
+        assertTrue(rejectedByQuota)
+        assertEquals(maximumPending, database.outbox().countPending(conversationId))
     }
 
     @Test

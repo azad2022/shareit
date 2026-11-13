@@ -37,9 +37,18 @@ class ChatMessageRulesTest {
     }
 
     @Test
+    fun acceptsMessagesAtExactUtf8ByteLimit() {
+        ChatMessageRules.validateBody("پ".repeat(ChatMessageRules.MAX_MESSAGE_UTF8_BYTES / 2))
+        ChatMessageRules.validateBody("🙂".repeat(ChatMessageRules.MAX_MESSAGE_UTF8_BYTES / 4))
+        ChatMessageRules.validateBody("a".repeat(ChatMessageRules.MAX_MESSAGE_UTF8_BYTES))
+    }
+
+    @Test
     fun rejectsMessageAboveUtf8ByteLimit() {
         val error = assertThrows(InvalidChatMessageException::class.java) {
-            ChatMessageRules.validateBody("پ".repeat(1400))
+            ChatMessageRules.validateBody(
+                "پ".repeat((ChatMessageRules.MAX_MESSAGE_UTF8_BYTES / 2) + 1),
+            )
         }
 
         assertEquals(ChatMessageValidationError.TOO_LARGE, error.reason)
