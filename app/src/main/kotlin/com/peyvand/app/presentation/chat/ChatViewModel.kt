@@ -76,6 +76,9 @@ class ChatViewModel(
             emptyList(),
         )
 
+    // Declared before any derived state that subscribes to this flow.
+    private val activeCoordinatorPeerState = MutableStateFlow<PeerIdentityId?>(null)
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private val conversationPreviews = trustedPeers.flatMapLatest { peers ->
         if (peers.isEmpty()) {
@@ -127,7 +130,6 @@ class ChatViewModel(
 
     private val selectedPeer = MutableStateFlow<PeerIdentityId?>(null)
     private val notice = MutableStateFlow<ChatUiNotice?>(null)
-    private val activeCoordinatorPeerState = MutableStateFlow<PeerIdentityId?>(null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val conversationUiState: StateFlow<ChatConversationUiState> = selectedPeer
