@@ -17,6 +17,7 @@ import java.util.UUID
 import javax.crypto.SecretKey
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
@@ -37,6 +38,7 @@ class RoomChatRepository(
     private val outbox = database.outbox()
     private val cryptoState = database.cryptoState()
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeRecentMessages(
         peerIdentityId: PeerIdentityId,
         limit: Int,
@@ -63,6 +65,7 @@ class RoomChatRepository(
             .flowOn(ioDispatcher)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observePendingOutboxCount(
         peerIdentityId: PeerIdentityId,
     ): Flow<Int> =
@@ -296,7 +299,7 @@ class RoomChatRepository(
         conversation: ChatConversationEntity,
         key: SecretKey,
     ): ChatMessage {
-        val direction = when (direction) {
+        val messageDirection = when (this.direction) {
             LOCAL_SENDER -> ChatMessageDirection.OUTGOING
             PEER_SENDER -> ChatMessageDirection.INCOMING
             else -> throw ChatLocalDataCorruptionException("Unknown chat message direction.")
@@ -338,7 +341,7 @@ class RoomChatRepository(
             peerIdentityId = PeerIdentityId.fromSha256Fingerprint(
                 conversation.peerIdentityFingerprint,
             ),
-            direction = direction,
+            direction = messageDirection,
             senderSequence = senderSequence,
             observedPeerSequence = observedPeerSequence,
             createdAtEpochMillis = createdAtMillis,
