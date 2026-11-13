@@ -3,7 +3,6 @@ package com.peyvand.core.data.chat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.peyvand.core.domain.chat.ChatMessageDeliveryState
-import com.peyvand.core.domain.chat.ChatMessageId
 import com.peyvand.core.domain.chat.ChatMessageRules
 import com.peyvand.core.domain.chat.ChatRepository
 import com.peyvand.core.domain.chat.PeerIdentityId
