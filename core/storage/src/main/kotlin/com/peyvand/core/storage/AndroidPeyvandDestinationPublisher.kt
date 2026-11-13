@@ -11,7 +11,7 @@ import android.os.Environment
 import android.os.ParcelFileDescriptor
 import android.os.StatFs
 import android.provider.MediaStore
-import androidx.annotation.RequiresApi
+import android.annotation.TargetApi
 import com.peyvand.core.domain.transfer.TransferStagingSink
 import java.io.File
 import java.io.FileInputStream
@@ -69,7 +69,7 @@ internal class AndroidPeyvandDestinationPublisher(context: Context) {
     fun availableBytes(): Long =
         StatFs(Environment.getExternalStorageDirectory().absolutePath).availableBytes
 
-    @RequiresApi(Build.VERSION_CODES.Q)
+    @TargetApi(Build.VERSION_CODES.Q)
     private suspend fun publishWithMediaStore(
         staging: TransferStagingSink,
         displayName: String,
@@ -202,7 +202,7 @@ internal class AndroidPeyvandDestinationPublisher(context: Context) {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
+    @TargetApi(Build.VERSION_CODES.Q)
     private fun mediaCollectionUri(collection: PeyvandMediaCollection): Uri {
         val volume = MediaStore.VOLUME_EXTERNAL_PRIMARY
         return when (collection) {
