@@ -27,7 +27,7 @@ App-private storage protects access through Android's application sandbox but mu
 4. Define a bounded retention/storage policy and show users when cleanup is needed. Never silently delete unsent messages to reclaim space.
 5. On “forget peer”, stop future synchronization immediately. Retention or deletion of that peer's local history still needs an explicit product decision.
 
-The no-server/no-external-retention boundary is accepted from the product owner's clarification. Message-body encryption is implemented in CP-CHAT-001 but still requires CI/device verification. Full database metadata encryption, retention, key-loss, and local deletion details remain proposals until reviewed.
+The no-server/no-external-retention boundary is accepted from the product owner's clarification. Message-body encryption is implemented in CP-CHAT-001 and CI-verified on API 26 and API 36 emulators; physical-device verification remains open. Full database metadata encryption, retention, key-loss, and local deletion details remain proposals until reviewed.
 
 ## UX implications
 
@@ -58,3 +58,18 @@ Important implementation note: Android documents that for apps targeting API 31+
 - Tests for key invalidation, app-data clear, peer forgetting, and pending-message cleanup.
 - Physical-device verification that app chat data is excluded from applicable Android cloud-backup and device-to-device migration paths for the supported API/target-SDK/OEM matrix.
 - User-facing privacy copy reviewed in Persian and English before enabling chat.
+
+
+## CP-CHAT-001 implementation evidence — 2026-11-13
+
+The following records implementation evidence, not a blanket acceptance of every proposed control in this ADR:
+
+- Message bodies are encrypted using AES-256-GCM (`AES/GCM/NoPadding`) with a 12-byte nonce and a 128-bit authentication tag. The key is created in Android Keystore as a non-exportable AES-256 key; hardware-backed storage and StrongBox are not guaranteed by this implementation.
+- Authenticated associated data binds the peer fingerprint, conversation ID, message ID, direction, local sender sequence, observed peer sequence and creation timestamp. Tests demonstrate rejection after ciphertext, timestamp, sender-sequence or peer-binding modification.
+- Room stores encrypted body bytes. Message/conversation identifiers, peer fingerprint, direction, sequence values, timestamp and delivery state remain plaintext metadata; this is field-level body encryption, not full-database encryption.
+- The Room transaction commits the outgoing message row, outbox row and next sequence together. CI run [#43477138714](https://github.com/azad2022/shareit/actions/runs/43477138714), exact SHA `2bb8cd51082428b4c1223cf38260d2672ca0dfb4`, passed the 16 Room/Keystore tests on both API 26 and API 36 emulators.
+- Temporary plaintext byte arrays are zero-filled in a `finally` block after encryption/decryption processing. This is best-effort hygiene only; it cannot guarantee erasure of immutable Kotlin/Java `String` objects, decoder/runtime copies, or provider-internal copies.
+- Missing Keystore key, missing crypto metadata when messages exist, and unsupported crypto-key version fail closed in the tested repository paths. Physical key invalidation and OEM Keystore behavior are not yet verified.
+- Current manifest backup settings disable backup and exclude app root, files, databases, shared preferences and external app data from both the legacy backup configuration and Android 12+ cloud/device-transfer rules. These rules affect app data broadly, not only chat. Their effective behavior still needs physical-device verification; no assumption is made that emulator CI proves OEM migration behavior.
+
+The CI run succeeded and produced a Debug APK, but the checkpoint remains `IN_PROGRESS` until the physical-device and data-lifecycle gates listed above are completed. See [CP-CHAT-001](../checkpoints/CP-CHAT-001-LOCAL-PERSISTENCE.md) for the full test evidence and open risks.
