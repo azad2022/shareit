@@ -99,7 +99,7 @@ fun ChatHomeScreen(
             IconButton(
                 onClick = onOpenNearby,
                 modifier = Modifier
-                    .size(46.dp)
+                    .size(48.dp)
                     .background(ChatPaleBlue, CircleShape)
                     .semantics { contentDescription = nearbyDescription },
             ) {

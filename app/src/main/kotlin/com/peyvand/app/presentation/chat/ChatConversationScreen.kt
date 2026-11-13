@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -33,6 +35,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -199,16 +202,19 @@ fun ChatConversationScreen(
                         color = if (state.isConnectedToDifferentPeer) PeyvandColors.Warning else PeyvandColors.OnPrimaryBlueContainer,
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    Text(
-                        text = stringResource(R.string.chat_connect_action),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable(onClick = onConnect)
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        color = ChatBlue,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
+                    TextButton(
+                        onClick = onConnect,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.chat_connect_action),
+                            color = ChatBlue,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
                 }
             }
         } else if (state.pendingOutboxCount > 0 && state.isSyncChannelReady) {
@@ -296,17 +302,18 @@ fun ChatConversationScreen(
                 if (emojiMenuExpanded) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         listOf("🙂", "😄", "❤️", "👍", "🙏", "🌱").forEach { emoji ->
-                            Text(
-                                emoji,
+                            Box(
                                 modifier = Modifier
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .clickable {
                                         draft += emoji
                                         emojiMenuExpanded = false
-                                    }
-                                    .padding(5.dp),
-                                fontSize = 22.sp,
-                            )
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(emoji, fontSize = 22.sp)
+                            }
                         }
                     }
                 }
