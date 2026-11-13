@@ -93,6 +93,21 @@ data class ChatOutboxEntity(
  * If this row exists while the key is absent, existing data is unavailable and the
  * repository must fail closed rather than silently initialize a replacement key.
  */
+@Entity(tableName = "chat_trusted_peers")
+data class ChatTrustedPeerEntity(
+    @PrimaryKey
+    @ColumnInfo(name = "identity_fingerprint")
+    val identityFingerprint: String,
+    @ColumnInfo(name = "public_key_encoded")
+    val publicKeyEncoded: ByteArray,
+    @ColumnInfo(name = "display_name")
+    val displayName: String,
+    @ColumnInfo(name = "first_seen_at_ms")
+    val firstSeenAtMillis: Long,
+    @ColumnInfo(name = "last_authenticated_at_ms")
+    val lastAuthenticatedAtMillis: Long,
+)
+
 @Entity(tableName = "chat_crypto_state")
 data class ChatCryptoStateEntity(
     @PrimaryKey

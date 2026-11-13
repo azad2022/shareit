@@ -94,6 +94,27 @@ interface ChatOutboxDao {
 }
 
 @Dao
+interface ChatTrustedPeerDao {
+    @Query("SELECT * FROM chat_trusted_peers ORDER BY last_authenticated_at_ms DESC")
+    fun observeAll(): Flow<List<ChatTrustedPeerEntity>>
+
+    @Query("SELECT * FROM chat_trusted_peers WHERE identity_fingerprint = :fingerprint LIMIT 1")
+    suspend fun findByFingerprint(fingerprint: String): ChatTrustedPeerEntity?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(peer: ChatTrustedPeerEntity)
+
+    @Query(
+        "UPDATE chat_trusted_peers SET last_authenticated_at_ms = :lastAuthenticatedAtMillis " +
+            "WHERE identity_fingerprint = :identityFingerprint",
+    )
+    suspend fun updateLastAuthenticated(
+        identityFingerprint: String,
+        lastAuthenticatedAtMillis: Long,
+    ): Int
+}
+
+@Dao
 interface ChatCryptoStateDao {
     @Query("SELECT * FROM chat_crypto_state WHERE id = 1 LIMIT 1")
     suspend fun getState(): ChatCryptoStateEntity?
