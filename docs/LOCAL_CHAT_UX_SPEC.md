@@ -3,7 +3,7 @@
 - **Status:** Proposed screen-level UX; based on owner-selected local-history/reconnect-sync behavior.
 - **Date:** 2026-11-13
 - **Design direction:** PEYVAND blue/white identity; original composition; accessible RTL/LTR.
-- **Implementation status:** Not authorized.
+- **Implementation status:** CP-CHAT-001 covers local persistence only; Compose chat screens remain outside this first implementation slice.
 
 ## 1. UX principles
 
@@ -159,4 +159,4 @@ Do not use wording such as “backed up” or “safe in the cloud”. Local per
 
 ## 11. Authorization boundary
 
-This document is a screen-level design specification only. It does not authorize Android source code, Compose screen implementation, Gradle changes, executable mocks, or protocol implementation.
+This is a screen-level design specification. CP-CHAT-001 currently authorizes only the local persistence foundation; this UX document does not authorize Compose screen implementation, chat protocol/network synchronization, persistent peer identity, group chat, or executable mocks.
