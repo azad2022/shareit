@@ -13,12 +13,14 @@ PEYVAND competes in the same product category as SHAREit and may use blue-and-wh
 
 ### Current repository state and implementation authorization
 
-- The master product specifications are maintained on main. The currently active implementation branch is `feature/secure-file-transfer`, stacked on `feature/reliable-bidirectional-discovery`; the active checkpoint is CP-003.
-- The product owner explicitly authorized implementation on 2026-11-01. This authorization is already recorded in CP-001/CP-002 and must not be treated as an unanswered permission question.
-- Continue work on the explicitly selected active branch `feature/secure-file-transfer` for CP-003; do not silently switch to another branch. Before repository work, read the latest skill and relevant product documents from main, then inspect the active branch and exact current file contents.
-- The existing authorization covers the agreed PEYVAND Android scope. It does not silently approve an unreviewed fallback transport, public backend/cloud dependency, release signing setup, or unrelated feature expansion.
-- Discussion and planning alone do not authorize additional implementation. For already authorized scope, do not ask the owner to repeat the 2026-11-01 implementation authorization.
-- Never claim that a feature works, a test passed, a build succeeded, or a device is supported without direct evidence from repository state or test output.
+- The master product specifications are maintained on `main`. CP-004 remains isolated on `feature/cp-004-multi-item-transfer`; PR #3 remains open as Draft and must not be modified or merged by this chat checkpoint.
+- CP-CHAT-001 is separately authorized by the product owner on 2026-11-13 and is implemented on `feature/cp-chat-001-local-persistence`, based on code SHA `cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8`.
+- Continue this task only on `feature/cp-chat-001-local-persistence`. Do not switch branches or fold CP-CHAT changes into CP-004/PR #3. Read the latest skill and product requirements from `main`, then inspect the exact active branch files before each change.
+- CP-CHAT-001 scope is encrypted local text-message persistence, Room storage, an atomic durable outbox, bounded pending-message count, Android backup/device-transfer exclusion, and automated tests. It does not include chat Compose screens, network sync, persistent peer identity, group chat, read receipts, voice/video, message deletion UI, app export, cloud backup, or remote recovery.
+- The product owner's no-server boundary is absolute: no central server, backend, hosted database, account service, push service, cloud message store, relay, or operator-held chat data. Chat data remains only in the participating phones' private app data.
+- The current mTLS pairing uses a session-scoped ephemeral certificate and exposes an exclusively claimed TLS channel to the transfer coordinator. Never use that ephemeral certificate, discovery name, IP/MAC address, or socket endpoint as a persistent chat identity. A separately reviewed stable-identity and channel-multiplexing milestone is required before synchronization.
+- The 2026-11-01 CP-001/CP-002 authorization and 2026-11-04 CP-003 authorization remain valid for their existing scopes; they do not replace the separate CP-CHAT-001 scope above.
+- Never claim a feature works, a test passed, a build succeeded, or a device is supported without direct evidence from repository state or test output.
 
 The product owner's explicit, most recent decisions take precedence over stale planning-only wording in older documentation. Update the relevant checkpoint or ADR when a decision or verified implementation state changes.
 ## 2. Confirmed product definition
@@ -42,6 +44,8 @@ The product owner's explicit, most recent decisions take precedence over stale p
 7. Verify received data before publishing it as a completed file.
 8. Inspect received application packages and request installation through Android's supported installation flow.
 9. Review local transfer history and safely clean up abandoned temporary data.
+10. Maintain local one-to-one text conversations with durable on-device history and an outgoing message outbox.
+11. Synchronize messages only after a later direct connection to the same authenticated, previously paired peer; no server or relay delivery is allowed.
 
 ### Explicit product boundaries
 
@@ -100,6 +104,13 @@ Suggested logical components (names are illustrative; do not create them until i
 - IncomingFilePublisher
 - PermissionCoordinator
 - TransferHistoryRepository
+- ChatRepository
+- LocalChatStore
+- ChatOutbox
+- ChatSyncCoordinator
+- PeerIdentityRepository
+
+For CP-CHAT-001, ChatRepository/LocalChatStore/ChatOutbox are implemented as a persistence slice. ChatSyncCoordinator and stable PeerIdentityRepository remain future responsibilities. These are logical boundaries, not a mandate to create one Gradle module per class.
 
 No UI class should own socket logic, file streaming, package extraction, or cryptographic policy. No transport class should depend on Compose or Android UI types.
 
@@ -356,6 +367,11 @@ The default product posture is local-first and data-minimal.
 - Do not collect contacts, location, installed-app inventory, or usage analytics unless a clearly approved feature requires it.
 - Do not log file contents, access tokens, pairing secrets, private keys, or unnecessary sensitive paths.
 - Keep transfer history local and provide user-controlled deletion.
+- Keep chat history and outgoing messages only in the private local application storage of participating phones. Never add server-side chat retention, remote backup, or relay.
+- Encrypt message bodies at rest using a reviewed AEAD scheme and a non-exportable Android Keystore key. Bind ciphertext to the message/conversation/peer metadata with authenticated associated data.
+- Persist each outgoing message and its outbox row in the same Room transaction before reporting local save. A socket write is never delivery confirmation.
+- If chat crypto metadata exists but its Keystore key is missing or invalidated, fail closed; never silently create a replacement and expose an empty history.
+- Exclude app data from cloud backup and Android device-transfer paths for the initial chat release; validate effective behavior on the supported Android/OEM matrix.
 - Document what metadata is retained, why, and for how long.
 - Make incoming-file destination and retention behavior understandable.
 - Ensure temporary artifacts are removed safely after cancellation or expiry.
@@ -379,6 +395,10 @@ A single emulator test is insufficient for a wireless transfer product. Use unit
 - Low storage, read-only destination, SAF provider failure, and file-name collision.
 - Large files, thousands of small files, Unicode names, long names, and unusual file types.
 - Malformed protocol frames and hostile peer behavior.
+- Chat message persistence and outgoing outbox survival across process/database reopen.
+- AES-GCM ciphertext integrity, wrong-peer isolation, Android Keystore key-loss fail-closed behavior, and queue quota.
+- Chat synchronization after direct reconnect, peer identity mismatch, replay/duplicate frames, cursor safety, and dual-device ordering once that milestone is implemented.
+- Android cloud backup and D2D migration exclusion on the supported matrix.
 - APK, split APK, ABI mismatch, version mismatch, signature mismatch, and installation cancellation.
 
 ### Required correctness invariants
@@ -507,6 +527,16 @@ These requirements are confirmed by the product owner. They supersede earlier op
 - Kotlin is mandatory for new Android application code.
 - Jetpack Compose is the default recommended UI toolkit for the custom interface and motion system. Record the chosen Compose/AndroidX versions and architecture in an ADR. Do not treat Kotlin as optional or replace it with Java or a cross-platform framework without explicit approval.
 - Keep UI declarative and state-driven. Compose UI must render state; it must not own sockets, file streaming, cryptographic rules, package extraction, or transfer orchestration.
+
+### Local chat persistence requirements
+
+- Use Room in `:core:data` for local conversations, messages, outbox, and crypto metadata; keep domain contracts Android-free.
+- Encrypt chat message bodies with AES-GCM and a non-exportable Android Keystore key. Hardware-backed or StrongBox protection must not be assumed without querying actual device capability.
+- Include the peer fingerprint, conversation/message IDs, direction, sender sequence, and creation timestamp in authenticated associated data.
+- Commit message row, outbox row, and next local sequence atomically. Return success to the caller only after the Room transaction commits.
+- Bound each message to 4 KiB UTF-8 and each pending outbox to the current engineering ceiling of 1,024 messages per peer. Do not silently prune history or unsent messages.
+- The current CP-CHAT-001 implementation does not send or receive network messages. Future sync must reuse direct Wi-Fi Direct, authenticate stable peer identity, use an idempotent protocol, and acknowledge only after durable receiver-side commit.
+- The current secure-session certificate is ephemeral and the current TLS channel is exclusively claimed. Do not attach chat to it until persistent identity and a reviewed multiplexing/ownership design exist.
 
 ### Localization scope and rollout
 
