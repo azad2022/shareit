@@ -53,17 +53,21 @@ Do not present CP-CHAT-001 as a functioning end-to-end chat feature until the id
 
 ## 5. Validation evidence
 
-- **Exact-head source:** commit `8e0c57761a26500aea00ed73770825e8d2337a0f`; branch head was re-read from GitHub after the push.
-- **Domain JVM tests:** GitHub Actions run #407 executed `:core:domain:testDebugUnitTest`. The dedicated `ChatMessageRulesTest` report records **8 tests, 0 failures, 0 errors, 0 skipped**. The exact-4-KiB boundary cases for Persian, emoji and ASCII passed.
-- **Room/Keystore instrumentation:** the test APK and KSP sources compiled on API 26, but `:core:data:connectedDebugAndroidTest` did not produce a test report in run #407. The combined instrumentation job stopped at the earlier storage test task. Therefore Room, Keystore, outbox quota, database-reopen and ciphertext-tamper instrumentation are **not verified**.
-- **API 26 unrelated instrumentation failure:** both existing `AndroidPeyvandDestinationPublisherTest` cases failed before exercising their assertions with `NoSuchMethodError: UiAutomation.grantRuntimePermission` at test line 64. This is in the existing `:core:storage` suite, not the chat module.
-- **API 36 instrumentation:** no tests ran; Gradle project configuration failed during dependency resolution for multiple Maven artifacts in the runner.
-- **Build/lint:** the general CI job failed on pre-existing shared-branch issues outside CP-CHAT-001: unresolved `AWAITING_DESTINATION` and `AWAITING_DESTINATION_TREE` references in `MainActivity.kt`, and an unguarded API-29 `MediaStore.Downloads.getContentUri` call while minSdk is 26. These files belong to the transfer/app baseline and are not changed by this checkpoint.
-- **APK:** no Debug APK was produced by run #407.
-- **Physical devices:** not tested for this chat persistence slice.
-- **Security review:** source-level review is ongoing; no security certification or release readiness is claimed.
+- **Exact-head source:** commit `0d9a927e878e5d1af92a6f6de18b6852dec00172` on `feature/cp-chat-001-local-persistence`; branch contents were fetched from GitHub before this update.
+- **Exact-head workflow:** GitHub Actions run [#408](https://github.com/azad2022/shareit/actions/runs/43445471038) used this exact SHA. The overall workflow conclusion is **failure**; the results below distinguish the passing CP-CHAT tests from unrelated baseline failures.
+- **Domain JVM tests:** `ChatMessageRulesTest` — **8 tests, 0 failures, 0 errors, 0 skipped**. The exact 4 KiB UTF-8 boundary cases for Persian, emoji and ASCII passed.
+- **Room/Keystore instrumentation, API 26:** `RoomChatRepositoryTest` — **9 tests, 0 failures, 0 errors, 0 skipped**. This includes encrypted payload storage, database reopen/outbox persistence, monotonic sequences, peer isolation, authenticated receipt handling, bounded outbox behavior, missing-key fail-closed behavior, oversized-message rejection and ciphertext tamper detection.
+- **Room/Keystore instrumentation, API 36:** the same **9 tests, 0 failures, 0 errors, 0 skipped**. The data instrumentation task completed on both API levels because the workflow uses Gradle `--continue`.
+- **mTLS instrumentation:** API 36 — **4 tests passed, 0 failures, 0 skips**, including TLS 1.2, TLS 1.3, Android Keystore ECDSA signing and rejection of an incorrect peer fingerprint. API 26 — **3 passed, 0 failed, 1 conditional skip** for TLS 1.3 when unsupported by the runtime; TLS 1.2, Keystore signing and incorrect-fingerprint rejection passed.
+- **Existing Storage instrumentation:** API 36 — **2 tests passed**. API 26 — both existing `AndroidPeyvandDestinationPublisherTest` cases failed before reaching their assertions with `NoSuchMethodError: UiAutomation.grantRuntimePermission` at test line 64. This is a test-platform/API compatibility failure in `:core:storage`, not a CP-CHAT data test.
+- **General Build/Lint job:** failed outside this checkpoint. `:app:compileDebugKotlin` reports unresolved `AWAITING_DESTINATION` and `AWAITING_DESTINATION_TREE` references in `MainActivity.kt:106-107`; `:core:storage:lintDebug` reports an unguarded API-29 `MediaStore.Downloads.getContentUri` call at `AndroidPeyvandDestinationPublisher.kt:209` while minSdk is 26. These app/transfer baseline files are not modified by CP-CHAT-001.
+- **API 26 instrumentation job:** overall failure is due to the two Storage tests above; the Room and connectivity instrumentation tasks did execute and produced reports.
+- **API 36 instrumentation job:** completed successfully; Room, Storage and connectivity reports were uploaded.
+- **Debug APK:** none was produced by run #408 because the general build job failed. Do not install or describe an artifact for this run.
+- **Physical devices:** not yet tested for this local chat persistence slice. Emulator instrumentation does not verify OEM Keystore behavior, backup/device-transfer exclusions or physical-device key invalidation.
+- **Security review:** source-level review remains distinct from Android runtime/physical-device validation. No security certification or release readiness is claimed.
 
-The instrumentation Gradle command now uses `--continue` so independent module test tasks can still execute and publish reports when another module's instrumentation task fails. This is test-runner isolation, not a suppression of failures.
+The `--continue` change is effective: a failed independent Storage instrumentation task no longer prevents the Room chat and connectivity tasks from executing. It does not suppress failures or turn the overall API 26 job green.
 
 ## 6. Risks and open decisions
 
@@ -76,8 +80,9 @@ The instrumentation Gradle command now uses `--continue` so independent module t
 
 ## 7. Next gate
 
-1. Re-run API 26/API 36 instrumentation with the updated `--continue` task execution so the isolated `:core:data:connectedDebugAndroidTest` result is captured even if storage or connectivity tests fail.
-2. Fix any chat-specific Room/Keystore instrumentation failures. Do not treat a compiled instrumentation APK as a passed test.
-3. Keep the shared transfer/app build blockers visible and isolated. They require a separately authorized CP-004/baseline repair and must not be hidden or silently patched in this checkpoint.
-4. Review local database/key-loss and backup/device-transfer behavior on representative physical devices.
-5. Only after CP-CHAT-001 is verified, proceed to the separately reviewed stable-peer-identity, re-pairing and authenticated channel-multiplexing milestone.
+1. **Completed:** run API 26/API 36 instrumentation with Gradle `--continue`; both isolated Room chat reports are now available.
+2. **Completed for automated chat tests:** all 9 Room/Keystore instrumentation tests passed on API 26 and API 36, and all 8 chat domain tests passed. No chat-specific automated test failure remains in run #408.
+3. Keep the unrelated app compile and Storage Lint/API 26 instrumentation failures visible. Do not patch those files from this checkpoint; they need a separately scoped CP-004/baseline repair.
+4. Perform the remaining physical-device validation for Keystore key availability/invalidation and backup/device-transfer exclusion behavior on representative supported OEM devices. Record device/API/build evidence; do not infer this from emulator results.
+5. Finish the source-level security review and record any remaining findings before considering CP-CHAT-001 complete.
+6. Only after this checkpoint is accepted, move to the separately reviewed stable-peer-identity, re-pairing and authenticated channel-multiplexing milestone. That work is not authorized by CP-CHAT-001 and has not started.
