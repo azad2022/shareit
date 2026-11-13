@@ -4,19 +4,23 @@
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-CHAT-001 — Local encrypted chat persistence (separate, isolated implementation track)
-- **Current branch:** `feature/cp-chat-001-local-persistence`, based on CP-004 code SHA `cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8`
+- **Current branch:** `feature/cp-chat-001-local-persistence`; CP-004 base code SHA `cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8`; latest CP-CHAT head `2bb8cd51082428b4c1223cf38260d2672ca0dfb4`
 - **Last updated:** 2026-11-13
 - **Parallel transfer track:** CP-004 remains `IN_PROGRESS` on `feature/cp-004-multi-item-transfer`; PR #3 remains open as Draft and has not been changed or merged.
 
 ## CP-CHAT-001 — Local encrypted persistence
 
-- **Status:** `IN_PROGRESS`.
-- **Scope:** Android-free chat domain contracts; Room local conversations/messages/outbox; AES-GCM body encryption with Android Keystore; atomic message + outbox + sequence transaction; bounded outbox; cloud/D2D backup exclusion; tests.
-- **No network/UI claim:** this checkpoint does not implement Compose chat screens, incoming-message frames, persistent peer identity, reconnect synchronization, group chat, or any server/relay/cloud service.
-- **Security boundary:** existing mTLS certificates are session-scoped and the authenticated stream is exclusively claimed by file transfer. The chat implementation does not reuse that ephemeral identity or take over the transfer channel.
-- **Validation:** Exact-head CI run #407 on `8e0c57761a26500aea00ed73770825e8d2337a0f`: all 8 `ChatMessageRulesTest` JVM tests passed. Room/Keystore Android instrumentation was compiled but did not execute because the combined job stopped on unrelated Storage instrumentation failures. API 36 instrumentation did not run because Gradle dependency resolution failed. General build/lint remains blocked by existing `MainActivity` unresolved transfer states and an API-29 `MediaStore.Downloads` call under minSdk 26. No Debug APK or physical-device chat test is claimed.
-- **Known risks:** Keystore key invalidation, backup/device-transfer exclusion across OEMs, and the exact local history deletion/retention policy need further validation/decision.
-- **Next gate:** capture independent API 26/API 36 Room/Keystore instrumentation results with Gradle `--continue`; resolve chat-specific failures, then review local-persistence behavior. Shared transfer/app build blockers remain separate and must not be modified under CP-CHAT-001. Stable peer identity and channel multiplexing require a separate approved milestone.
+- **Status:** `IN_PROGRESS`; exact-head automated CI is green, but physical-device and security/lifecycle gates remain.
+- **Latest source head:** `2bb8cd51082428b4c1223cf38260d2672ca0dfb4` on `feature/cp-chat-001-local-persistence`.
+- **Latest CI:** [run #43477138714](https://github.com/azad2022/shareit/actions/runs/43477138714) succeeded on that exact SHA; all 3 workflow jobs passed.
+- **Automated results:** 148/148 configured JVM unit tests; Chat domain 8/8; Room/Keystore 16/16 on API 26 and 16/16 on API 36; Storage instrumentation 2/2 on each API; mTLS 3 passed + 1 conditional skip on API 26 and 4/4 on API 36.
+- **Debug APK:** 14,720,844 bytes; SHA-256 `6944412768a0af66945888adaa68b98e2c413423d94c1956fd70699716c2a33c`; [artifact 14063403573](https://github.com/azad2022/shareit/actions/runs/43477138714/artifacts/14063403573).
+- **Lint:** 0 errors, 16 warnings across app and adjacent modules. The custom X509 trust-manager warning remains a review item; see the CP checkpoint evidence.
+- **Implementation scope:** Android-free domain contract; Room local history/outbox; AES-256-GCM message-body encryption using Android Keystore; AAD binding; atomic enqueue and sequence allocation; 1,024 pending-message cap; fail-closed key metadata handling; best-effort temporary plaintext byte-array clearing. No UI or message network sync is implemented.
+- **Security boundary:** existing mTLS certificates remain session-scoped and their channel remains exclusively owned by file transfer. The chat store does not treat the currently connected socket, IP/MAC address or discovery name as stable peer identity.
+- **Remaining gates:** physical OEM Keystore/key-invalidation verification; physical cloud-backup/device-transfer exclusion verification; local retention/deletion decisions; focused security review. Current backup exclusions are app-wide, not chat-only.
+- **No end-to-end chat claim:** persistent peer identity, re-pairing, message synchronization, channel multiplexing and Compose screens remain outside CP-CHAT-001 and require a separately approved milestone.
+- Detailed checkpoint and historical CI runs are recorded in `docs/checkpoints/CP-CHAT-001-LOCAL-PERSISTENCE.md`.
 
 ## Milestones
 
@@ -282,3 +286,17 @@ The ordering is a proposed dependency-aware plan, not authorization to skip arch
 - **Overall CI remains failed:** the general build job reports unresolved `AWAITING_DESTINATION` and `AWAITING_DESTINATION_TREE` references at `MainActivity.kt:106-107`, plus Storage Lint `NewApi` at `AndroidPeyvandDestinationPublisher.kt:209` (`MediaStore.Downloads.getContentUri`, API 29 while minSdk is 26). These are outside CP-CHAT-001 and were not changed here. The API 26 instrumentation job is also red due to the Storage test failure.
 - **Artifact/device status:** no Debug APK was produced by this run. No physical-device Keystore or backup/device-transfer test has yet been performed for chat persistence.
 - **Next:** complete physical-device key lifecycle and backup exclusion verification, finish the security review, and keep stable peer identity/network sync/channel multiplexing out of scope until separately authorized.
+
+
+## 2026-11-13 — CP-CHAT-001 exact-head validation #43477138714
+
+This is the latest authoritative CP-CHAT-001 CI record and supersedes the older #407/#408/#411/#434540 status summaries where they conflict.
+
+- Exact source SHA: `2bb8cd51082428b4c1223cf38260d2672ca0dfb4`; all three jobs in [run #43477138714](https://github.com/azad2022/shareit/actions/runs/43477138714) succeeded.
+- Chat persistence: `RoomChatRepositoryTest` 16/16 on API 26 and 16/16 on API 36, zero failures/errors/skips. The five additional tests for metadata loss, unsupported key version, sender-sequence tampering and temporary byte-array cleanup passed on both APIs.
+- Chat domain: 8/8. All configured JVM suites: 148/148 passed.
+- Storage: 2/2 on both APIs. mTLS: API 26 had 3 passed and one conditional TLS 1.3 skip; API 36 passed 4/4.
+- Lint: 0 errors and 16 warnings across app/adjacent modules. Keep the X509 trust-manager and package-visibility warnings visible for review.
+- Debug APK: artifact 14063403573; 14,720,844 bytes; SHA-256 `6944412768a0af66945888adaa68b98e2c413423d94c1956fd70699716c2a33c`.
+- No physical-device tests were performed. Status remains `IN_PROGRESS` pending OEM Keystore/key-loss testing, backup/device-transfer verification, lifecycle-policy decisions and final security review.
+- Main, CP-004 and PR #3 were not changed. No chat UI, persistent peer identity or network synchronization has been implemented by this update.
