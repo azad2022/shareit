@@ -141,6 +141,16 @@ jobs:
           disable-animations: true
           script: ./gradlew --no-daemon --stacktrace --continue :core:data:connectedDebugAndroidTest :core:storage:connectedDebugAndroidTest :core:connectivity:connectedDebugAndroidTest
 
+      - name: Upload Room instrumentation APK for physical-device validation
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: peyvand-room-instrumentation-apk-api-${{ matrix.api-level }}
+          path: |
+            core/data/build/outputs/apk/androidTest/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload instrumented test reports
         if: always()
         uses: actions/upload-artifact@v7
