@@ -159,7 +159,7 @@ class RoomChatRepositoryTest {
         assertEquals(1L, outgoing.senderSequence)
         assertEquals(1L, incoming.senderSequence)
         assertEquals(2L, nextOutgoing.senderSequence)
-        assertEquals(1, repository.loadPendingOutgoingMessages(peerIdentity).size)
+        assertEquals(2, repository.loadPendingOutgoingMessages(peerIdentity).size)
     }
 
     @Test
@@ -187,7 +187,7 @@ class RoomChatRepositoryTest {
         assertEquals(1, history.size)
         assertEquals(ChatMessageDeliveryState.DELIVERED, history.single().deliveryState)
         assertTrue(
-            repository.confirmDeliveredAfterAuthenticatedReceipt(peerIdentity, message.id),
+            repository.confirmDeliveredAfterAuthenticatedReceipt(peerIdentity, message.id, message.senderSequence),
         )
     }
 

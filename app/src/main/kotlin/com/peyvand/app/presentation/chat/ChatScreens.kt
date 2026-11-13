@@ -39,6 +39,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,8 +57,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.peyvand.app.R
@@ -468,61 +471,63 @@ fun ChatConversationScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(ChatCanvas)
-            .windowInsetsPadding(WindowInsets.safeDrawing),
+            .windowInsetsPadding(WindowInsets.statusBars),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.White)
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Text("‹", color = Color(0xFF1D3552), fontSize = 34.sp)
-            }
-            PeerAvatar(
-                label = peer?.displayName.orEmpty(),
-                modifier = Modifier.size(43.dp),
-            )
-            Column(
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                    .fillMaxWidth()
+                    .background(Color.White)
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = peer?.displayName ?: stringResource(R.string.chat_conversation_title),
-                    color = Color(0xFF162D49),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
+                IconButton(onClick = onBack) {
+                    Text("‹", color = Color(0xFF1D3552), fontSize = 34.sp)
+                }
+                PeerAvatar(
+                    label = peer?.displayName.orEmpty(),
+                    modifier = Modifier.size(43.dp),
                 )
-                Text(
-                    text = when {
-                        state.isConnected -> stringResource(R.string.chat_status_connected)
-                        state.isConnectedToDifferentPeer ->
-                            stringResource(R.string.chat_status_other_peer_connected)
-                        else -> stringResource(R.string.chat_status_not_connected)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = peer?.displayName ?: stringResource(R.string.chat_conversation_title),
+                        color = Color(0xFF162D49),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = when {
+                            state.isConnected -> stringResource(R.string.chat_status_connected)
+                            state.isConnectedToDifferentPeer ->
+                                stringResource(R.string.chat_status_other_peer_connected)
+                            else -> stringResource(R.string.chat_status_not_connected)
+                        },
+                        color = if (state.isConnected) Color(0xFF16835A) else ChatMuted,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                    )
+                }
+                IconButton(
+                    enabled = false,
+                    onClick = {},
+                    modifier = Modifier.semantics {
+                        contentDescription = voiceCallDescription
                     },
-                    color = if (state.isConnected) Color(0xFF16835A) else ChatMuted,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                )
+                ) { Text("☎", color = Color(0xFF8291A3), fontSize = 22.sp) }
+                IconButton(
+                    enabled = false,
+                    onClick = {},
+                    modifier = Modifier.semantics {
+                        contentDescription = videoCallDescription
+                    },
+                ) { Text("▣", color = Color(0xFF8291A3), fontSize = 21.sp) }
             }
-            IconButton(
-                enabled = false,
-                onClick = {},
-                modifier = Modifier.semantics {
-                    contentDescription = voiceCallDescription
-                },
-            ) { Text("☎", color = Color(0xFF8291A3), fontSize = 22.sp) }
-            IconButton(
-                enabled = false,
-                onClick = {},
-                modifier = Modifier.semantics {
-                    contentDescription = videoCallDescription
-                },
-            ) { Text("▣", color = Color(0xFF8291A3), fontSize = 21.sp) }
         }
 
         if (!state.isConnected) {
@@ -644,43 +649,11 @@ fun ChatConversationScreen(
                         }
                     }
                 }
-                Row(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Box {
-                        IconButton(
-                            onClick = { attachmentMenuExpanded = true },
-                            enabled = state.isConnected,
-                            modifier = Modifier.semantics {
-                                contentDescription = attachmentDescription
-                            },
-                        ) {
-                            Text("＋", color = if (state.isConnected) ChatBlue else ChatMuted, fontSize = 27.sp)
-                        }
-                        DropdownMenu(
-                            expanded = attachmentMenuExpanded,
-                            onDismissRequest = { attachmentMenuExpanded = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_attach_send)) },
-                                onClick = {
-                                    attachmentMenuExpanded = false
-                                    onSendAttachment()
-                                },
-                                leadingIcon = { Text("↗", color = ChatBlue, fontSize = 20.sp) },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_attach_receive)) },
-                                onClick = {
-                                    attachmentMenuExpanded = false
-                                    onPrepareReceive()
-                                },
-                                leadingIcon = { Text("↓", color = ChatBlue, fontSize = 20.sp) },
-                            )
-                        }
-                    }
-                    Box {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
                         IconButton(
                             onClick = { emojiMenuExpanded = !emojiMenuExpanded },
                             modifier = Modifier.semantics {
@@ -689,54 +662,87 @@ fun ChatConversationScreen(
                         ) {
                             Text("☺", color = ChatMuted, fontSize = 25.sp)
                         }
-                    }
-                    OutlinedTextField(
-                        value = draft,
-                        onValueChange = { draft = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(bottom = 2.dp),
-                        placeholder = {
-                            Text(stringResource(R.string.chat_composer_placeholder))
-                        },
-                        shape = RoundedCornerShape(22.dp),
-                        minLines = 1,
-                        maxLines = 4,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedContainerColor = Color(0xFFF7F9FC),
-                            focusedContainerColor = Color(0xFFF7F9FC),
-                            unfocusedBorderColor = Color(0xFFE5EBF2),
-                            focusedBorderColor = Color(0xFF9CC2F0),
-                        ),
-                    )
-                    IconButton(
-                        onClick = {
-                            if (!sending && draft.isNotBlank()) {
-                                val content = draft
-                                sending = true
-                                scope.launch {
-                                    val result = onSendMessage(content)
-                                    if (result == ChatSendResult.Saved) draft = ""
-                                    sending = false
-                                }
-                            }
-                        },
-                        enabled = draft.isNotBlank() && !sending,
-                        modifier = Modifier
-                            .padding(bottom = 3.dp)
-                            .size(48.dp)
-                            .background(
-                                color = if (draft.isNotBlank() && !sending) ChatBlue else Color(0xFFB7C5D6),
-                                shape = CircleShape,
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                            OutlinedTextField(
+                                value = draft,
+                                onValueChange = { draft = it },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(bottom = 2.dp),
+                                placeholder = {
+                                    Text(stringResource(R.string.chat_composer_placeholder))
+                                },
+                                shape = RoundedCornerShape(22.dp),
+                                minLines = 1,
+                                maxLines = 4,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    unfocusedContainerColor = Color(0xFFF7F9FC),
+                                    focusedContainerColor = Color(0xFFF7F9FC),
+                                    unfocusedBorderColor = Color(0xFFE5EBF2),
+                                    focusedBorderColor = Color(0xFF9CC2F0),
+                                ),
                             )
-                            .semantics {
-                                contentDescription = sendDescription
+                        }
+                        Box {
+                            IconButton(
+                                onClick = { attachmentMenuExpanded = true },
+                                enabled = state.isConnected,
+                                modifier = Modifier.semantics {
+                                    contentDescription = attachmentDescription
+                                },
+                            ) {
+                                Text("＋", color = if (state.isConnected) ChatBlue else ChatMuted, fontSize = 27.sp)
+                            }
+                            DropdownMenu(
+                                expanded = attachmentMenuExpanded,
+                                onDismissRequest = { attachmentMenuExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.chat_attach_send)) },
+                                    onClick = {
+                                        attachmentMenuExpanded = false
+                                        onSendAttachment()
+                                    },
+                                    leadingIcon = { Text("↗", color = ChatBlue, fontSize = 20.sp) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.chat_attach_receive)) },
+                                    onClick = {
+                                        attachmentMenuExpanded = false
+                                        onPrepareReceive()
+                                    },
+                                    leadingIcon = { Text("↓", color = ChatBlue, fontSize = 20.sp) },
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = {
+                                if (!sending && draft.isNotBlank()) {
+                                    val content = draft
+                                    sending = true
+                                    scope.launch {
+                                        val result = onSendMessage(content)
+                                        if (result == ChatSendResult.Saved) draft = ""
+                                        sending = false
+                                    }
+                                }
                             },
-                    ) {
-                        Text("➤", color = Color.White, fontSize = 22.sp)
+                            enabled = draft.isNotBlank() && !sending,
+                            modifier = Modifier
+                                .padding(bottom = 3.dp)
+                                .size(48.dp)
+                                .background(
+                                    color = if (draft.isNotBlank() && !sending) ChatBlue else Color(0xFFB7C5D6),
+                                    shape = CircleShape,
+                                )
+                                .semantics {
+                                    contentDescription = sendDescription
+                                },
+                        ) {
+                            Text("➤", color = Color.White, fontSize = 22.sp)
+                        }
                     }
-                }
-            }
+                }            }
         }
     }
 }
