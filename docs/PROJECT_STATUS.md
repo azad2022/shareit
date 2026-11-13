@@ -3,9 +3,20 @@
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
-- **Current checkpoint:** CP-004 — Multi-item one-to-one transfer
-- **Current branch:** `feature/cp-004-multi-item-transfer` (isolated CP-004 branch; PR #3 remains open as Draft and is not merged)
-- **Last updated:** 2026-11-08 (CP-004 MIME/metadata/failure-stage hardening in progress; exact-head CI and physical interoperability retest pending)
+- **Current checkpoint:** CP-CHAT-001 — Local encrypted chat persistence (separate, isolated implementation track)
+- **Current branch:** `feature/cp-chat-001-local-persistence`, based on CP-004 code SHA `cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8`
+- **Last updated:** 2026-11-13
+- **Parallel transfer track:** CP-004 remains `IN_PROGRESS` on `feature/cp-004-multi-item-transfer`; PR #3 remains open as Draft and has not been changed or merged.
+
+## CP-CHAT-001 — Local encrypted persistence
+
+- **Status:** `IN_PROGRESS`.
+- **Scope:** Android-free chat domain contracts; Room local conversations/messages/outbox; AES-GCM body encryption with Android Keystore; atomic message + outbox + sequence transaction; bounded outbox; cloud/D2D backup exclusion; tests.
+- **No network/UI claim:** this checkpoint does not implement Compose chat screens, incoming-message frames, persistent peer identity, reconnect synchronization, group chat, or any server/relay/cloud service.
+- **Security boundary:** existing mTLS certificates are session-scoped and the authenticated stream is exclusively claimed by file transfer. The chat implementation does not reuse that ephemeral identity or take over the transfer channel.
+- **Validation:** Domain tests and Android instrumentation tests have been added. Local Gradle execution is unavailable in the current environment because DNS resolution for github.com failed. The CI runs created during intermediate commits were cancelled or were not on the latest source SHA; exact-head CI is still required. No Debug APK or physical-device chat test is claimed.
+- **Known risks:** Keystore key invalidation, backup/device-transfer exclusion across OEMs, and the exact local history deletion/retention policy need further validation/decision.
+- **Next gate:** obtain exact-head CI results for API 26 and API 36, fix any compile/test/lint issues, then review the local-persistence behavior before designing stable peer identity and channel multiplexing.
 
 ## Milestones
 
