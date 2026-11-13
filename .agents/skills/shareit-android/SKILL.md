@@ -44,6 +44,9 @@ The product owner's explicit decisions take precedence over assumptions in this 
 7. Verify received data before publishing it as a completed file.
 8. Inspect received application packages and request installation through Android's supported installation flow.
 9. Review local transfer history and safely clean up abandoned temporary data.
+10. Maintain local one-to-one conversations with durable on-device message history.
+11. Persist unsent chat messages in a durable local outbox and synchronize them only after direct reconnection to the authenticated, previously paired peer.
+12. Distinguish local message persistence from remote durable receipt; never report delivery based only on a socket write or local queue entry.
 
 ### Explicit product boundaries
 
@@ -102,6 +105,13 @@ Suggested logical components (names are illustrative; do not create them until i
 - IncomingFilePublisher
 - PermissionCoordinator
 - TransferHistoryRepository
+- ChatRepository
+- LocalChatStore
+- ChatOutbox
+- ChatSyncCoordinator
+- PeerIdentityRepository
+
+The chat components above are logical responsibilities, not a one-class-per-module mandate. They must reuse the existing discovery, authenticated connection, and security boundaries rather than introducing a parallel networking stack. Message persistence and sync policy belong below presentation; chat UI must never own sockets, cryptography, or database transactions.
 
 No UI class should own socket logic, file streaming, package extraction, or cryptographic policy. No transport class should depend on Compose or Android UI types.
 
@@ -346,6 +356,9 @@ The default product posture is local-first and data-minimal.
 - Do not collect contacts, location, installed-app inventory, or usage analytics unless a clearly approved feature requires it.
 - Do not log file contents, access tokens, pairing secrets, private keys, or unnecessary sensitive paths.
 - Keep transfer history local and provide user-controlled deletion.
+- Keep local chat history and pending message outbox data on participating devices; do not add remote relay, cloud sync, or server-side message storage.
+- Distinguish durable local save from delivery to the peer. The peer must acknowledge only after its message record has been durably committed.
+- Document chat metadata retention, local encryption, backup exclusion, peer-forgetting, and message-deletion policy before implementation; do not silently assume those unresolved policies.
 - Document what metadata is retained, why, and for how long.
 - Make incoming-file destination and retention behavior understandable.
 - Ensure temporary artifacts are removed safely after cancellation or expiry.
@@ -369,6 +382,11 @@ A single emulator test is insufficient for a wireless transfer product. Use unit
 - Low storage, read-only destination, SAF provider failure, and file-name collision.
 - Large files, thousands of small files, Unicode names, long names, and unusual file types.
 - Malformed protocol frames and hostile peer behavior.
+- Local chat queue persistence across process death and app restart.
+- Chat synchronization after reconnect to the correct authenticated peer; identity mismatch must block sync.
+- Duplicate, reordered, interrupted, and repeated chat synchronization batches.
+- Durable receiver acknowledgement, storage exhaustion, and message ordering convergence across two physical devices.
+- Local chat backup, key invalidation, peer-forgetting, and deletion behavior once those policies are approved.
 - APK, split APK, ABI mismatch, version mismatch, signature mismatch, and installation cancellation.
 
 ### Required correctness invariants
@@ -538,6 +556,7 @@ Animations are a first-class frontend requirement, but only when they communicat
 - Use transitions for navigation and state changes only when they preserve orientation and do not hide controls or important status. Keep critical buttons stable and predictable.
 - Respect Android accessibility settings and reduced-motion preferences. Provide a static or low-motion equivalent; no critical information may be conveyed solely by animation.
 - Avoid infinite decorative loops, parallax for its own sake, large particle effects, CPU-heavy blur, and unnecessary recomposition. Stop animation when off-screen or irrelevant; test low-end supported hardware, 60/120 Hz devices, battery use, thermal effects, and accessibility.
+- Chat may animate message insertion and real synchronization-state transitions, but the animation must follow persisted message/sync state. Never animate a queued message as delivered or fabricate typing/presence indicators.
 - Motion must never block user input, delay cancellation, make progress less legible, break screen-reader semantics, or create misleading expectations. Transfer correctness and accurate state always outrank visual flourish.
 
 ### Localization and animation acceptance gates
