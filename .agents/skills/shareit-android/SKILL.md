@@ -13,11 +13,15 @@ PEYVAND competes in the same product category as SHAREit and may use blue-and-wh
 
 ### Current repository state
 
-This repository is in the product-definition and engineering-planning stage. It contains project guidance, not an application implementation.
+This repository contains product specifications on main and isolated implementation branches. The default scope-control rule remains: do not create source code, Gradle scaffolding, screens, mocks, or build configuration unless the product owner explicitly authorizes the relevant implementation scope.
 
-- Do not create Android source code, Gradle scaffolding, mock implementations, screens, or build configuration unless the user explicitly asks to begin implementation.
-- A request to discuss, review, plan, or refine the product does not authorize coding.
-- When asked to plan, return a decision-ready engineering proposal and identify unresolved decisions.
+- On 2026-11-13, the product owner explicitly authorized **CP-CHAT-001 — local encrypted persistence** on branch `feature/cp-chat-001-local-persistence`, based on code SHA `cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8`.
+- CP-CHAT-001 is limited to Android-free chat domain contracts, Room local message/history persistence, an encrypted message-body store backed by Android Keystore, atomic outgoing outbox, bounded queue policy, Android backup/device-transfer exclusion, and tests.
+- CP-CHAT-001 does not include Compose chat screens, incoming network frames, persistent peer identity, reconnect synchronization, channel multiplexing, group chat, read receipts, voice/video, cloud backup, manual export, remote recovery, or any server/relay/backend.
+- The existing CP-003 and CP-004 implementation branches remain isolated. Do not modify or merge PR #3 as part of CP-CHAT-001.
+- The current mTLS peer certificate is session-scoped and its authenticated channel is exclusively claimed by the file-transfer coordinator. Never use it, a discovery name, or an IP/MAC address as a persistent chat identity. Stable peer identity and safe channel multiplexing need a separate reviewed milestone.
+- Read the latest skill and relevant product docs from main before repository work, then inspect the exact active branch and exact files before editing.
+- A request to discuss, review, plan, or refine the product does not authorize new code. For CP-CHAT-001, the explicit authorization above is already granted and must not be requested again. Scope expansions still need separate owner approval.
 - When asked to implement, make the smallest complete, testable change that satisfies the approved scope.
 - Never claim that a feature works, a test passed, a build succeeded, or a device is supported without direct evidence from repository state or test output.
 
@@ -565,5 +569,5 @@ Before a language/UI milestone is marked PASSED, verify: all visible strings are
 
 Before a motion milestone is marked PASSED, verify: the animation is tied to a real state; it reflects actual transfer/connection data; interruptions and lifecycle changes are safe; reduced motion is supported; controls remain usable; frame stability and resource use are acceptable on the supported device matrix; and the animation does not misrepresent transfer completion.
 
-Refer to `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md` for the expanded product identity, localization, RTL, motion, and acceptance specification. Refer to `docs/PRODUCT_REQUIREMENTS.md` for the current confirmed scope. The project remains in planning until the product owner explicitly authorizes implementation.
+Refer to `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md` for the expanded product identity, localization, RTL, motion, and acceptance specification. Refer to `docs/PRODUCT_REQUIREMENTS.md` for the current confirmed scope. CP-CHAT-001 local persistence is explicitly authorized as of 2026-11-13; the current implementation remains limited to that checkpoint, and all later chat/network/UI expansions require their own approved scope.
 
