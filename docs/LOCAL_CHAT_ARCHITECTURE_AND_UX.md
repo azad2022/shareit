@@ -41,9 +41,9 @@ Group file transfer remains a separate capability and does not imply group-chat 
 PEYVAND remains file-transfer first. Chat is a distinct destination, not the primary home-screen experience.
 
 Recommended navigation:
-1. **Nearby / Home:** discovery, send, receive, pairing, and active connection.
-2. **Transfers:** active, queued, paused, completed, and failed transfer jobs.
-3. **Chats:** paired peers and local conversations.
+1. **Chats:** trusted-peer conversations and the primary home destination.
+2. **Nearby:** discovery and explicit pairing to start a conversation.
+3. **Transfers:** active, queued, paused, completed, and failed transfer jobs.
 4. **Settings:** language, privacy, trusted devices, storage, and diagnostics.
 
 ### Chats list
