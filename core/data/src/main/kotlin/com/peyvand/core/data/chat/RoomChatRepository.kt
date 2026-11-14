@@ -184,7 +184,7 @@ class RoomChatRepository(
     ): ChatMessage {
         ChatMessageRules.validateBody(body)
         require(createdAtEpochMillis >= 0L)
-        require(senderSequence > 0L)
+        require(senderSequence > 0L && senderSequence < Long.MAX_VALUE)
         require(observedPeerSequence >= 0L)
         require(observedPeerSequence < Long.MAX_VALUE)
         require(runCatching { UUID.fromString(messageId.value) }.isSuccess)
