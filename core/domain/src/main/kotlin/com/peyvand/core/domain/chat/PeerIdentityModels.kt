@@ -8,6 +8,11 @@ data class LocalPeerIdentity(
     val fingerprintHex: String,
 )
 
+class LocalPeerIdentityUnavailableException :
+    IllegalStateException(
+        "The persistent local identity key is missing while trusted peers exist; automatic identity rotation is blocked.",
+    )
+
 interface PeerIdentityKeyProvider {
     /** Creates the device key once, then returns the same public identity on subsequent launches. */
     suspend fun getOrCreateIdentity(): LocalPeerIdentity
