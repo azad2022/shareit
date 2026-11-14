@@ -512,7 +512,9 @@ fun DeviceDiscoveryScreen(
                 SecureSessionStatus.REJECTED -> R.string.secure_session_rejected
                 SecureSessionStatus.FAILED -> when (secureSession.failure) {
                     SecureSessionFailure.KEYSTORE_ERROR -> R.string.secure_session_error_keystore
-                    SecureSessionFailure.INVALID_PEER_CERTIFICATE -> R.string.secure_session_error_certificate
+                    SecureSessionFailure.INVALID_PEER_CERTIFICATE,
+                    SecureSessionFailure.PEER_IDENTITY_PROOF_INVALID,
+                    SecureSessionFailure.PEER_IDENTITY_MISMATCH -> R.string.secure_session_error_certificate
                     SecureSessionFailure.PARTICIPANT_ROLE_MISMATCH -> R.string.secure_session_error_role
                     SecureSessionFailure.BOOTSTRAP_TIMEOUT,
                     SecureSessionFailure.USER_APPROVAL_TIMEOUT -> R.string.secure_session_error_timeout
