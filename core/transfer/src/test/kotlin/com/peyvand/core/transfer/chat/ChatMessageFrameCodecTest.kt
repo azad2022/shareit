@@ -118,6 +118,45 @@ class ChatMessageFrameCodecTest {
     }
 
     @Test
+    fun `message decoder rejects the exhausted Long maximum sequence`() {
+        val valid = ChatMessageFrameCodec.encodeMessage(
+            sessionId,
+            ChatWireMessage(
+                ChatMessageId("61710ea9-ae9d-4d23-8aab-41c1ad0d1199"),
+                1L,
+                0L,
+                1_800_000_000_000L,
+                "hello",
+            ),
+        )
+        val payload = valid.payloadBytes()
+        ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN).putLong(16, Long.MAX_VALUE)
+        val malformed = TransferFrame(
+            TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+            TransferFrameType.CHAT_MESSAGE,
+            sessionId,
+            payload,
+        )
+
+        assertThrows(ChatWireProtocolException::class.java) {
+            ChatMessageFrameCodec.decodeMessage(malformed)
+        }
+    }
+
+    @Test
+    fun `acknowledgement encoder rejects the exhausted Long maximum sequence`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            ChatMessageFrameCodec.encodeAcknowledgement(
+                sessionId,
+                ChatWireAcknowledgement(
+                    ChatMessageId("61710ea9-ae9d-4d23-8aab-41c1ad0d1199"),
+                    Long.MAX_VALUE,
+                ),
+            )
+        }
+    }
+
+    @Test
     fun `message body is bounded by UTF8 bytes`() {
         val tooLarge = "آ".repeat(2_100)
         assertThrows(IllegalArgumentException::class.java) {
