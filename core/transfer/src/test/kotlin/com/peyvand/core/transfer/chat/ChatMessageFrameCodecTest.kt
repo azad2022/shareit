@@ -119,7 +119,7 @@ class ChatMessageFrameCodecTest {
 
     @Test
     fun `message body is bounded by UTF8 bytes`() {
-        val tooLarge = "آ".repeat(1_400)
+        val tooLarge = "آ".repeat(2_100)
         assertThrows(IllegalArgumentException::class.java) {
             ChatMessageFrameCodec.encodeMessage(
                 sessionId,
