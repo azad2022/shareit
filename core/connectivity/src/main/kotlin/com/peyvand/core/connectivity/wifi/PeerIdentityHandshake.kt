@@ -5,6 +5,8 @@ import com.peyvand.core.domain.chat.PeerIdentityKeyProvider
 import com.peyvand.core.domain.chat.TrustedPeerIdentity
 import com.peyvand.core.domain.chat.TrustedPeerIdentityConflictException
 import com.peyvand.core.domain.chat.TrustedPeerRepository
+import com.peyvand.core.domain.profile.DeviceProfileRepository
+import com.peyvand.core.domain.profile.DeviceProfileRules
 import com.peyvand.core.transfer.protocol.TransferFrame
 import com.peyvand.core.transfer.protocol.TransferFrameCodec
 import com.peyvand.core.transfer.protocol.TransferFrameType
@@ -13,7 +15,6 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
-import java.io.IOException
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.security.KeyFactory
@@ -25,13 +26,15 @@ import java.util.UUID
 import javax.net.ssl.SSLSocket
 
 /**
- * Binds a long-lived Keystore identity to the already SAS-approved ephemeral mTLS session.
- * It is deliberately run only after the local and remote users have approved the SAS.
+ * Binds a long-lived Keystore identity and its optional presentation profile to the
+ * already SAS-approved ephemeral mTLS session. This exchange runs only after bilateral
+ * SAS approval and pinned mutual TLS; discovery metadata is never promoted to trust.
  */
 internal class PeerIdentityHandshake(
     private val keyProvider: PeerIdentityKeyProvider,
     private val trustedPeers: TrustedPeerRepository,
-    private val localDisplayName: String,
+    private val deviceProfileRepository: DeviceProfileRepository,
+    private val fallbackDeviceName: String,
 ) {
     suspend fun exchange(
         socket: SSLSocket,
@@ -44,18 +47,47 @@ internal class PeerIdentityHandshake(
         require(groupClientCertificateFingerprint.size == SHA256_BYTES)
 
         val local = keyProvider.getOrCreateIdentity()
+        val localProfile = deviceProfileRepository.getLocalProfile()
+        val localDeviceName = DeviceProfileRules.normalizeDeviceName(
+            localProfile.deviceNameOverride,
+        ) ?: DeviceProfileRules.normalizeDeviceName(fallbackDeviceName)
+            ?: DEFAULT_DEVICE_NAME
+        val sharedProfileName = if (localProfile.shareWithTrustedPeers) {
+            DeviceProfileRules.normalizeProfileName(localProfile.profileName)
+        } else {
+            null
+        }
+        val sharedAvatarBytes = if (localProfile.shareWithTrustedPeers) {
+            localProfile.avatarBytes?.copyOf()
+        } else {
+            null
+        }
+        DeviceProfileRules.validateAvatar(sharedAvatarBytes)
+        val avatarHash = sharedAvatarBytes?.let {
+            MessageDigest.getInstance("SHA-256").digest(it)
+        }
+        require(localProfile.revision >= 0L)
+
         val transcript = identityTranscript(
             sessionId = sessionId,
             groupOwnerFingerprint = groupOwnerCertificateFingerprint,
             groupClientFingerprint = groupClientCertificateFingerprint,
             role = localRole,
             publicKey = local.publicKeyEncoded,
+            deviceName = localDeviceName,
+            profileRevision = localProfile.revision,
+            profileName = sharedProfileName,
+            avatarHash = avatarHash,
         )
         val signature = keyProvider.signIdentityProof(transcript)
         val localHello = encodeHello(
             role = localRole,
             publicKey = local.publicKeyEncoded,
-            displayName = sanitizeDisplayName(localDisplayName),
+            deviceName = localDeviceName,
+            profileRevision = localProfile.revision,
+            profileName = sharedProfileName,
+            avatarBytes = sharedAvatarBytes,
+            avatarHash = avatarHash,
             signature = signature,
         )
 
@@ -90,6 +122,10 @@ internal class PeerIdentityHandshake(
             groupClientFingerprint = groupClientCertificateFingerprint,
             role = remote.role,
             publicKey = remote.publicKey,
+            deviceName = remote.deviceName,
+            profileRevision = remote.profileRevision,
+            profileName = remote.profileName,
+            avatarHash = remote.avatarHash,
         )
         verifyProof(remote.publicKey, remoteTranscript, remote.signature)
 
@@ -105,14 +141,21 @@ internal class PeerIdentityHandshake(
             TrustedPeerIdentity(
                 identityId = identityId,
                 publicKeyEncoded = remote.publicKey,
-                displayName = remote.displayName,
+                displayName = remote.deviceName,
                 firstSeenAtEpochMillis = existing?.firstSeenAtEpochMillis ?: now,
                 lastAuthenticatedAtEpochMillis = now,
+                profileName = remote.profileName,
+                profileAvatarHash = remote.avatarHash?.let(::hex),
+                profileAvatarBytes = remote.avatarBytes?.copyOf(),
+                profileRevision = remote.profileRevision,
             ),
         )
         return AuthenticatedPeerIdentity(
             identityId = trusted.identityId,
-            displayName = trusted.displayName,
+            deviceName = trusted.displayName,
+            profileName = trusted.profileName,
+            profileAvatarBytes = trusted.profileAvatarBytes?.copyOf(),
+            profileRevision = trusted.profileRevision,
             isNewlyTrusted = existing == null,
         )
     }
@@ -142,7 +185,13 @@ internal class PeerIdentityHandshake(
         groupClientFingerprint: ByteArray,
         role: PairingParticipantRole,
         publicKey: ByteArray,
+        deviceName: String,
+        profileRevision: Long,
+        profileName: String?,
+        avatarHash: ByteArray?,
     ): ByteArray {
+        val nameBytes = deviceName.toByteArray(StandardCharsets.UTF_8)
+        val profileNameBytes = profileName?.toByteArray(StandardCharsets.UTF_8) ?: byteArrayOf()
         val bytes = ByteArrayOutputStream()
         DataOutputStream(bytes).use { output ->
             output.write(TRANSCRIPT_DOMAIN)
@@ -153,34 +202,38 @@ internal class PeerIdentityHandshake(
             output.writeByte(role.ordinal)
             output.writeShort(publicKey.size)
             output.write(publicKey)
+            output.writeShort(nameBytes.size)
+            output.write(nameBytes)
+            output.writeLong(profileRevision)
+            output.writeShort(profileNameBytes.size)
+            output.write(profileNameBytes)
+            output.writeByte(avatarHash?.size ?: 0)
+            if (avatarHash != null) output.write(avatarHash)
         }
         return bytes.toByteArray()
-    }
-
-    private fun sanitizeDisplayName(value: String): String {
-        val candidate = value.trim().take(32)
-        val encoded = candidate.toByteArray(StandardCharsets.UTF_8)
-        return if (
-            candidate.isNotBlank() &&
-            encoded.size <= MAX_NAME_BYTES &&
-            candidate.none { Character.isISOControl(it) }
-        ) {
-            candidate
-        } else {
-            DEFAULT_DEVICE_NAME
-        }
     }
 
     private fun encodeHello(
         role: PairingParticipantRole,
         publicKey: ByteArray,
-        displayName: String,
+        deviceName: String,
+        profileRevision: Long,
+        profileName: String?,
+        avatarBytes: ByteArray?,
+        avatarHash: ByteArray?,
         signature: ByteArray,
     ): ByteArray {
         require(publicKey.size in MIN_KEY_BYTES..MAX_KEY_BYTES)
         require(signature.size in 1..MAX_SIGNATURE_BYTES)
-        val name = displayName.toByteArray(StandardCharsets.UTF_8)
-        require(name.isNotEmpty() && name.size <= MAX_NAME_BYTES)
+        require(profileRevision >= 0L)
+        require((avatarBytes == null) == (avatarHash == null))
+        avatarBytes?.let(DeviceProfileRules::validateAvatar)
+        val name = deviceName.toByteArray(StandardCharsets.UTF_8)
+        val profile = profileName?.toByteArray(StandardCharsets.UTF_8) ?: byteArrayOf()
+        require(name.isNotEmpty() && name.size <= DeviceProfileRules.MAX_NAME_UTF8_BYTES)
+        require(profile.size <= DeviceProfileRules.MAX_NAME_UTF8_BYTES)
+        require((avatarBytes?.size ?: 0) <= DeviceProfileRules.MAX_AVATAR_BYTES)
+
         val bytes = ByteArrayOutputStream()
         DataOutputStream(bytes).use { output ->
             output.writeByte(IDENTITY_VERSION)
@@ -189,6 +242,15 @@ internal class PeerIdentityHandshake(
             output.write(publicKey)
             output.writeShort(name.size)
             output.write(name)
+            output.writeLong(profileRevision)
+            output.writeShort(profile.size)
+            output.write(profile)
+            output.writeInt(avatarBytes?.size ?: 0)
+            if (avatarBytes != null && avatarHash != null) {
+                require(avatarHash.size == SHA256_BYTES)
+                output.write(avatarHash)
+                output.write(avatarBytes)
+            }
             output.writeShort(signature.size)
             output.write(signature)
         }
@@ -204,7 +266,7 @@ internal class PeerIdentityHandshake(
         try {
             DataInputStream(ByteArrayInputStream(payload)).use { input ->
                 if (input.readUnsignedByte() != IDENTITY_VERSION) {
-                    throw PeerIdentityHandshakeException("Unsupported peer identity version.")
+                    throw PeerIdentityHandshakeException("Unsupported peer identity profile version.")
                 }
                 val roleIndex = input.readUnsignedByte()
                 val role = PairingParticipantRole.entries.getOrNull(roleIndex)
@@ -215,20 +277,55 @@ internal class PeerIdentityHandshake(
                 }
                 val publicKey = ByteArray(keyLength)
                 input.readFully(publicKey)
+
                 val nameLength = input.readUnsignedShort()
-                if (nameLength !in 1..MAX_NAME_BYTES) {
-                    throw PeerIdentityHandshakeException("Invalid peer display-name length.")
+                if (nameLength !in 1..DeviceProfileRules.MAX_NAME_UTF8_BYTES) {
+                    throw PeerIdentityHandshakeException("Invalid device-name length.")
                 }
-                val nameBytes = ByteArray(nameLength)
-                input.readFully(nameBytes)
-                val name = StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(java.nio.ByteBuffer.wrap(nameBytes))
-                    .toString()
-                if (name.isBlank() || name.any { Character.isISOControl(it) }) {
-                    throw PeerIdentityHandshakeException("Invalid peer display name.")
+                val deviceName = readUtf8(input, nameLength, allowEmpty = false)
+                if (DeviceProfileRules.normalizeDeviceName(deviceName) != deviceName) {
+                    throw PeerIdentityHandshakeException("Invalid or non-canonical device name.")
                 }
+
+                val profileRevision = input.readLong()
+                if (profileRevision < 0L) {
+                    throw PeerIdentityHandshakeException("Invalid peer profile revision.")
+                }
+                val profileNameLength = input.readUnsignedShort()
+                if (profileNameLength > DeviceProfileRules.MAX_NAME_UTF8_BYTES) {
+                    throw PeerIdentityHandshakeException("Invalid peer profile-name length.")
+                }
+                val profileName = if (profileNameLength == 0) {
+                    null
+                } else {
+                    readUtf8(input, profileNameLength, allowEmpty = false).also { value ->
+                        if (DeviceProfileRules.normalizeProfileName(value) != value) {
+                            throw PeerIdentityHandshakeException("Invalid or non-canonical profile name.")
+                        }
+                    }
+                }
+
+                val avatarLength = input.readInt()
+                if (avatarLength !in 0..DeviceProfileRules.MAX_AVATAR_BYTES) {
+                    throw PeerIdentityHandshakeException("Invalid peer profile-avatar length.")
+                }
+                val avatarHash = if (avatarLength == 0) {
+                    null
+                } else {
+                    ByteArray(SHA256_BYTES).also(input::readFully)
+                }
+                val avatarBytes = if (avatarLength == 0) {
+                    null
+                } else {
+                    ByteArray(avatarLength).also(input::readFully).also { avatar ->
+                        DeviceProfileRules.validateAvatar(avatar)
+                        val calculatedHash = MessageDigest.getInstance("SHA-256").digest(avatar)
+                        if (!MessageDigest.isEqual(calculatedHash, avatarHash)) {
+                            throw PeerIdentityHandshakeException("Peer profile-avatar digest mismatch.")
+                        }
+                    }
+                }
+
                 val signatureLength = input.readUnsignedShort()
                 if (signatureLength !in 1..MAX_SIGNATURE_BYTES) {
                     throw PeerIdentityHandshakeException("Invalid peer identity signature length.")
@@ -238,7 +335,16 @@ internal class PeerIdentityHandshake(
                 if (input.available() != 0) {
                     throw PeerIdentityHandshakeException("Trailing bytes in peer identity proof.")
                 }
-                return PeerIdentityHello(role, publicKey, name, signature)
+                return PeerIdentityHello(
+                    role = role,
+                    publicKey = publicKey,
+                    deviceName = deviceName,
+                    profileRevision = profileRevision,
+                    profileName = profileName,
+                    avatarBytes = avatarBytes,
+                    avatarHash = avatarHash,
+                    signature = signature,
+                )
             }
         } catch (exception: PeerIdentityHandshakeException) {
             throw exception
@@ -247,41 +353,63 @@ internal class PeerIdentityHandshake(
         }
     }
 
+    private fun readUtf8(input: DataInputStream, length: Int, allowEmpty: Boolean): String {
+        if (length == 0 && !allowEmpty) {
+            throw PeerIdentityHandshakeException("An empty display label is invalid.")
+        }
+        val encoded = ByteArray(length)
+        input.readFully(encoded)
+        return StandardCharsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(java.nio.ByteBuffer.wrap(encoded))
+            .toString()
+    }
+
     private fun sha256Hex(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") {
             "%02x".format(it)
         }
 
+    private fun hex(bytes: ByteArray): String =
+        bytes.joinToString("") { "%02x".format(it) }
+
     private data class PeerIdentityHello(
         val role: PairingParticipantRole,
         val publicKey: ByteArray,
-        val displayName: String,
+        val deviceName: String,
+        val profileRevision: Long,
+        val profileName: String?,
+        val avatarBytes: ByteArray?,
+        val avatarHash: ByteArray?,
         val signature: ByteArray,
     )
 
     companion object {
         const val DEFAULT_DEVICE_NAME = "Android device"
-        const val MAX_IDENTITY_HELLO_BYTES = 2 * 1024
+        const val MAX_IDENTITY_HELLO_BYTES = 40 * 1024
         private const val MIN_IDENTITY_HELLO_BYTES = 80
         private const val MIN_KEY_BYTES = 64
         private const val MAX_KEY_BYTES = 512
-        private const val MAX_NAME_BYTES = 128
         private const val MAX_SIGNATURE_BYTES = 128
         private const val SHA256_BYTES = 32
-        private const val IDENTITY_VERSION = 1
+        private const val IDENTITY_VERSION = 2
         private const val SIGNATURE_ALGORITHM = "SHA256withECDSA"
         private val TRANSCRIPT_DOMAIN =
-            "PEYVAND-CHAT-IDENTITY/1".toByteArray(StandardCharsets.US_ASCII)
+            "PEYVAND-CHAT-IDENTITY/2".toByteArray(StandardCharsets.US_ASCII)
     }
 }
 
 internal data class AuthenticatedPeerIdentity(
     val identityId: PeerIdentityId,
-    val displayName: String,
+    val deviceName: String,
+    val profileName: String?,
+    val profileAvatarBytes: ByteArray?,
+    val profileRevision: Long,
     val isNewlyTrusted: Boolean,
 )
 
 internal class PeerIdentityHandshakeException(
     message: String,
     cause: Throwable? = null,
-) : IOException(message, cause)
+) : IllegalStateException(message, cause)

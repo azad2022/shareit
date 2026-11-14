@@ -52,7 +52,7 @@ enum class TransferFrameType(
     BATCH_ABORT(29, 16, 16),
     BATCH_OFFER(30, 16, 16),
     BATCH_OFFER_ACCEPTED(31, 16, 16),
-    PEER_IDENTITY_HELLO(32, 2 * 1024, 80),
+    PEER_IDENTITY_HELLO(32, 40 * 1024, 80),
     CHAT_MESSAGE(33, 16 + 8 + 8 + 8 + 4 + 4096, 16 + 8 + 8 + 8 + 4 + 1),
     CHAT_ACK(34, 24, 24);
 

@@ -61,7 +61,8 @@ class RoomTrustedPeerRepository(
             } else {
                 val incomingIsStale = peer.profileRevision < existing.profileRevision
                 if (!incomingIsStale && peer.profileRevision == existing.profileRevision) {
-                    val sameProfile = existing.profileName == peer.profileName &&
+                    val sameProfile = existing.displayName == peer.displayName &&
+                        existing.profileName == peer.profileName &&
                         existing.profileAvatarHash == peer.profileAvatarHash &&
                         nullableBytesEqual(existing.profileAvatarBytes, peer.profileAvatarBytes)
                     if (!sameProfile) throw TrustedPeerProfileConflictException()
@@ -69,7 +70,7 @@ class RoomTrustedPeerRepository(
                 val keepExistingProfile = incomingIsStale
                 dao.updateAuthenticatedPeer(
                     identityFingerprint = peer.identityId.sha256Fingerprint,
-                    deviceName = peer.displayName,
+                    deviceName = if (incomingIsStale) existing.displayName else peer.displayName,
                     lastAuthenticatedAtMillis = peer.lastAuthenticatedAtEpochMillis,
                     profileName = if (keepExistingProfile) existing.profileName else peer.profileName,
                     profileAvatarHash = if (keepExistingProfile) existing.profileAvatarHash else peer.profileAvatarHash,

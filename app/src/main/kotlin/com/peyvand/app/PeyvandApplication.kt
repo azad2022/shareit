@@ -16,6 +16,8 @@ import com.peyvand.core.data.chat.AndroidKeystoreChatPayloadCipher
 import com.peyvand.core.data.chat.RoomChatRepository
 import com.peyvand.core.data.chat.AndroidKeystorePeerIdentityKeyProvider
 import com.peyvand.core.data.chat.RoomTrustedPeerRepository
+import com.peyvand.core.data.profile.RoomDeviceProfileRepository
+import com.peyvand.core.domain.profile.DeviceProfileRepository
 
 class PeyvandApplication : Application() {
     private val localChatDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -30,6 +32,15 @@ class PeyvandApplication : Application() {
         RoomTrustedPeerRepository(localChatDatabase)
     }
 
+    val deviceProfileRepository: DeviceProfileRepository by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        RoomDeviceProfileRepository(
+            context = applicationContext,
+            database = localChatDatabase,
+        )
+    }
+
     private val wifiDirectRepository by lazy(
         LazyThreadSafetyMode.SYNCHRONIZED,
     ) {
@@ -37,6 +48,7 @@ class PeyvandApplication : Application() {
             context = applicationContext,
             peerIdentityKeyProvider = peerIdentityKeyProvider,
             trustedPeerRepository = trustedPeerRepository,
+            deviceProfileRepository = deviceProfileRepository,
         )
     }
 

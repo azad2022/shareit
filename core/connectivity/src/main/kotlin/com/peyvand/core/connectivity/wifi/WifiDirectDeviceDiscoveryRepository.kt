@@ -22,6 +22,8 @@ import com.peyvand.core.domain.connection.AuthenticatedPeerChannel
 import com.peyvand.core.domain.connection.AuthenticatedPeerChannelPurpose
 import com.peyvand.core.domain.chat.PeerIdentityKeyProvider
 import com.peyvand.core.domain.chat.TrustedPeerRepository
+import com.peyvand.core.domain.profile.DeviceProfileRepository
+import com.peyvand.core.domain.profile.DeviceProfileRules
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.domain.connection.SecureSessionSnapshot
 import kotlinx.coroutines.flow.StateFlow
@@ -51,19 +53,11 @@ class WifiDirectDeviceDiscoveryRepository(
     context: Context,
     private val peerIdentityKeyProvider: PeerIdentityKeyProvider,
     private val trustedPeerRepository: TrustedPeerRepository,
+    private val deviceProfileRepository: DeviceProfileRepository,
 ) : DeviceDiscoveryRepository, PeerConnectivityRepository {
 
     private val localDeviceDisplayName: String
-        get() {
-            val manufacturer = Build.MANUFACTURER.trim()
-                .takeIf { it.isNotEmpty() && !it.equals("unknown", ignoreCase = true) }
-            val model = Build.MODEL.trim()
-            val combined = listOfNotNull(manufacturer, model.takeIf(String::isNotEmpty))
-                .distinct()
-                .joinToString(" ")
-                .take(32)
-            return combined.ifBlank { "Android device" }
-        }
+        get() = DeviceProfileRules.defaultDeviceName(Build.MANUFACTURER, Build.MODEL)
 
     private val appContext = context.applicationContext
     private val packageManager = appContext.packageManager
@@ -115,6 +109,7 @@ class WifiDirectDeviceDiscoveryRepository(
             rawSocketProvider = { tcpChannelController.value.connectedSocketForSecurityUpgrade() },
             peerIdentityKeyProvider = peerIdentityKeyProvider,
             trustedPeerRepository = trustedPeerRepository,
+            deviceProfileRepository = deviceProfileRepository,
             localDeviceDisplayName = localDeviceDisplayName,
         )
     }

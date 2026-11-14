@@ -158,9 +158,8 @@ class RoomDeviceProfileRepository(
         val top = (bitmap.height - side) / 2
         val square = Bitmap.createBitmap(bitmap, left, top, side, side)
         val scaled = Bitmap.createScaledBitmap(square, size, size, true)
-        if (square !== bitmap && square !== scaled && !square.isRecycled) square.recycle()
-        if (scaled !== square && scaled !== bitmap && !square.isRecycled) {
-            // square is no longer needed after the scaled copy exists.
+        if (square !== bitmap && square !== scaled && !square.isRecycled) {
+            square.recycle()
         }
         return scaled
     }

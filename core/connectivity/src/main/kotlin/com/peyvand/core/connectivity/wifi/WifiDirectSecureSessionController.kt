@@ -7,6 +7,7 @@ import com.peyvand.core.domain.chat.PeerIdentityKeyProvider
 import com.peyvand.core.domain.chat.TrustedPeerRepository
 import com.peyvand.core.domain.chat.TrustedPeerIdentityConflictException
 import com.peyvand.core.domain.chat.LocalPeerIdentityUnavailableException
+import com.peyvand.core.domain.profile.DeviceProfileRepository
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
 import com.peyvand.core.domain.connection.PeerTransferRole
 import com.peyvand.core.domain.connection.SecureSessionFailure
@@ -62,6 +63,7 @@ internal class WifiDirectSecureSessionController(
     private val rawSocketProvider: () -> Socket?,
     private val peerIdentityKeyProvider: PeerIdentityKeyProvider,
     private val trustedPeerRepository: TrustedPeerRepository,
+    private val deviceProfileRepository: DeviceProfileRepository,
     private val localDeviceDisplayName: String,
 ) : com.peyvand.core.domain.connection.PeerSecureSessionRepository {
 
@@ -408,7 +410,8 @@ internal class WifiDirectSecureSessionController(
                 PeerIdentityHandshake(
                     keyProvider = peerIdentityKeyProvider,
                     trustedPeers = trustedPeerRepository,
-                    localDisplayName = localDeviceDisplayName,
+                    deviceProfileRepository = deviceProfileRepository,
+                    fallbackDeviceName = localDeviceDisplayName,
                 ).exchange(
                     socket = authenticatedTlsSocket,
                     sessionId = sessionId,
