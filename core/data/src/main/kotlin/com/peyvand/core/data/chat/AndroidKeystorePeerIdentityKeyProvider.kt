@@ -27,9 +27,9 @@ class AndroidKeystorePeerIdentityKeyProvider(
     override suspend fun getOrCreateIdentity(): LocalPeerIdentity = withContext(Dispatchers.IO) {
         // If the key disappeared after peers were paired, silently minting a new identity
         // would make this installation appear to be a different device to every peer.
-        val keyInitiallyMissing = !loadKeyStore().containsAlias(keyAlias)
-        val trustedPeersExist = keyInitiallyMissing &&
-            trustedPeers.observeTrustedPeers().first().isNotEmpty()
+        // Read trust state before entering the Keystore critical section. The alias is
+        // checked again under the lock, so a key disappearing between checks still fails closed.
+        val trustedPeersExist = trustedPeers.observeTrustedPeers().first().isNotEmpty()
 
         val certificate = synchronized(KEYSTORE_LOCK) {
             if (!loadKeyStore().containsAlias(keyAlias)) {
