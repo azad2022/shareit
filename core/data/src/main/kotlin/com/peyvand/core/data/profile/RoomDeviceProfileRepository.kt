@@ -14,7 +14,6 @@ import com.peyvand.core.domain.profile.DeviceProfileRepository
 import com.peyvand.core.domain.profile.DeviceProfileRules
 import com.peyvand.core.domain.profile.LocalDeviceProfile
 import java.io.ByteArrayOutputStream
-import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -101,7 +100,7 @@ class RoomDeviceProfileRepository(
     ): LocalDeviceProfile = withContext(Dispatchers.IO) {
         val normalizedDeviceName = DeviceProfileRules.normalizeDeviceName(deviceNameOverride)
         val normalizedProfileName = DeviceProfileRules.normalizeProfileName(profileName)
-        DeviceProfileRules.validateAvatar(avatarBytes)
+        validateCanonicalAvatar(avatarBytes)
 
         database.withTransaction {
             // Read and increment under the same Room transaction so simultaneous saves
@@ -128,6 +127,24 @@ class RoomDeviceProfileRepository(
                 updated
             }
         }
+    }
+
+    private fun validateCanonicalAvatar(bytes: ByteArray?) {
+        DeviceProfileRules.validateAvatar(bytes)
+        if (bytes == null) return
+
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        require(
+            bounds.outWidth == OUTPUT_DIMENSION &&
+                bounds.outHeight == OUTPUT_DIMENSION &&
+                bounds.outMimeType == "image/jpeg",
+        ) {
+            "A local profile avatar must be a canonical 256x256 JPEG."
+        }
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            ?: throw IllegalArgumentException("The local profile avatar JPEG is invalid.")
+        decoded.recycle()
     }
 
     private fun applyOrientation(bitmap: Bitmap, orientation: Int): Bitmap {

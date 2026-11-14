@@ -320,7 +320,8 @@ internal class PeerIdentityHandshake(
                     ByteArray(avatarLength).also(input::readFully).also { avatar ->
                         DeviceProfileRules.validateAvatar(avatar)
                         val calculatedHash = MessageDigest.getInstance("SHA-256").digest(avatar)
-                        if (!MessageDigest.isEqual(calculatedHash, avatarHash)) {
+                        val expectedHash = requireNotNull(avatarHash)
+                        if (!MessageDigest.isEqual(calculatedHash, expectedHash)) {
                             throw PeerIdentityHandshakeException("Peer profile-avatar digest mismatch.")
                         }
                     }

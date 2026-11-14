@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.peyvand.core.domain.profile.DeviceProfileRepository
 import com.peyvand.core.domain.profile.LocalDeviceProfile
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,6 +54,7 @@ class DeviceProfileViewModel(
         DeviceProfileUiState(defaultDeviceName = defaultDeviceName),
     )
     val state: StateFlow<DeviceProfileUiState> = mutableState.asStateFlow()
+    private var avatarImportJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -92,7 +94,7 @@ class DeviceProfileViewModel(
             isImportingAvatar = true,
             error = null,
         )
-        viewModelScope.launch {
+        avatarImportJob = viewModelScope.launch {
             try {
                 val encoded = repository.importAvatar(contentUri)
                 mutableState.value = mutableState.value.copy(
@@ -112,11 +114,18 @@ class DeviceProfileViewModel(
                     isImportingAvatar = false,
                     error = DeviceProfileUiError.IMAGE_IMPORT_FAILED,
                 )
+            } finally {
+                avatarImportJob = null
+                if (mutableState.value.isImportingAvatar) {
+                    mutableState.value = mutableState.value.copy(isImportingAvatar = false)
+                }
             }
         }
     }
 
     fun discardChanges() {
+        avatarImportJob?.cancel()
+        avatarImportJob = null
         mutableState.value = mutableState.value.withProfile(mutableState.value.localProfile)
     }
 

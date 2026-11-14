@@ -112,7 +112,7 @@ data class ChatTrustedPeerEntity(
     val profileAvatarHash: String? = null,
     @ColumnInfo(name = "profile_avatar_bytes")
     val profileAvatarBytes: ByteArray? = null,
-    @ColumnInfo(name = "profile_revision")
+    @ColumnInfo(name = "profile_revision", defaultValue = "0")
     val profileRevision: Long = 0L,
 )
 

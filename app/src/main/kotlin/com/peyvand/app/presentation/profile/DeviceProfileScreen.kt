@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.peyvand.app.R
@@ -56,6 +58,7 @@ fun DeviceProfileScreen(
     onBack: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val backDescription = stringResource(R.string.action_back)
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
@@ -75,7 +78,10 @@ fun DeviceProfileScreen(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            androidx.compose.material3.IconButton(onClick = onBack) {
+            androidx.compose.material3.IconButton(
+                onClick = onBack,
+                modifier = Modifier.semantics { contentDescription = backDescription },
+            ) {
                 PeyvandChatIcon(PeyvandChatIconType.BACK, PeyvandColors.OnSurface)
             }
             Text(
@@ -172,6 +178,7 @@ fun DeviceProfileScreen(
                     OutlinedTextField(
                         value = state.deviceNameDraft,
                         onValueChange = viewModel::onDeviceNameChanged,
+                        enabled = !state.isSaving,
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         placeholder = { Text(state.defaultDeviceName) },
@@ -189,6 +196,7 @@ fun DeviceProfileScreen(
                     OutlinedTextField(
                         value = state.profileNameDraft,
                         onValueChange = viewModel::onProfileNameChanged,
+                        enabled = !state.isSaving,
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         placeholder = { Text(stringResource(R.string.device_profile_profile_name_placeholder)) },
@@ -219,7 +227,7 @@ fun DeviceProfileScreen(
                         Switch(
                             checked = state.shareWithTrustedPeersDraft,
                             onCheckedChange = viewModel::onShareWithTrustedPeersChanged,
-                            enabled = !state.isSaving,
+                            enabled = !state.isSaving && !state.isImportingAvatar,
                         )
                     }
                 }
