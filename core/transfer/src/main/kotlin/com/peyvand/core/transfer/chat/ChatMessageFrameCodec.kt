@@ -40,7 +40,9 @@ object ChatMessageFrameCodec {
 
     fun encodeMessage(sessionId: UUID, message: ChatWireMessage): TransferFrame {
         val messageUuid = canonicalUuid(message.messageId.value)
-        require(message.senderSequence > 0L) { "Chat sender sequence must be positive." }
+        require(message.senderSequence in 1 until Long.MAX_VALUE) {
+            "Chat sender sequence must be positive and leave room for the exhausted sentinel."
+        }
         require(message.observedPeerSequence >= 0L) { "Observed peer sequence cannot be negative." }
         require(message.createdAtEpochMillis >= 0L) { "Chat timestamp cannot be negative." }
         ChatMessageRules.validateBody(message.body)
@@ -86,7 +88,9 @@ object ChatMessageFrameCodec {
             val createdAtEpochMillis = buffer.long
             val bodyLength = buffer.int
 
-            if (senderSequence <= 0L || observedPeerSequence < 0L || createdAtEpochMillis < 0L) {
+            if (senderSequence <= 0L || senderSequence == Long.MAX_VALUE ||
+                observedPeerSequence < 0L || createdAtEpochMillis < 0L
+            ) {
                 throw ChatWireProtocolException("Chat message metadata contains an invalid value.")
             }
             if (bodyLength !in 1..ChatMessageRules.MAX_MESSAGE_UTF8_BYTES ||
@@ -127,8 +131,8 @@ object ChatMessageFrameCodec {
         acknowledgement: ChatWireAcknowledgement,
     ): TransferFrame {
         val messageUuid = canonicalUuid(acknowledgement.messageId.value)
-        require(acknowledgement.senderSequence > 0L) {
-            "Chat acknowledgement sequence must be positive."
+        require(acknowledgement.senderSequence in 1 until Long.MAX_VALUE) {
+            "Chat acknowledgement sequence is outside the allocated range."
         }
         val payload = ByteBuffer.allocate(ACKNOWLEDGEMENT_BYTES)
             .order(ByteOrder.BIG_ENDIAN)
@@ -155,8 +159,8 @@ object ChatMessageFrameCodec {
             val buffer = ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN)
             val messageId = ChatMessageId(UUID(buffer.long, buffer.long).toString())
             val senderSequence = buffer.long
-            if (senderSequence <= 0L) {
-                throw ChatWireProtocolException("Chat acknowledgement sequence must be positive.")
+            if (senderSequence <= 0L || senderSequence == Long.MAX_VALUE) {
+                throw ChatWireProtocolException("Chat acknowledgement sequence is outside the allocated range.")
             }
             ChatWireAcknowledgement(messageId, senderSequence)
         } catch (exception: ChatWireProtocolException) {
