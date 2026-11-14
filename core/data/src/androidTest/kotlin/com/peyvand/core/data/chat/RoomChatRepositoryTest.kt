@@ -9,7 +9,11 @@ import com.peyvand.core.domain.chat.ChatMessageRules
 import com.peyvand.core.domain.chat.ChatOutboxLimitExceededException
 import com.peyvand.core.domain.chat.ChatRepository
 import com.peyvand.core.domain.chat.PeerIdentityId
+import com.peyvand.core.domain.chat.TrustedPeerIdentity
+import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.spec.ECGenParameterSpec
 import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -28,6 +32,7 @@ class RoomChatRepositoryTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val databaseName = "chat-test-" + UUID.randomUUID() + ".db"
     private val keyAlias = "peyvand.chat.test." + UUID.randomUUID()
+    private val identityKeyAlias = "peyvand.identity.test." + UUID.randomUUID()
     private val peerIdentity = PeerIdentityId.fromSha256Fingerprint("a".repeat(64))
 
     private lateinit var database: ChatDatabase
@@ -43,6 +48,7 @@ class RoomChatRepositoryTest {
         if (::database.isInitialized) database.close()
         context.deleteDatabase(databaseName)
         deleteKeystoreAlias()
+        deletePersistentIdentityTestAlias()
     }
 
     @Test
@@ -218,6 +224,66 @@ class RoomChatRepositoryTest {
         } finally {
             cursor.close()
         }
+    }
+
+    @Test
+    fun incomingSequenceCannotExhaustTheLongSequenceSpace() = runBlocking {
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                repository.acceptIncomingMessage(
+                    peerIdentityId = peerIdentity,
+                    messageId = ChatMessageId(UUID.randomUUID().toString()),
+                    senderSequence = Long.MAX_VALUE,
+                    observedPeerSequence = 0L,
+                    createdAtEpochMillis = 100L,
+                    body = "sequence overflow",
+                )
+            }
+        }
+
+        assertTrue(repository.observeRecentMessages(peerIdentity).first().isEmpty())
+    }
+
+    @Test
+    fun missingPersistentIdentityKeyDoesNotCreateAReplacementWhenTrustedPeersExist() = runBlocking {
+        val keyGenerator = KeyPairGenerator.getInstance("EC")
+        keyGenerator.initialize(ECGenParameterSpec("secp256r1"))
+        val peerPublicKey = keyGenerator.generateKeyPair().public.encoded
+        val peerFingerprint = MessageDigest.getInstance("SHA-256")
+            .digest(peerPublicKey)
+            .joinToString("") { "%02x".format(it) }
+        val trustedPeers = RoomTrustedPeerRepository(database)
+        trustedPeers.recordAuthenticatedPeer(
+            TrustedPeerIdentity(
+                identityId = PeerIdentityId.fromSha256Fingerprint(peerFingerprint),
+                publicKeyEncoded = peerPublicKey,
+                displayName = "Trusted test device",
+                firstSeenAtEpochMillis = 100L,
+                lastAuthenticatedAtEpochMillis = 100L,
+            ),
+        )
+
+        val provider = AndroidKeystorePeerIdentityKeyProvider(trustedPeers, identityKeyAlias)
+        org.junit.Assert.assertThrows(
+            com.peyvand.core.domain.chat.LocalPeerIdentityUnavailableException::class.java,
+        ) {
+            runBlocking { provider.getOrCreateIdentity() }
+        }
+
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        assertFalse(store.containsAlias(identityKeyAlias))
+    }
+
+    @Test
+    fun persistentIdentityIsCreatedOnceAndStableAcrossProviderCalls() = runBlocking {
+        val trustedPeers = RoomTrustedPeerRepository(database)
+        val provider = AndroidKeystorePeerIdentityKeyProvider(trustedPeers, identityKeyAlias)
+
+        val first = provider.getOrCreateIdentity()
+        val second = provider.getOrCreateIdentity()
+
+        assertArrayEquals(first.publicKeyEncoded, second.publicKeyEncoded)
+        assertEquals(first.fingerprintHex, second.fingerprintHex)
     }
 
     @Test
@@ -473,6 +539,14 @@ class RoomChatRepositoryTest {
         keyStore.load(null)
         if (keyStore.containsAlias(keyAlias)) {
             keyStore.deleteEntry(keyAlias)
+        }
+    }
+
+    private fun deletePersistentIdentityTestAlias() {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore")
+        keyStore.load(null)
+        if (keyStore.containsAlias(identityKeyAlias)) {
+            keyStore.deleteEntry(identityKeyAlias)
         }
     }
 }
