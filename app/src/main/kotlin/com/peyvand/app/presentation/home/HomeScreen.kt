@@ -515,6 +515,8 @@ fun DeviceDiscoveryScreen(
                     SecureSessionFailure.INVALID_PEER_CERTIFICATE,
                     SecureSessionFailure.PEER_IDENTITY_PROOF_INVALID,
                     SecureSessionFailure.PEER_IDENTITY_MISMATCH -> R.string.secure_session_error_certificate
+                    SecureSessionFailure.PEER_IDENTITY_KEY_UNAVAILABLE ->
+                        R.string.secure_session_error_identity_key_lost
                     SecureSessionFailure.PARTICIPANT_ROLE_MISMATCH -> R.string.secure_session_error_role
                     SecureSessionFailure.BOOTSTRAP_TIMEOUT,
                     SecureSessionFailure.USER_APPROVAL_TIMEOUT -> R.string.secure_session_error_timeout
