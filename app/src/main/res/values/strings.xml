@@ -181,6 +181,7 @@
     <string name="secure_session_authenticated">هویت دو دستگاه تأیید و کانال TLS دوطرفه برقرار شد. هنوز انتقال فایل آغاز نشده است.</string>
     <string name="secure_session_rejected">درخواست جفت‌سازی رد شد. هیچ اطلاعات فایل ارسال نشده است.</string>
     <string name="secure_session_error">احراز هویت امن انجام نشد. اتصال را قطع و دوباره تلاش کنید.</string>
+    <string name="secure_session_error_identity_key_lost">کلید هویت پایدار این دستگاه در دسترس نیست؛ برای جلوگیری از تغییر هویت و ارسال پیام به مخاطب اشتباه، اتصال متوقف شد. همگام‌سازی خودکار انجام نمی‌شود.</string>
     <string name="secure_session_error_keystore">ساخت کلید موقت امن در Android Keystore انجام نشد.</string>
     <string name="secure_session_error_certificate">گواهی موقت دستگاه مقابل معتبر نیست.</string>
     <string name="secure_session_error_role">نقش فرستنده و گیرنده در دو دستگاه با هم سازگار نیست.</string>
