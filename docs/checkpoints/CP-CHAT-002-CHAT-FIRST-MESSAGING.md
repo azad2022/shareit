@@ -6,7 +6,7 @@
 - **Repository:** `azad2022/shareit`
 - **Branch:** `feature/cp-chat-002-chat-experience`
 - **Base:** CP-CHAT-001 branch head `eaa8fad9649362951e9283b91b8d162a26c75488`
-- **Code snapshot before checkpoint documentation:** `06652de8c429545af57467aac18c52b807a0bc59`
+- **Latest implementation source SHA:** `8e25b56951ef981dcf85ade834edd94881b655a1` (the documentation commit that follows is not a source-code change)
 
 ## Objective
 
@@ -49,14 +49,17 @@ Replace the three-button Send/Receive/Files home with a polished, original PEYVA
 
 ## Current source implementation snapshot
 
-- Android Keystore P-256 identity provider and transcript-bound peer identity handshake are present.
+- Android Keystore P-256 identity provider and transcript-bound peer identity handshake are present; peer verification compares the full secp256r1 parameter set, not only bit lengths.
+- If the persistent local identity alias is missing while trusted peers remain, pairing fails closed with an explicit identity-key-unavailable state; it does not mint a replacement identity.
 - Trusted peers are stored in Room with a v1-to-v2 migration.
-- Chat frame codec and session coordinator implement bounded message/ACK handling and durable receipt ordering.
+- Chat frame codec and session coordinator implement bounded message/ACK handling and durable receipt ordering. `ChatSessionCoordinatorTest` now exercises the real local CHAT channel path, proving that ACK waits for the incoming commit and the sender outbox is acknowledged only after the matching peer ACK.
+- Message and ACK codecs plus Room ingestion reject `Long.MAX_VALUE` as an exhausted sequence sentinel.
 - `AuthenticatedPeerChannelMultiplexer` routes frames over one TLS socket into CHAT and FILE_TRANSFER logical streams.
 - The old `MainHomeScreen` is no longer the app's main route; `PeyvandApp` opens the new chat-first Compose home.
 - Attachments launch the existing transfer UI/channel from the conversation; attachment cards are not yet persisted/rendered in the chat timeline.
-- The exact-head CI and tests for the latest source snapshot have not yet produced a verified result at this documentation snapshot.
-- No physical two-device chat validation has been completed.
+- Previous code snapshot `3cbc8c2f5abb920f23a0bc8314eca2f1eff78ec9` passed exact-head CI run [43599087732](https://github.com/azad2022/shareit/actions/runs/43599087732) and produced a Debug APK. That run predates the security fixes and added coordinator tests.
+- Exact-head CI for updated implementation `8e25b56951ef981dcf85ade834edd94881b655a1` is run [43623779996](https://github.com/azad2022/shareit/actions/runs/43623779996); it was still pending at the last status read. Do not treat the updated code or its new tests as validated until that run completes.
+- No physical two-device chat validation has been completed. The checkpoint remains `IN_PROGRESS`; emulator CI is not hardware interoperability evidence.
 
 ## Evidence and remaining risk
 

@@ -52,6 +52,14 @@ The product owner has now selected a chat-first app experience. Chat messages an
 4. Voice/video call icons may be disabled placeholders only; call implementation requires a separate media/security milestone.
 5. Group chat, read receipts, voice/video calls, cloud delivery and remote deletion are not included.
 
+### 5. Identity-key loss, exact curve validation and sequence exhaustion
+
+1. The remote signing key must use the complete named secp256r1 parameter set (field prime, curve coefficients, generator, subgroup order and cofactor). Matching only 256-bit field/order lengths is insufficient.
+2. If the local Android Keystore identity alias is missing while any trusted peer remains in Room, identity creation must fail closed. The app must not silently generate a replacement key and present itself as a different device. Automatic trust deletion or silent re-pairing is prohibited; a separately designed, explicit recovery flow is required.
+3. The initial identity may be created when no trusted peers exist. Existing aliases are reused; key invalidation or signing failure must not trigger automatic rotation.
+4. `Long.MAX_VALUE` is reserved as the exhausted sequence sentinel. Chat message and acknowledgement codecs and incoming persistence reject it before it can overflow the contiguous sequence counter.
+5. Regression coverage verifies exact secp256r1 acceptance/rejection, persistent identity stability, missing-key fail-closed behavior, sequence exhaustion rejection and the coordinator's durable-commit/ACK ordering.
+
 ## Consequences and risks
 
 - Both devices must run a compatible PEYVAND protocol version; this checkpoint deliberately has no silent downgrade to the previous file-only session protocol.

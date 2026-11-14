@@ -4,9 +4,9 @@
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
 - **Current checkpoint:** CP-CHAT-002 — Chat-first experience and direct peer messaging
-- **Current branch:** `feature/cp-chat-002-chat-experience`; latest code snapshot before this documentation update: `06652de8c429545af57467aac18c52b807a0bc59`
+- **Current branch:** `feature/cp-chat-002-chat-experience`; latest implementation source SHA: `8e25b56951ef981dcf85ade834edd94881b655a1`
 - **Previous chat foundation:** CP-CHAT-001 remains on `feature/cp-chat-001-local-persistence`; source head `2bb8cd51082428b4c1223cf38260d2672ca0dfb4`
-- **Last updated:** 2026-11-13
+- **Last updated:** 2026-11-14
 - **Parallel transfer track:** CP-004 remains `IN_PROGRESS` on `feature/cp-004-multi-item-transfer`; PR #3 remains open as Draft and has not been changed or merged.
 
 # CP-CHAT-002 — Chat-First Experience and Direct Peer Messaging
@@ -17,7 +17,8 @@
 - **Repository:** `azad2022/shareit`
 - **Branch:** `feature/cp-chat-002-chat-experience`
 - **Base:** CP-CHAT-001 branch head `eaa8fad9649362951e9283b91b8d162a26c75488`
-- **Code snapshot before checkpoint documentation:** `06652de8c429545af57467aac18c52b807a0bc59`
+- **Latest implementation source SHA:** `8e25b56951ef981dcf85ade834edd94881b655a1`
+- **Latest exact-head CI:** run [43623779996](https://github.com/azad2022/shareit/actions/runs/43623779996), pending at last verification; previous run [43599087732](https://github.com/azad2022/shareit/actions/runs/43599087732) passed on the preceding code snapshot and is not validation of these refinements.
 
 ## Objective
 
@@ -60,13 +61,15 @@ Replace the three-button Send/Receive/Files home with a polished, original PEYVA
 
 ## Current source implementation snapshot
 
-- Android Keystore P-256 identity provider and transcript-bound peer identity handshake are present.
+- Android Keystore P-256 identity provider and transcript-bound peer identity handshake are present; full secp256r1 parameters are verified, and missing local identity keys fail closed while trusted peers remain.
 - Trusted peers are stored in Room with a v1-to-v2 migration.
-- Chat frame codec and session coordinator implement bounded message/ACK handling and durable receipt ordering.
+- Chat frame codec and session coordinator implement bounded message/ACK handling and durable receipt ordering; new coordinator tests cover durable inbound commit before ACK and sender delivery only after matching ACK.
+- Wire and Room layers reject `Long.MAX_VALUE` as an exhausted message sequence.
 - `AuthenticatedPeerChannelMultiplexer` routes frames over one TLS socket into CHAT and FILE_TRANSFER logical streams.
 - The old `MainHomeScreen` is no longer the app's main route; `PeyvandApp` opens the new chat-first Compose home.
 - Attachments launch the existing transfer UI/channel from the conversation; attachment cards are not yet persisted/rendered in the chat timeline.
-- The exact-head CI and tests for the latest source snapshot have not yet produced a verified result at this documentation snapshot.
+- The preceding source snapshot `3cbc8c2f5abb920f23a0bc8314eca2f1eff78ec9` passed CI run [43599087732](https://github.com/azad2022/shareit/actions/runs/43599087732); that result predates the security and test changes above.
+- Exact-head CI for `8e25b56951ef981dcf85ade834edd94881b655a1` is run [43623779996](https://github.com/azad2022/shareit/actions/runs/43623779996), pending at last check. Do not treat it as passed until its conclusion is successful.
 - No physical two-device chat validation has been completed.
 
 ## Evidence and remaining risk
