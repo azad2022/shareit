@@ -34,6 +34,7 @@ enum class SecureSessionFailure {
     IO_ERROR,
     PEER_IDENTITY_PROOF_INVALID,
     PEER_IDENTITY_MISMATCH,
+    PEER_IDENTITY_KEY_UNAVAILABLE,
 }
 
 data class SecureSessionSnapshot(
