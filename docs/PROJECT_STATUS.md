@@ -383,3 +383,14 @@ This is the latest authoritative CP-CHAT-001 CI record and supersedes the older 
 - Debug APK: artifact 14063403573; 14,720,844 bytes; SHA-256 `6944412768a0af66945888adaa68b98e2c413423d94c1956fd70699716c2a33c`.
 - No physical-device tests were performed. Status remains `IN_PROGRESS` pending OEM Keystore/key-loss testing, backup/device-transfer verification, lifecycle-policy decisions and final security review.
 - Main, CP-004 and PR #3 were not changed. No chat UI, persistent peer identity or network synchronization has been implemented by this update.
+
+## 2026-11-14 — CP-PROFILE-001 device label and optional peer profile
+
+- **Status:** IN_PROGRESS.
+- **Branch:** feature/cp-profile-001-device-profile — separate from CP-CHAT-002, CP-004 and main.
+- **Base:** b721b1ff8b4188e4fd729b0a4751c9997f6eac3d (CP-CHAT-002 head used to create this isolated branch).
+- **Owner decision:** always retain and display the device label; additionally display a user profile name and/or image only when the user has configured one. Device label/profile are presentation metadata and never identity credentials.
+- **Implementation:** Room v3 local profile row and trusted-peer profile cache; PEYVAND-only device-name override; Photo Picker image import; bounded canonical JPEG; monotonic profile revision; profile image hash verification; profile exchange inside identity HELLO v2 after bilateral SAS and pinned mTLS; dual-label chat-list and conversation presentation.
+- **Security boundary:** unknown devices still expose only the OS discovery label before authentication. No profile image is sent before authenticated pairing. A profile update is synchronized at the next secure connection, not pushed into an already active session. No new socket, TLS reader, backend, cloud or relay is introduced.
+- **Validation:** domain and Room instrumentation tests have been added. Exact-head CI and physical Galaxy A12 ↔ ASUS X017DA profile-sync testing remain pending; do not mark this checkpoint PASSED until exact-head CI and repeatable physical evidence exist.
+- **Compatibility:** identity HELLO v2 is intentionally not downgraded to v1. Mixed old/new app versions require both devices to update before a secure chat session can complete.

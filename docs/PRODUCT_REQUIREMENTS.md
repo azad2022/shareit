@@ -2,7 +2,7 @@
 
 - **Status:** Product definition with owner-authorized, checkpoint-scoped Android implementation.
 - **Repository:** `azad2022/shareit` (private), default branch `main`.
-- **Last decision update:** 2026-11-13.
+- **Last decision update:** 2026-11-14.
 
 ## 1. Product vision
 
@@ -69,6 +69,19 @@ The product owner selected local chat with durable local history and synchroniza
 - Group chat, read receipts, voice/video communication, and remote deletion are not approved by this decision and require separate design/approval.
 
 See [`LOCAL_CHAT_ARCHITECTURE_AND_UX.md`](LOCAL_CHAT_ARCHITECTURE_AND_UX.md) and the chat ADRs under [`decisions/`](decisions/) for detailed architecture and unresolved decisions.
+
+
+### 4.4 Device label and optional user profile
+
+- Every authenticated PEYVAND peer has a **device label**, defaulting to the Android manufacturer/model and optionally overridden inside PEYVAND only. This setting must not rename Android, Bluetooth, Wi-Fi, or other operating-system identities.
+- A user may optionally configure a **profile name** and/or **profile image**. If no profile is configured, peers display the device label only. If a profile name exists, show it alongside the device label; do not hide or replace the device identity.
+- Device label and user profile are presentation metadata, not authentication credentials. They must never replace or mutate the persistent P-256 key, SHA-256 peer fingerprint, trusted-peer record key, or conversation identity.
+- The Android discovery name shown before authentication remains untrusted platform metadata. PEYVAND's app-scoped device label and optional profile are exchanged only after bilateral SAS approval and pinned mutual TLS complete.
+- The user can disable sharing of profile name and image with trusted peers. The device label remains available after authenticated pairing. No profile image is sent to an unauthenticated or unknown peer.
+- Store the local profile in private app storage. Select images through Android's system Photo Picker, normalize them to a bounded 256×256 JPEG, and do not request broad gallery access solely for this feature.
+- Store a remote profile cache against the already authenticated persistent peer fingerprint. Reject invalid image dimensions, MIME, length, digest, malformed Unicode, stale revisions and conflicting same-revision profile data.
+- A profile revision is monotonic. Changes are synchronized over the existing authenticated TLS session during the next secure connection; they are not live-pushed into an already established session. The UI must state this behavior.
+- The profile protocol must reuse the existing secure identity exchange and its single TLS owner. Do not add another socket, TLS connection, reader, cloud service or relay.
 
 ## 5. Performance and integrity
 
@@ -172,4 +185,4 @@ See [`PRODUCT_IDENTITY_AND_LOCALIZATION.md`](PRODUCT_IDENTITY_AND_LOCALIZATION.m
 
 ## 14. Implementation authorization
 
-This document records product requirements and implementation boundaries. The product owner explicitly authorized CP-CHAT-001 local-persistence implementation on 2026-11-13. That authorization is limited to the scoped local-storage milestone and does not approve chat networking, persistent peer identity, Compose chat screens, group chat, remote services, cloud backup, app export, release signing, or unrelated feature expansion.
+The product owner explicitly authorized CP-CHAT-001 local chat persistence, CP-CHAT-002 chat-first messaging, and CP-PROFILE-001 local device/profile editing and authenticated peer-profile exchange in their separately scoped milestones. This authorization does not approve group chat, remote services, cloud backup, app export, release signing, or unrelated feature expansion.

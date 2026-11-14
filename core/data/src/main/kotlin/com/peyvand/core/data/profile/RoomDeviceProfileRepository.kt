@@ -102,26 +102,32 @@ class RoomDeviceProfileRepository(
         val normalizedDeviceName = DeviceProfileRules.normalizeDeviceName(deviceNameOverride)
         val normalizedProfileName = DeviceProfileRules.normalizeProfileName(profileName)
         DeviceProfileRules.validateAvatar(avatarBytes)
-        val current = database.localDeviceProfile().get()?.toDomain() ?: LocalDeviceProfile()
 
-        val same = current.deviceNameOverride == normalizedDeviceName &&
-            current.profileName == normalizedProfileName &&
-            nullableBytesEqual(current.avatarBytes, avatarBytes) &&
-            current.shareWithTrustedPeers == shareWithTrustedPeers
-        if (same) return@withContext current
-
-        check(current.revision < Long.MAX_VALUE) { "The local profile revision is exhausted." }
-        val updated = LocalDeviceProfile(
-            deviceNameOverride = normalizedDeviceName,
-            profileName = normalizedProfileName,
-            avatarBytes = avatarBytes?.copyOf(),
-            revision = current.revision + 1L,
-            shareWithTrustedPeers = shareWithTrustedPeers,
-        )
         database.withTransaction {
-            database.localDeviceProfile().replace(updated.toEntity())
+            // Read and increment under the same Room transaction so simultaneous saves
+            // cannot produce duplicate profile revisions or overwrite a newer profile.
+            val current = database.localDeviceProfile().get()?.toDomain() ?: LocalDeviceProfile()
+            val same = current.deviceNameOverride == normalizedDeviceName &&
+                current.profileName == normalizedProfileName &&
+                nullableBytesEqual(current.avatarBytes, avatarBytes) &&
+                current.shareWithTrustedPeers == shareWithTrustedPeers
+            if (same) {
+                current
+            } else {
+                check(current.revision < Long.MAX_VALUE) {
+                    "The local profile revision is exhausted."
+                }
+                val updated = LocalDeviceProfile(
+                    deviceNameOverride = normalizedDeviceName,
+                    profileName = normalizedProfileName,
+                    avatarBytes = avatarBytes?.copyOf(),
+                    revision = current.revision + 1L,
+                    shareWithTrustedPeers = shareWithTrustedPeers,
+                )
+                database.localDeviceProfile().replace(updated.toEntity())
+                updated
+            }
         }
-        updated
     }
 
     private fun applyOrientation(bitmap: Bitmap, orientation: Int): Bitmap {

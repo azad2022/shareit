@@ -67,6 +67,9 @@ object DeviceProfileRules {
         var offset = 0
         while (offset < normalized.length) {
             val codePoint = normalized.codePointAt(offset)
+            require(codePoint !in 0xD800..0xDFFF) {
+                "Unpaired UTF-16 surrogates are not valid Unicode names."
+            }
             require(!Character.isISOControl(codePoint)) {
                 "Control characters are not allowed in device or profile names."
             }
@@ -106,8 +109,9 @@ object DeviceProfileRules {
         val candidate = listOfNotNull(safeManufacturer, safeModel)
             .distinct()
             .joinToString(" ")
-        return normalizeDeviceName(candidate.takeCodePoints(MAX_DEVICE_NAME_CODE_POINTS))
-            ?: "Android device"
+        return runCatching {
+            normalizeDeviceName(candidate.takeCodePoints(MAX_DEVICE_NAME_CODE_POINTS))
+        }.getOrNull() ?: "Android device"
     }
 
     private fun String.takeCodePoints(maximum: Int): String {
