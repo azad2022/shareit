@@ -90,16 +90,15 @@ fun ChatConversationScreen(
     val emojiDescription = stringResource(R.string.chat_accessibility_emoji)
     val sendDescription = stringResource(R.string.chat_accessibility_send)
 
-    LaunchedEffect(state.messages.size) {
+    LaunchedEffect(state.messages.lastOrNull()?.id) {
         if (state.messages.isNotEmpty()) {
-            val separatorCount = state.messages.indices.count { index ->
-                index == 0 || !isSameLocalCalendarDay(
-                    state.messages[index - 1].createdAtEpochMillis,
-                    state.messages[index].createdAtEpochMillis,
-                )
+            // Date separators are rendered inside each message item, not as separate
+            // LazyColumn entries. Follow new messages only while the reader is near the end.
+            val lastMessageItemIndex = state.messages.lastIndex
+            val lastVisibleItemIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            if (lastVisibleItemIndex < 0 || lastVisibleItemIndex >= lastMessageItemIndex - 1) {
+                listState.animateScrollToItem(lastMessageItemIndex)
             }
-            val lastMessageItemIndex = state.messages.lastIndex + separatorCount
-            listState.animateScrollToItem(lastMessageItemIndex)
         }
     }
 
@@ -147,13 +146,24 @@ fun ChatConversationScreen(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        Text(
-                            text = peer?.displayName ?: stringResource(R.string.chat_conversation_title),
-                            color = PeyvandColors.OnSurface,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = peer?.displayName ?: stringResource(R.string.chat_conversation_title),
+                                color = PeyvandColors.OnSurface,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                            )
+                            if (peer != null) {
+                                PeyvandChatIcon(
+                                    PeyvandChatIconType.VERIFIED,
+                                    ChatBlue,
+                                    Modifier.size(17.dp).semantics {
+                                        contentDescription = stringResource(R.string.chat_accessibility_verified_peer)
+                                    },
+                                )
+                            }
+                        }
                         Text(
                             text = when {
                                 state.isConnected -> stringResource(R.string.chat_status_connected)

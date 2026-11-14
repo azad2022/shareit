@@ -40,6 +40,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -127,12 +128,14 @@ class SingleFileTransferCoordinatorTest {
             assertEquals(fileBytes.size.toLong(), sender.state.value.transferredBytes)
             assertEquals(fileBytes.size.toLong(), receiver.state.value.transferredBytes)
             withTimeout(10_000L) {
-                while (!senderConnectivity.disconnected || !receiverConnectivity.disconnected) {
+                while (!senderChannel.closed || !receiverChannel.closed) {
                     delay(1L)
                 }
             }
-            assertTrue(senderConnectivity.disconnected)
-            assertTrue(receiverConnectivity.disconnected)
+            assertTrue(senderChannel.closed)
+            assertTrue(receiverChannel.closed)
+            assertFalse(senderConnectivity.disconnected)
+            assertFalse(receiverConnectivity.disconnected)
         } finally {
             sender.close()
             receiver.close()
@@ -192,9 +195,11 @@ class SingleFileTransferCoordinatorTest {
             coordinator.cancelTransfer()
 
             withTimeout(10_000L) {
-                while (!storage.sourceStreamClosed || !connectivity.disconnected) delay(1L)
+                while (!storage.sourceStreamClosed || !channel.closed) delay(1L)
             }
             assertTrue(blockingStream.isClosed)
+            assertTrue(channel.closed)
+            assertFalse(connectivity.disconnected)
             assertEquals(TransferSessionPhase.CANCELLED, coordinator.state.value.phase)
         } finally {
             coordinator.close()
@@ -254,7 +259,12 @@ class SingleFileTransferCoordinatorTest {
         override val inputStream: InputStream,
         override val outputStream: OutputStream,
     ) : AuthenticatedPeerChannel {
+        @Volatile
+        var closed: Boolean = false
+            private set
+
         override fun close() {
+            closed = true
             runCatching { inputStream.close() }
             runCatching { outputStream.close() }
         }

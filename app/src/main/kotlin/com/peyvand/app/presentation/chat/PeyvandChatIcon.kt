@@ -25,6 +25,7 @@ enum class PeyvandChatIconType {
     NEARBY,
     VOICE_CALL,
     VIDEO_CALL,
+    VERIFIED,
     ATTACHMENT,
     EMOJI,
     SEND,
@@ -136,6 +137,22 @@ internal fun PeyvandChatIcon(
                     lineTo(w * 0.9f, h * 0.72f)
                     lineTo(w * 0.71f, h * 0.6f)
                     close()
+                }
+            }
+            PeyvandChatIconType.VERIFIED -> {
+                path {
+                    moveTo(w * 0.5f, h * 0.08f)
+                    lineTo(w * 0.84f, h * 0.22f)
+                    lineTo(w * 0.8f, h * 0.61f)
+                    quadraticTo(w * 0.76f, h * 0.82f, w * 0.5f, h * 0.94f)
+                    quadraticTo(w * 0.24f, h * 0.82f, w * 0.2f, h * 0.61f)
+                    lineTo(w * 0.16f, h * 0.22f)
+                    close()
+                }
+                path {
+                    moveTo(w * 0.31f, h * 0.51f)
+                    lineTo(w * 0.44f, h * 0.64f)
+                    lineTo(w * 0.7f, h * 0.37f)
                 }
             }
             PeyvandChatIconType.ATTACHMENT -> {

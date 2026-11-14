@@ -52,6 +52,7 @@ import com.peyvand.app.presentation.transfer.FileTransferViewModel
 import com.peyvand.core.domain.connection.PeerConnectionStatus
 import com.peyvand.core.domain.connection.SecureSessionStatus
 import com.peyvand.core.domain.discovery.DiscoveryRole
+import com.peyvand.core.domain.chat.PeerIdentityId
 
 private enum class HomeDestination {
     HOME,
@@ -83,6 +84,7 @@ fun PeyvandApp(
     val conversationState by chatViewModel.conversationUiState.collectAsStateWithLifecycle()
     val selectedItems = selectionState.selectedItems.values.toList()
     var destination by rememberSaveable { mutableStateOf(HomeDestination.HOME) }
+    var selectedChatPeerFingerprint by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(
         destination,
@@ -96,7 +98,9 @@ fun PeyvandApp(
             destination == HomeDestination.CHAT_FIND_DEVICE ||
                 destination == HomeDestination.CHAT_PREPARE_TO_BE_FOUND
         if (isChatDiscoveryRoute && secureSession.status == SecureSessionStatus.AUTHENTICATED) {
-            if (chatViewModel.openAuthenticatedConversation() != null) {
+            val authenticatedPeer = chatViewModel.openAuthenticatedConversation()
+            if (authenticatedPeer != null) {
+                selectedChatPeerFingerprint = authenticatedPeer.sha256Fingerprint
                 destination = HomeDestination.CHAT_CONVERSATION
             }
         }
@@ -113,11 +117,27 @@ fun PeyvandApp(
         }
     }
 
+    LaunchedEffect(destination, selectedChatPeerFingerprint) {
+        if (destination == HomeDestination.CHAT_CONVERSATION) {
+            val fingerprint = selectedChatPeerFingerprint
+            val identity = fingerprint?.let {
+                runCatching { PeerIdentityId.fromSha256Fingerprint(it) }.getOrNull()
+            }
+            if (identity == null) {
+                selectedChatPeerFingerprint = null
+                destination = HomeDestination.HOME
+            } else {
+                chatViewModel.openConversation(identity)
+            }
+        }
+    }
+
     BackHandler(
         enabled = uiState is MainUiState.Home && destination != HomeDestination.HOME,
     ) {
         when (destination) {
             HomeDestination.CHAT_CONVERSATION -> {
+                selectedChatPeerFingerprint = null
                 chatViewModel.clearConversationSelection()
                 destination = HomeDestination.HOME
             }
@@ -173,7 +193,7 @@ fun PeyvandApp(
                 HomeDestination.HOME -> ChatHomeScreen(
                     state = chatHomeState,
                     onOpenConversation = { identity ->
-                        chatViewModel.openConversation(identity)
+                        selectedChatPeerFingerprint = identity.sha256Fingerprint
                         destination = HomeDestination.CHAT_CONVERSATION
                     },
                     onOpenNearby = { destination = HomeDestination.NEARBY_HUB },
@@ -221,6 +241,7 @@ fun PeyvandApp(
                 HomeDestination.CHAT_CONVERSATION -> ChatConversationScreen(
                     state = conversationState,
                     onBack = {
+                        selectedChatPeerFingerprint = null
                         chatViewModel.clearConversationSelection()
                         destination = HomeDestination.HOME
                     },

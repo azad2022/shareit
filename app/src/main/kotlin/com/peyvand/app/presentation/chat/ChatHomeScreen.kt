@@ -314,6 +314,13 @@ private fun ChatConversationRow(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
+                    PeyvandChatIcon(
+                        PeyvandChatIconType.VERIFIED,
+                        ChatBlue,
+                        Modifier.size(17.dp).semantics {
+                            contentDescription = stringResource(R.string.chat_accessibility_verified_peer)
+                        },
+                    )
                     Text(
                         text = preview.latestMessage?.let(::formatChatTime) ?: "",
                         color = ChatMuted,

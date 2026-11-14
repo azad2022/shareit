@@ -306,6 +306,7 @@
     <string name="chat_nearby_ready_action">آماده‌سازی دستگاه</string>
     <string name="chat_nearby_local_only_note">ارتباط چت و انتقال فایل از طریق اتصال مستقیم محلی انجام می‌شود؛ اینترنت عمومی، حساب کاربری و سرور پیام‌رسان لازم نیست.</string>
     <string name="chat_accessibility_nearby">اتصال به دستگاه نزدیک</string>
+    <string name="chat_accessibility_verified_peer">هویت این دستگاه پس از جفت‌سازی امن تأیید شده است</string>
     <string name="chat_accessibility_voice_call">تماس صوتی؛ قابلیت در مرحله آینده فعال می‌شود</string>
     <string name="chat_accessibility_video_call">تماس تصویری؛ قابلیت در مرحله آینده فعال می‌شود</string>
     <string name="chat_accessibility_attachment">افزودن پیوست</string>
