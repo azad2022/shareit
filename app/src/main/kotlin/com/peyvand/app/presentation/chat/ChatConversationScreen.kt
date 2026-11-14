@@ -89,6 +89,7 @@ fun ChatConversationScreen(
     val attachmentDescription = stringResource(R.string.chat_accessibility_attachment)
     val emojiDescription = stringResource(R.string.chat_accessibility_emoji)
     val sendDescription = stringResource(R.string.chat_accessibility_send)
+    val verifiedPeerDescription = stringResource(R.string.chat_accessibility_verified_peer)
 
     LaunchedEffect(state.messages.lastOrNull()?.id) {
         if (state.messages.isNotEmpty()) {
@@ -159,7 +160,7 @@ fun ChatConversationScreen(
                                     PeyvandChatIconType.VERIFIED,
                                     ChatBlue,
                                     Modifier.size(17.dp).semantics {
-                                        contentDescription = stringResource(R.string.chat_accessibility_verified_peer)
+                                        contentDescription = verifiedPeerDescription
                                     },
                                 )
                             }

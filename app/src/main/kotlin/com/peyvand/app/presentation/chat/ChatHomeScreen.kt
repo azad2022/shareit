@@ -281,6 +281,7 @@ private fun ChatConversationRow(
     isSyncChannelReady: Boolean,
     onClick: () -> Unit,
 ) {
+    val verifiedPeerDescription = stringResource(R.string.chat_accessibility_verified_peer)
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -318,7 +319,7 @@ private fun ChatConversationRow(
                         PeyvandChatIconType.VERIFIED,
                         ChatBlue,
                         Modifier.size(17.dp).semantics {
-                            contentDescription = stringResource(R.string.chat_accessibility_verified_peer)
+                            contentDescription = verifiedPeerDescription
                         },
                     )
                     Text(
