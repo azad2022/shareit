@@ -138,13 +138,21 @@ class ChatViewModel(
                 flowOf(ChatConversationUiState())
             } else {
                 combine(
-                    trustedPeers,
-                    chatRepository.observeRecentMessages(identityId, limit = 100),
-                    chatRepository.observePendingOutboxCount(identityId),
-                    connectivityRepository.secureSession,
-                    notice,
-                    activeCoordinatorPeerState,
-                ) { peers, messages, pending, session, currentNotice, coordinatorPeer ->
+                    combine(
+                        trustedPeers,
+                        chatRepository.observeRecentMessages(identityId, limit = 100),
+                    ) { peers, messages -> peers to messages },
+                    combine(
+                        chatRepository.observePendingOutboxCount(identityId),
+                        connectivityRepository.secureSession,
+                    ) { pending, session -> pending to session },
+                    combine(notice, activeCoordinatorPeerState) { currentNotice, coordinatorPeer ->
+                        currentNotice to coordinatorPeer
+                    },
+                ) { peerMessages, pendingSession, noticeCoordinator ->
+                    val (peers, messages) = peerMessages
+                    val (pending, session) = pendingSession
+                    val (currentNotice, coordinatorPeer) = noticeCoordinator
                     val peer = peers.firstOrNull { it.identityId == identityId }
                     val connectedPeer = session.peerIdentityId?.let {
                         runCatching { PeerIdentityId.fromSha256Fingerprint(it) }.getOrNull()
@@ -193,15 +201,16 @@ class ChatViewModel(
     init {
         viewModelScope.launch {
             connectivityRepository.secureSession.collect { snapshot ->
+                val peerFingerprint = snapshot.peerIdentityId
                 if (snapshot.status != SecureSessionStatus.AUTHENTICATED ||
-                    snapshot.peerIdentityId.isNullOrBlank()
+                    peerFingerprint.isNullOrBlank()
                 ) {
                     closeActiveCoordinator()
                     return@collect
                 }
 
                 val authenticatedId = runCatching {
-                    PeerIdentityId.fromSha256Fingerprint(snapshot.peerIdentityId)
+                    PeerIdentityId.fromSha256Fingerprint(peerFingerprint)
                 }.getOrNull() ?: run {
                     closeActiveCoordinator()
                     notice.value = ChatUiNotice.PEER_IDENTITY_CHANGED
