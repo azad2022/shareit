@@ -125,9 +125,7 @@ internal class PeerIdentityHandshake(
         val publicKey = KeyFactory.getInstance("EC")
             .generatePublic(X509EncodedKeySpec(encodedPublicKey)) as? ECPublicKey
             ?: throw PeerIdentityHandshakeException("Peer identity key is not EC.")
-        if (publicKey.params.curve.field.fieldSize != 256 ||
-            publicKey.params.order.bitLength() != 256
-        ) {
+        if (!PeerIdentityCurvePolicy.isP256(publicKey.params)) {
             throw PeerIdentityHandshakeException("Peer identity key is not P-256.")
         }
         val verifier = Signature.getInstance(SIGNATURE_ALGORITHM)
