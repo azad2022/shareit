@@ -120,13 +120,33 @@ interface ChatTrustedPeerDao {
     suspend fun insert(peer: ChatTrustedPeerEntity)
 
     @Query(
-        "UPDATE chat_trusted_peers SET last_authenticated_at_ms = :lastAuthenticatedAtMillis " +
+        "UPDATE chat_trusted_peers SET display_name = :deviceName, " +
+            "last_authenticated_at_ms = :lastAuthenticatedAtMillis, " +
+            "profile_name = :profileName, profile_avatar_hash = :profileAvatarHash, " +
+            "profile_avatar_bytes = :profileAvatarBytes, profile_revision = :profileRevision " +
             "WHERE identity_fingerprint = :identityFingerprint",
     )
-    suspend fun updateLastAuthenticated(
+    suspend fun updateAuthenticatedPeer(
         identityFingerprint: String,
+        deviceName: String,
         lastAuthenticatedAtMillis: Long,
+        profileName: String?,
+        profileAvatarHash: String?,
+        profileAvatarBytes: ByteArray?,
+        profileRevision: Long,
     ): Int
+}
+
+@Dao
+interface LocalDeviceProfileDao {
+    @Query("SELECT * FROM local_device_profile WHERE id = 1 LIMIT 1")
+    fun observe(): Flow<LocalDeviceProfileEntity?>
+
+    @Query("SELECT * FROM local_device_profile WHERE id = 1 LIMIT 1")
+    suspend fun get(): LocalDeviceProfileEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun replace(profile: LocalDeviceProfileEntity)
 }
 
 @Dao

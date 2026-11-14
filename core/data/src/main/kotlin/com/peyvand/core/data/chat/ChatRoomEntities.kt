@@ -106,7 +106,36 @@ data class ChatTrustedPeerEntity(
     val firstSeenAtMillis: Long,
     @ColumnInfo(name = "last_authenticated_at_ms")
     val lastAuthenticatedAtMillis: Long,
+    @ColumnInfo(name = "profile_name")
+    val profileName: String? = null,
+    @ColumnInfo(name = "profile_avatar_hash")
+    val profileAvatarHash: String? = null,
+    @ColumnInfo(name = "profile_avatar_bytes")
+    val profileAvatarBytes: ByteArray? = null,
+    @ColumnInfo(name = "profile_revision")
+    val profileRevision: Long = 0L,
 )
+
+/** One private, device-local editable profile row. It is excluded from Android backup. */
+@Entity(tableName = "local_device_profile")
+data class LocalDeviceProfileEntity(
+    @PrimaryKey
+    val id: Int = SINGLETON_ID,
+    @ColumnInfo(name = "device_name_override")
+    val deviceNameOverride: String?,
+    @ColumnInfo(name = "profile_name")
+    val profileName: String?,
+    @ColumnInfo(name = "avatar_bytes")
+    val avatarBytes: ByteArray?,
+    @ColumnInfo(name = "profile_revision")
+    val profileRevision: Long,
+    @ColumnInfo(name = "share_with_trusted_peers")
+    val shareWithTrustedPeers: Boolean,
+) {
+    companion object {
+        const val SINGLETON_ID = 1
+    }
+}
 
 @Entity(tableName = "chat_crypto_state")
 data class ChatCryptoStateEntity(
