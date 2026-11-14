@@ -6,6 +6,7 @@ import com.peyvand.core.transfer.session.AuthenticatedPeerChannelMultiplexer
 import com.peyvand.core.domain.chat.PeerIdentityKeyProvider
 import com.peyvand.core.domain.chat.TrustedPeerRepository
 import com.peyvand.core.domain.chat.TrustedPeerIdentityConflictException
+import com.peyvand.core.domain.chat.LocalPeerIdentityUnavailableException
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
 import com.peyvand.core.domain.connection.PeerTransferRole
 import com.peyvand.core.domain.connection.SecureSessionFailure
@@ -461,6 +462,18 @@ internal class WifiDirectSecureSessionController(
                 SecureSessionSnapshot(
                     status = SecureSessionStatus.FAILED,
                     failure = exception.failure,
+                ),
+            )
+        } catch (exception: LocalPeerIdentityUnavailableException) {
+            diagnostics.failure("SESSION_FAILURE", currentStage, tlsRoleForDiagnostics, exception)
+            closeQuietly(tlsSocket)
+            closeQuietly(localSocket)
+            alias?.let(::deleteKeyAlias)
+            publishIfCurrent(
+                expectedGeneration,
+                SecureSessionSnapshot(
+                    status = SecureSessionStatus.FAILED,
+                    failure = SecureSessionFailure.PEER_IDENTITY_KEY_UNAVAILABLE,
                 ),
             )
         } catch (exception: java.security.GeneralSecurityException) {
