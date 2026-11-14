@@ -1,6 +1,7 @@
 package com.peyvand.app
 
 import android.app.Application
+import android.os.Build
 import com.peyvand.core.connectivity.network.AndroidNetworkEnvironmentRepository
 import com.peyvand.core.connectivity.wifi.WifiDirectDeviceDiscoveryRepository
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
@@ -18,6 +19,7 @@ import com.peyvand.core.data.chat.AndroidKeystorePeerIdentityKeyProvider
 import com.peyvand.core.data.chat.RoomTrustedPeerRepository
 import com.peyvand.core.data.profile.RoomDeviceProfileRepository
 import com.peyvand.core.domain.profile.DeviceProfileRepository
+import com.peyvand.core.domain.profile.DeviceProfileRules
 
 class PeyvandApplication : Application() {
     private val localChatDatabase by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -31,6 +33,9 @@ class PeyvandApplication : Application() {
     val trustedPeerRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         RoomTrustedPeerRepository(localChatDatabase)
     }
+
+    val defaultDeviceName: String
+        get() = DeviceProfileRules.defaultDeviceName(Build.MANUFACTURER, Build.MODEL)
 
     val deviceProfileRepository: DeviceProfileRepository by lazy(
         LazyThreadSafetyMode.SYNCHRONIZED,

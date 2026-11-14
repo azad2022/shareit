@@ -40,6 +40,8 @@ import com.peyvand.app.presentation.chat.ChatConversationScreen
 import com.peyvand.app.presentation.chat.ChatHomeScreen
 import com.peyvand.app.presentation.chat.ChatViewModel
 import com.peyvand.app.presentation.chat.NearbyChatHubScreen
+import com.peyvand.app.presentation.profile.DeviceProfileScreen
+import com.peyvand.app.presentation.profile.DeviceProfileViewModel
 import com.peyvand.app.presentation.connection.PeerConnectionViewModel
 import com.peyvand.app.presentation.discovery.DeviceDiscoveryViewModel
 import com.peyvand.app.presentation.files.FileSelectionScreen
@@ -64,6 +66,7 @@ private enum class HomeDestination {
     CHAT_ATTACHMENT_SEND,
     CHAT_ATTACHMENT_RECEIVE,
     ACTIVITY,
+    DEVICE_PROFILE,
 }
 
 @Composable
@@ -75,6 +78,7 @@ fun PeyvandApp(
     peerConnectionViewModel: PeerConnectionViewModel,
     fileTransferViewModel: FileTransferViewModel,
     chatViewModel: ChatViewModel,
+    deviceProfileViewModel: DeviceProfileViewModel,
 ) {
     val uiState by languageViewModel.uiState.collectAsStateWithLifecycle()
     val connectionState by peerConnectionViewModel.state.collectAsStateWithLifecycle()
@@ -82,6 +86,7 @@ fun PeyvandApp(
     val selectionState by shareSelectionViewModel.state.collectAsStateWithLifecycle()
     val chatHomeState by chatViewModel.homeUiState.collectAsStateWithLifecycle()
     val conversationState by chatViewModel.conversationUiState.collectAsStateWithLifecycle()
+    val deviceProfileState by deviceProfileViewModel.state.collectAsStateWithLifecycle()
     val selectedItems = selectionState.selectedItems.values.toList()
     var destination by rememberSaveable { mutableStateOf(HomeDestination.HOME) }
     var selectedChatPeerFingerprint by rememberSaveable { mutableStateOf<String?>(null) }
@@ -163,6 +168,11 @@ fun PeyvandApp(
                 destination = HomeDestination.NEARBY_HUB
             }
 
+            HomeDestination.DEVICE_PROFILE -> {
+                deviceProfileViewModel.discardChanges()
+                destination = HomeDestination.HOME
+            }
+
             HomeDestination.NEARBY_HUB,
             HomeDestination.ACTIVITY,
             -> destination = HomeDestination.HOME
@@ -192,12 +202,23 @@ fun PeyvandApp(
             is MainUiState.Home -> when (destination) {
                 HomeDestination.HOME -> ChatHomeScreen(
                     state = chatHomeState,
+                    localProfile = deviceProfileState.localProfile,
+                    defaultDeviceName = deviceProfileState.defaultDeviceName,
+                    onOpenProfile = { destination = HomeDestination.DEVICE_PROFILE },
                     onOpenConversation = { identity ->
                         selectedChatPeerFingerprint = identity.sha256Fingerprint
                         destination = HomeDestination.CHAT_CONVERSATION
                     },
                     onOpenNearby = { destination = HomeDestination.NEARBY_HUB },
                     onOpenTransfers = { destination = HomeDestination.ACTIVITY },
+                )
+
+                HomeDestination.DEVICE_PROFILE -> DeviceProfileScreen(
+                    viewModel = deviceProfileViewModel,
+                    onBack = {
+                        deviceProfileViewModel.discardChanges()
+                        destination = HomeDestination.HOME
+                    },
                 )
 
                 HomeDestination.NEARBY_HUB -> NearbyChatHubScreen(

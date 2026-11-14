@@ -137,7 +137,8 @@ fun ChatConversationScreen(
                     PeyvandChatIcon(PeyvandChatIconType.BACK, PeyvandColors.OnSurface, Modifier.size(24.dp))
                 }
                 PeerAvatar(
-                    label = peer?.displayName.orEmpty(),
+                    label = peer?.profileName ?: peer?.displayName.orEmpty(),
+                    avatarBytes = peer?.profileAvatarBytes,
                     modifier = Modifier.size(43.dp),
                 )
                 Column(
@@ -149,7 +150,7 @@ fun ChatConversationScreen(
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = peer?.displayName ?: stringResource(R.string.chat_conversation_title),
+                                text = peer?.profileName ?: peer?.displayName ?: stringResource(R.string.chat_conversation_title),
                                 color = PeyvandColors.OnSurface,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
@@ -164,6 +165,14 @@ fun ChatConversationScreen(
                                     },
                                 )
                             }
+                        }
+                        if (!peer?.profileName.isNullOrBlank()) {
+                            Text(
+                                text = stringResource(R.string.device_profile_device_label, peer?.displayName.orEmpty()),
+                                color = ChatMuted,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                            )
                         }
                         Text(
                             text = when {

@@ -318,4 +318,27 @@
     <string name="chat_find_discovery_subtitle">دستگاه نزدیک را انتخاب کنید. پس از اتصال، هر دو طرف باید کد امنیتی یکسان را تأیید کنند.</string>
     <string name="chat_ready_discovery_title">آماده اتصال برای گفتگو</string>
     <string name="chat_ready_discovery_subtitle">این دستگاه را برای شناسایی توسط مخاطب موردنظر آماده کنید و درخواست احراز هویت را بررسی کنید.</string>
+
+    <!-- Local device profile -->
+    <string name="device_profile_title">پروفایل دستگاه</string>
+    <string name="device_profile_open_accessibility">ویرایش پروفایل دستگاه من</string>
+    <string name="device_profile_photo_hint">تصویر پروفایل برای مخاطبان تأییدشده نمایش داده می‌شود.</string>
+    <string name="device_profile_choose_photo">انتخاب تصویر</string>
+    <string name="device_profile_remove_photo">حذف تصویر</string>
+    <string name="device_profile_device_name_label">نام دستگاه در پیوند</string>
+    <string name="device_profile_device_name_hint">در صورت خالی‌بودن، نام پیش‌فرض دستگاه نمایش داده می‌شود: %1$s</string>
+    <string name="device_profile_profile_name_label">نام پروفایل (اختیاری)</string>
+    <string name="device_profile_profile_name_placeholder">نامی که مخاطبان شما می‌بینند</string>
+    <string name="device_profile_profile_name_hint">می‌توانید نام پروفایل را تنظیم نکنید؛ در آن صورت فقط نام دستگاه نمایش داده می‌شود.</string>
+    <string name="device_profile_device_label">دستگاه: %1$s</string>
+    <string name="device_profile_share_title">اشتراک پروفایل با مخاطبان تأییدشده</string>
+    <string name="device_profile_share_hint">نام پروفایل و تصویر فقط در اتصال مستقیم امن و پس از تأیید دوطرفه به اشتراک گذاشته می‌شوند.</string>
+    <string name="device_profile_preview_title">پیش‌نمایش برای مخاطبان</string>
+    <string name="device_profile_security_note">تغییرات پروفایل در اتصال امن بعدی با مخاطبان همگام می‌شود. نام سیستمی گوشی تغییر نمی‌کند.</string>
+    <string name="device_profile_save">ذخیره تغییرات</string>
+    <string name="device_profile_error_import">خواندن تصویر انتخاب‌شده انجام نشد. تصویر دیگری انتخاب کنید.</string>
+    <string name="device_profile_error_image">تصویر نامعتبر یا بیش از حد بزرگ است. تصویر دیگری انتخاب کنید.</string>
+    <string name="device_profile_error_input">نام دستگاه یا پروفایل معتبر نیست. طول و نویسه‌های ورودی را بررسی کنید.</string>
+    <string name="device_profile_error_save">ذخیره پروفایل انجام نشد. دوباره تلاش کنید.</string>
+
 </resources>

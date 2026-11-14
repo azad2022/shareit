@@ -15,6 +15,8 @@ import androidx.lifecycle.lifecycleScope
 import com.peyvand.app.presentation.MainViewModel
 import com.peyvand.app.presentation.chat.ChatViewModel
 import com.peyvand.app.presentation.chat.ChatViewModelFactory
+import com.peyvand.app.presentation.profile.DeviceProfileViewModel
+import com.peyvand.app.presentation.profile.DeviceProfileViewModelFactory
 import com.peyvand.app.presentation.connection.PeerConnectionViewModel
 import com.peyvand.app.presentation.connection.PeerConnectionViewModelFactory
 import com.peyvand.app.presentation.MainViewModelFactory
@@ -49,6 +51,7 @@ class MainActivity : AppCompatActivity() {
             val peerConnectionViewModel: PeerConnectionViewModel,
             val fileTransferViewModel: FileTransferViewModel,
             val chatViewModel: ChatViewModel,
+            val deviceProfileViewModel: DeviceProfileViewModel,
         ) : StartupState
     }
 
@@ -79,6 +82,7 @@ class MainActivity : AppCompatActivity() {
                         peerConnectionViewModel = state.peerConnectionViewModel,
                         fileTransferViewModel = state.fileTransferViewModel,
                         chatViewModel = state.chatViewModel,
+                        deviceProfileViewModel = state.deviceProfileViewModel,
                     )
                 }
             }
@@ -167,6 +171,14 @@ class MainActivity : AppCompatActivity() {
                 )[FileTransferViewModel::class.java]
 
                 val peyvandApplication = application as PeyvandApplication
+                val deviceProfileViewModel = ViewModelProvider(
+                    this@MainActivity,
+                    DeviceProfileViewModelFactory(
+                        repository = peyvandApplication.deviceProfileRepository,
+                        defaultDeviceName = peyvandApplication.defaultDeviceName,
+                    ),
+                )[DeviceProfileViewModel::class.java]
+
                 val chatViewModel = ViewModelProvider(
                     this@MainActivity,
                     ChatViewModelFactory(
@@ -184,6 +196,7 @@ class MainActivity : AppCompatActivity() {
                     peerConnectionViewModel = peerConnectionViewModel,
                     fileTransferViewModel = fileTransferViewModel,
                     chatViewModel = chatViewModel,
+                    deviceProfileViewModel = deviceProfileViewModel,
                 )
             } catch (cancellation: CancellationException) {
                 throw cancellation
