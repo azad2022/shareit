@@ -23,7 +23,7 @@ class PeyvandApplication : Application() {
     }
 
     private val peerIdentityKeyProvider by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        AndroidKeystorePeerIdentityKeyProvider()
+        AndroidKeystorePeerIdentityKeyProvider(trustedPeerRepository)
     }
 
     val trustedPeerRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
