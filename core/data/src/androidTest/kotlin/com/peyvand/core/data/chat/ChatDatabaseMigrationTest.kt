@@ -151,11 +151,11 @@ class ChatDatabaseMigrationTest {
 
             database.execSQL(
                 "INSERT INTO chat_trusted_peers VALUES(?, ?, ?, ?, ?)",
-                arrayOf(PEER_FINGERPRINT, byteArrayOf(1, 2, 3), "Galaxy A12", 10L, 20L),
+                arrayOf<Any?>(PEER_FINGERPRINT, byteArrayOf(1, 2, 3), "Galaxy A12", 10L, 20L),
             )
             database.execSQL(
                 "INSERT INTO chat_conversations VALUES(?, ?, ?, ?, ?, ?)",
-                arrayOf(CONVERSATION_ID, PEER_FINGERPRINT, 10L, 20L, 2L, 0L),
+                arrayOf<Any?>(CONVERSATION_ID, PEER_FINGERPRINT, 10L, 20L, 2L, 0L),
             )
             database.execSQL(
                 "INSERT INTO chat_messages VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -173,11 +173,11 @@ class ChatDatabaseMigrationTest {
             )
             database.execSQL(
                 "INSERT INTO chat_outbox VALUES(?, ?)",
-                arrayOf("message-v2", 10L),
+                arrayOf<Any?>("message-v2", 10L),
             )
             database.execSQL(
                 "INSERT INTO chat_crypto_state VALUES(?, ?, ?)",
-                arrayOf(1, 1, 10L),
+                arrayOf<Any?>(1, 1, 10L),
             )
             database.version = 2
         } finally {
