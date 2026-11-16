@@ -35,16 +35,21 @@ Every peer retains a visible device label. A user may additionally configure a p
 
 ## Validation and evidence
 
-- Domain unit tests authored in DeviceProfileRulesTest; execution pending.
-- Room Android instrumentation tests authored in DeviceProfileRepositoryTest; execution pending.
-- Exact-head Android CI: pending.
-- API 26 and API 36 instrumentation: pending.
-- Physical device matrix: Galaxy A12 ↔ ASUS X017DA; not yet tested for this feature.
-- APK SHA-256 and install/retest evidence: pending.
+- **Exact implementation source SHA:** `fccb9776125afdcfd24e1e957578ce1bf66fe378` on `feature/cp-profile-001-device-profile`.
+- **Exact-head CI:** [Run #43910295903](https://github.com/azad2022/shareit/actions/runs/43910295903) completed successfully on 2026-11-16; all three jobs passed: Build/unit tests/lint, Android instrumentation API 26, and Android instrumentation API 36.
+- **JVM unit tests:** 172/172 passed; zero failures, errors or skips. `DeviceProfileRulesTest` passed 8/8.
+- **Lint:** zero errors across configured modules. Warnings: app 28, core:data 2, core:storage 1, core:designsystem 1, core:connectivity 1; core:domain and core:transfer reported no issues.
+- **API 26 instrumentation:** 35 tests reported, zero failures and errors, one conditional skip. `:core:data` passed 27/27, including the v2→v3 migration test (1/1), DeviceProfileRepositoryTest (3/3), and RoomChatRepositoryTest (23/23). Storage passed 2/2. Connectivity reported 6 tests with one conditional TLS 1.3 skip because the Android provider does not support TLS 1.3; the remaining five passed.
+- **API 36 instrumentation:** 35/35 passed with zero failures, errors or skips. `:core:data` 27/27 (migration 1/1, profile 3/3, chat 23/23); storage 2/2; connectivity 6/6.
+- **Migration evidence:** the version-2 database fixture was opened through the production Room factory and migrated to schema v3 on both APIs. The test confirms the existing trusted-peer record and conversation/message/outbox/crypto-state records remain available, new trusted-peer profile fields default safely, and the local profile begins with the defined empty/default state.
+- **Debug APK:** artifact [14247532067](https://github.com/azad2022/shareit/actions/runs/43910295903/artifacts/14247532067); 15,088,036 bytes; SHA-256 `a429ce8f831c6f2bdf5b4372a8fe7e386e8c31ce69c5c553562230c2c62c9179`. The extracted APK checksum matches the CI-provided `.sha256` file and the APK archive passed ZIP integrity validation. This is a standard Debug build, not a release build.
+- **Physical-device matrix:** Galaxy A12 ↔ ASUS X017DA profile exchange has not yet been tested for this milestone. No physical-device, TalkBack, font-scaling, RTL/LTR or OEM-specific profile evidence is claimed.
 
 ## Risks and follow-up
 
 - HELLO v2 is incompatible with HELLO v1; both devices must upgrade together. No downgrade path is added.
 - Profile data changes do not propagate during an already established connection. A live PROFILE logical channel would require a separately reviewed protocol/UX scope.
-- Database migration 2→3 must pass automated validation on API 26 and API 36 before the milestone can pass.
+- The incoming HELLO avatar path enforces a bounded JPEG envelope and SHA-256 match, but the current receiver path does not decode the image or independently enforce canonical 256×256 dimensions before caching. Close this validation gap and add focused malformed/oversized/hash/dimension tests before considering the profile-security gate complete.
+- The exact-head CI above does not replace the protocol-negative matrix (pre-auth profile non-disclosure, malformed HELLO fields, identity-proof binding and version rejection) or two-device/OEM interoperability testing.
+- Room migration 2→3 passed automated instrumentation on API 26 and API 36. Physical OEM database/lifecycle validation remains outstanding.
 - A profile is presentation data and never a trust indicator; the verified badge continues to mean cryptographic peer authentication only.

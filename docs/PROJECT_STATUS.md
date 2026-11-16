@@ -394,3 +394,17 @@ This is the latest authoritative CP-CHAT-001 CI record and supersedes the older 
 - **Security boundary:** unknown devices still expose only the OS discovery label before authentication. No profile image is sent before authenticated pairing. A profile update is synchronized at the next secure connection, not pushed into an already active session. No new socket, TLS reader, backend, cloud or relay is introduced.
 - **Validation:** domain and Room instrumentation tests have been added. Exact-head CI and physical Galaxy A12 ↔ ASUS X017DA profile-sync testing remain pending; do not mark this checkpoint PASSED until exact-head CI and repeatable physical evidence exist.
 - **Compatibility:** identity HELLO v2 is intentionally not downgraded to v1. Mixed old/new app versions require both devices to update before a secure chat session can complete.
+
+## 2026-11-16 — CP-PROFILE-001 exact-head automated validation
+
+This addendum supersedes the 2026-11-14 CP-PROFILE-001 validation-pending bullets above where they conflict.
+
+- Exact implementation source SHA: `fccb9776125afdcfd24e1e957578ce1bf66fe378` on `feature/cp-profile-001-device-profile`.
+- GitHub Actions [run #43910295903](https://github.com/azad2022/shareit/actions/runs/43910295903) completed successfully; all 3 jobs passed.
+- JVM unit tests: 172/172; lint: 0 errors (33 warnings across app and adjacent modules).
+- API 26 instrumentation: 35 tests, 0 failures/errors and 1 conditional TLS 1.3 skip; Room/Data 27/27, Storage 2/2, Connectivity 5 passed + 1 capability-based skip.
+- API 36 instrumentation: 35/35 passed; Room/Data 27/27 including the real Room v2→v3 migration test and all 3 device-profile repository tests, Storage 2/2, Connectivity 6/6.
+- Debug APK artifact [14247532067](https://github.com/azad2022/shareit/actions/runs/43910295903/artifacts/14247532067): 15,088,036 bytes; SHA-256 `a429ce8f831c6f2bdf5b4372a8fe7e386e8c31ce69c5c553562230c2c62c9179`.
+- **CP-PROFILE-001 remains IN_PROGRESS.** Automated emulator validation does not satisfy the physical Galaxy A12 ↔ ASUS X017DA, accessibility, RTL/LTR and full protocol-security acceptance gates. The remaining avatar decode/dimension validation and HELLO negative-test gaps are recorded in the checkpoint.
+- `main` and `feature/cp-004-multi-item-transfer` were not changed.
+
