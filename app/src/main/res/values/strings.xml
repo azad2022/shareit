@@ -31,6 +31,7 @@
     <string name="action_continue">ادامه</string>
     <string name="action_retry">تلاش مجدد</string>
     <string name="action_back">بازگشت</string>
+    <string name="action_cancel">انصراف</string>
     <string name="saving_language">در حال ذخیره زبان…</string>
     <string name="language_save_failed">ذخیره زبان انجام نشد. دوباره تلاش کنید.</string>
     <string name="app_startup_loading">در حال آماده‌سازی پیوند…</string>

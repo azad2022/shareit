@@ -19,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -79,10 +80,19 @@ class DeviceProfileRepositoryTest {
         assertNull(cleared.profileName)
         assertNull(cleared.avatarBytes)
         assertEquals(2L, cleared.revision)
+
+        database.close()
+        openDatabase()
+        val restoredCleared = repository.getLocalProfile()
+        assertNull(restoredCleared.deviceNameOverride)
+        assertNull(restoredCleared.profileName)
+        assertNull(restoredCleared.avatarBytes)
+        assertEquals(2L, restoredCleared.revision)
+        assertFalse(restoredCleared.shareWithTrustedPeers)
     }
 
     @Test
-    fun trustedPeerProfileIsBoundToPersistentFingerprintAndRejectsStaleOrConflictingRevisions() =
+    fun trustedPeerProfileIsBoundToPersistentFingerprintAndRejectsStaleOrConflictingRevisions() {
         runBlocking {
             val publicKey = generatePeerPublicKey()
             val identityId = PeerIdentityId.fromSha256Fingerprint(sha256Hex(publicKey))
@@ -127,7 +137,30 @@ class DeviceProfileRepositoryTest {
                     )
                 }
             }
+
+            val cleared = trustedPeers.recordAuthenticatedPeer(
+                first.copy(
+                    profileName = null,
+                    profileAvatarHash = null,
+                    profileAvatarBytes = null,
+                    profileRevision = 3L,
+                    lastAuthenticatedAtEpochMillis = 500L,
+                ),
+            )
+            assertNull(cleared.profileName)
+            assertNull(cleared.profileAvatarHash)
+            assertNull(cleared.profileAvatarBytes)
+            assertEquals(3L, cleared.profileRevision)
+
+            val staleAfterClear = trustedPeers.recordAuthenticatedPeer(
+                first.copy(lastAuthenticatedAtEpochMillis = 600L),
+            )
+            assertNull(staleAfterClear.profileName)
+            assertNull(staleAfterClear.profileAvatarHash)
+            assertNull(staleAfterClear.profileAvatarBytes)
+            assertEquals(3L, staleAfterClear.profileRevision)
         }
+    }
 
     @Test
     fun localProfileFlowPublishesLatestCommittedRevision() = runBlocking {
