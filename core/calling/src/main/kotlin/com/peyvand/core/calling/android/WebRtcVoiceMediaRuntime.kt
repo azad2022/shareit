@@ -248,6 +248,7 @@ class WebRtcAudioCallSession internal constructor(
     private var audioSource: AudioSource? = null
     private var localTrack: AudioTrack? = null
     private var muted = false
+    @Volatile private var telecomActive = true
     private var activated = false
 
     override suspend fun createOffer(): String = signallingMutex.withLock {
@@ -321,18 +322,20 @@ class WebRtcAudioCallSession internal constructor(
         activateAudioPath(connection, track, MEDIA_PATH_TIMEOUT_MILLIS)
     }
 
-    override suspend fun setTelecomActive(active: Boolean): Boolean {
-        if (active) return activateAfterVerifiedP2pPath(MEDIA_PATH_TIMEOUT_MILLIS)
-        return signallingMutex.withLock {
-            ensureNotClosed()
-            val connection = synchronized(lock) { peerConnection } ?: return@withLock true
-            val track = synchronized(lock) { localTrack }
-            runCatching { track?.setEnabled(false) }
-            runCatching { connection.setAudioRecording(false) }
-            runCatching { connection.setAudioPlayout(false) }
-            synchronized(lock) { activated = false }
-            true
+    override fun setTelecomActive(active: Boolean): Boolean {
+        if (closed.get()) return false
+        telecomActive = active
+        if (active) return true
+
+        val (connection, track) = synchronized(lock) {
+            activated = false
+            peerConnection to localTrack
         }
+        runCatching { track?.setEnabled(false) }
+        runCatching { connection?.setAudioRecording(false) }
+        runCatching { connection?.setAudioPlayout(false) }
+        runtime.resetCaptureState()
+        return true
     }
 
     private suspend fun activateAudioPath(
@@ -344,6 +347,7 @@ class WebRtcAudioCallSession internal constructor(
             onFailure(WebRtcVoiceMediaFailure.MEDIA_STATS_UNAVAILABLE)
             return false
         }
+        if (!telecomActive || closed.get()) return !closed.get()
 
         runtime.resetCaptureState()
         connection.setAudioRecording(true)
@@ -352,6 +356,12 @@ class WebRtcAudioCallSession internal constructor(
             connection.setAudioPlayout(false)
             onFailure(WebRtcVoiceMediaFailure.AUDIO_CAPTURE_FAILED)
             return false
+        }
+        if (!telecomActive || closed.get()) {
+            connection.setAudioRecording(false)
+            connection.setAudioPlayout(false)
+            track.setEnabled(false)
+            return !closed.get()
         }
 
         track.setEnabled(!muted)

@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -65,6 +66,9 @@ class VoiceCallOrchestratorTest {
             assertTrue(rig.orchestrator.setTelecomMediaActive(false))
             assertFalse(rig.mediaFactory.lastSession?.isActive == true)
             assertTrue(rig.orchestrator.setTelecomMediaActive(true))
+            withTimeout(2_000) {
+                while (rig.mediaFactory.lastSession?.isActive != true) delay(5)
+            }
             assertTrue(rig.mediaFactory.lastSession?.isActive == true)
 
             rig.remote.send(VoiceCallSignal.End(callId, VoiceCallEndCause.NORMAL))
@@ -258,10 +262,9 @@ class VoiceCallOrchestratorTest {
         ): Boolean = true
 
         override suspend fun activateAfterVerifiedP2pPath(): Boolean {
-            telecomActive = mediaPathSucceeds
-            return mediaPathSucceeds
+            return mediaPathSucceeds && telecomActive
         }
-        override suspend fun setTelecomActive(active: Boolean): Boolean {
+        override fun setTelecomActive(active: Boolean): Boolean {
             telecomActive = active && mediaPathSucceeds
             return mediaPathSucceeds
         }

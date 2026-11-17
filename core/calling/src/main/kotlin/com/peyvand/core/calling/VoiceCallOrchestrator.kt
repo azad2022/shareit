@@ -393,30 +393,41 @@ class VoiceCallOrchestrator(
         mutableMuted.value = mediaSession?.isMuted ?: false
     }
 
-    private suspend fun handleTelecomMediaActive(event: Event.TelecomMediaActive) {
+    private fun handleTelecomMediaActive(event: Event.TelecomMediaActive) {
         val current = machine.snapshot
         val media = mediaSession
         telecomMediaActive = event.active
-        if (media == null) {
-            // No microphone or playout exists before media setup. Remember Telecom's
-            // active/inactive state; the asynchronous media activation path observes it.
-            event.reply.complete(!current.isTerminal)
-            return
-        }
+
         val succeeded = try {
-            media.setTelecomActive(event.active)
-        } catch (cancellation: CancellationException) {
-            throw cancellation
+            media?.setTelecomActive(event.active) ?: !current.isTerminal
         } catch (_: Exception) {
             false
         }
+
         if (!succeeded) {
             val callId = current.callId
             if (callId != null && !current.isTerminal) {
                 failCurrentCall(callId, VoiceCallFailure.RESOURCE_UNAVAILABLE, sendEnd = true)
             }
+            event.reply.complete(false)
+            return
         }
-        event.reply.complete(succeeded)
+
+        if (!event.active) {
+            // Do not leave an ICE/statistics wait running after Telecom placed the call on hold.
+            activationJob?.cancel()
+            activationJob = null
+            activationStartedFor = null
+        } else if (media != null &&
+            current.callId != null &&
+            current.status == VoiceCallStatus.ACTIVE
+        ) {
+            // Core-Telecom callbacks have a 5-second deadline. Resume media asynchronously;
+            // failure is fed back through MediaActivated and terminates the call safely.
+            activationStartedFor = null
+            startMediaActivation(current.callId, media)
+        }
+        event.reply.complete(true)
     }
 
     private suspend fun handleRemoteSignal(signal: VoiceCallSignal) {
@@ -540,10 +551,7 @@ class VoiceCallOrchestrator(
         activationJob?.cancel()
         activationJob = scope.launch {
             try {
-                var active = media.activateAfterVerifiedP2pPath()
-                if (active && !telecomMediaActive) {
-                    active = media.setTelecomActive(false)
-                }
+                val active = media.activateAfterVerifiedP2pPath()
                 events.send(Event.MediaActivated(callId, generation, active, null))
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -554,13 +562,16 @@ class VoiceCallOrchestrator(
     }
 
     private fun handleMediaActivated(event: Event.MediaActivated) {
+        val current = machine.snapshot
         if (event.generation != mediaGeneration ||
-            event.callId != machine.snapshot.callId ||
-            machine.snapshot.status != VoiceCallStatus.NEGOTIATING
+            event.callId != current.callId ||
+            current.status !in setOf(VoiceCallStatus.NEGOTIATING, VoiceCallStatus.ACTIVE)
         ) return
         if (event.succeeded) {
-            machine.mediaConnected(event.callId)
-            cancelTimeout()
+            if (current.status == VoiceCallStatus.NEGOTIATING) {
+                machine.mediaConnected(event.callId)
+                cancelTimeout()
+            }
             mutableMuted.value = mediaSession?.isMuted ?: false
             publish()
         } else {

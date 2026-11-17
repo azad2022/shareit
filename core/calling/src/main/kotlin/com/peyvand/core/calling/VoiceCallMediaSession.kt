@@ -20,8 +20,8 @@ interface VoiceCallMediaSession : Closeable {
         candidateSdp: String,
     ): Boolean
     suspend fun activateAfterVerifiedP2pPath(): Boolean
-    /** Stops both microphone capture and remote playout while Telecom has the call inactive. */
-    suspend fun setTelecomActive(active: Boolean): Boolean
+    /** Applies Telecom active/hold state synchronously; inactive must stop capture and playout immediately. */
+    fun setTelecomActive(active: Boolean): Boolean
     fun setMuted(value: Boolean)
     val isMuted: Boolean
     val isActive: Boolean
