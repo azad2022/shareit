@@ -103,6 +103,7 @@ class VoiceCallOrchestrator(
     private var timeoutJob: Job? = null
     private var activationJob: Job? = null
     private var activationStartedFor: UUID? = null
+    @Volatile private var telecomMediaActive = true
 
     init {
         require(callSetupTimeoutMillis in MIN_CALL_SETUP_TIMEOUT_MILLIS..MAX_CALL_SETUP_TIMEOUT_MILLIS)
@@ -284,6 +285,7 @@ class VoiceCallOrchestrator(
         synchronizeExternalState()
         ensureAvailable()
         val callId = UUID.randomUUID()
+        telecomMediaActive = true
         machine.beginOutgoing(callId)
         publish()
         scheduleTimeout(callId)
@@ -394,9 +396,11 @@ class VoiceCallOrchestrator(
     private suspend fun handleTelecomMediaActive(event: Event.TelecomMediaActive) {
         val current = machine.snapshot
         val media = mediaSession
+        telecomMediaActive = event.active
         if (media == null) {
-            // A ringing call has no media session yet; there is nothing to pause.
-            event.reply.complete(!event.active && !current.isTerminal)
+            // No microphone or playout exists before media setup. Remember Telecom's
+            // active/inactive state; the asynchronous media activation path observes it.
+            event.reply.complete(!current.isTerminal)
             return
         }
         val succeeded = try {
@@ -423,6 +427,7 @@ class VoiceCallOrchestrator(
                     sendSignal(VoiceCallSignal.Reject(signal.callId, VoiceCallRejectReason.BUSY))
                     return
                 }
+                telecomMediaActive = true
                 publish()
                 scheduleTimeout(signal.callId)
             }
@@ -535,7 +540,10 @@ class VoiceCallOrchestrator(
         activationJob?.cancel()
         activationJob = scope.launch {
             try {
-                val active = media.activateAfterVerifiedP2pPath()
+                var active = media.activateAfterVerifiedP2pPath()
+                if (active && !telecomMediaActive) {
+                    active = media.setTelecomActive(false)
+                }
                 events.send(Event.MediaActivated(callId, generation, active, null))
             } catch (cancellation: CancellationException) {
                 throw cancellation

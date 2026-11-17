@@ -306,9 +306,7 @@ class WebRtcAudioCallSession internal constructor(
      * Starts recording/playout only after stats prove the selected host/UDP pair and
      * DTLS-SRTP are active on the exact P2P IP addresses.
      */
-    override suspend fun activateAfterVerifiedP2pPath(
-        timeoutMillis: Long,
-    ): Boolean = signallingMutex.withLock {
+    override suspend fun activateAfterVerifiedP2pPath(): Boolean = signallingMutex.withLock {
         ensureNotClosed()
         ensureMicrophonePermission()
         if (!hasExactP2pInterface()) {
@@ -320,7 +318,7 @@ class WebRtcAudioCallSession internal constructor(
 
         val connection = synchronized(lock) { peerConnection } ?: return@withLock false
         val track = synchronized(lock) { localTrack } ?: return@withLock false
-        activateAudioPath(connection, track, timeoutMillis)
+        activateAudioPath(connection, track, MEDIA_PATH_TIMEOUT_MILLIS)
     }
 
     override suspend fun setTelecomActive(active: Boolean): Boolean {
