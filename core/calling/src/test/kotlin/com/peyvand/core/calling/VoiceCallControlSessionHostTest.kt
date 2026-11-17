@@ -7,7 +7,6 @@ import com.peyvand.core.domain.connection.SecureSessionStatus
 import com.peyvand.core.domain.connection.VoiceCallP2pEndpointProvider
 import com.peyvand.core.domain.connection.VoiceCallP2pEndpoints
 import com.peyvand.core.transfer.protocol.TransferFrameCodec
-import java.io.ByteArrayOutputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.net.Inet4Address
@@ -19,11 +18,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VoiceCallControlSessionHostTest {
@@ -91,11 +90,15 @@ class VoiceCallControlSessionHostTest {
         )
         val capability = MutableStateFlow(false)
         val claimCount = AtomicInteger()
+        val probeFinished = CompletableDeferred<Unit>()
         val scope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val host = VoiceCallControlSessionHost(
             secureSession = session,
             capabilityVerified = capability,
-            verifyCapability = { false },
+            verifyCapability = {
+                probeFinished.complete(Unit)
+                false
+            },
             endpointProvider = FixedEndpointProvider(sessionId),
             claimAuthenticatedChannel = {
                 claimCount.incrementAndGet()
@@ -107,12 +110,54 @@ class VoiceCallControlSessionHostTest {
 
         try {
             host.start()
-            withTimeout(2_000) { kotlinx.coroutines.delay(50) }
+            withTimeout(2_000) { probeFinished.await() }
             assertFalse(host.isReady.value)
             assertEquals(0, claimCount.get())
             assertEquals(SecureSessionStatus.AUTHENTICATED, session.value.status)
         } finally {
             host.close()
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun capabilityProofRevocationClosesTheCallLeaseAndDisablesSending() = runBlocking {
+        val sessionId = UUID.randomUUID()
+        val session = MutableStateFlow(
+            SecureSessionSnapshot(
+                status = SecureSessionStatus.AUTHENTICATED,
+                peerIdentityId = "trusted-peer",
+            ),
+        )
+        val capability = MutableStateFlow(true)
+        val channel = TestChannel(sessionId)
+        val failures = AtomicInteger()
+        val scope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val host = VoiceCallControlSessionHost(
+            secureSession = session,
+            capabilityVerified = capability,
+            verifyCapability = { false },
+            endpointProvider = FixedEndpointProvider(sessionId),
+            claimAuthenticatedChannel = { channel },
+            scope = scope,
+            onSignal = {},
+            onFailure = { failures.incrementAndGet() },
+        )
+
+        try {
+            host.start()
+            withTimeout(2_000) { host.isReady.first { it } }
+            capability.value = false
+            withTimeout(2_000) {
+                while (!channel.isClosed) kotlinx.coroutines.delay(10)
+            }
+            assertFalse(host.isReady.value)
+            assertEquals(1, failures.get())
+            val sendResult = runCatching { host.send(VoiceCallSignal.Invite(UUID.randomUUID())) }
+            assertTrue(sendResult.isFailure)
+        } finally {
+            host.close()
+            channel.close()
             scope.cancel()
         }
     }

@@ -16,6 +16,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
@@ -99,6 +100,7 @@ class VoiceCallControlSessionHost(
     suspend fun send(signal: VoiceCallSignal) {
         val coordinator = synchronized(lock) {
             check(!closed.get()) { "Voice call control session host is closed." }
+            check(capabilityVerified.value) { "Voice-call capability proof is not currently valid." }
             activeCoordinator
         } ?: throw IOException("The authenticated peer has not negotiated voice-call capability.")
         try {
@@ -120,6 +122,7 @@ class VoiceCallControlSessionHost(
 
         var startProbeFor: UUID? = null
         var claimFor: UUID? = null
+        var capabilityRevoked = false
         synchronized(lock) {
             if (closed.get()) return
             if (currentSessionId != desiredSessionId) {
@@ -139,12 +142,26 @@ class VoiceCallControlSessionHost(
                     claimStartedFor = sessionId
                     claimFor = sessionId
                 }
-            } else if (probeStartedFor != sessionId) {
-                probeStartedFor = sessionId
-                startProbeFor = sessionId
+            } else {
+                if (activeCoordinator != null) {
+                    activeCoordinator?.close()
+                    activeCoordinator = null
+                    claimStartedFor = null
+                    mutableReady.value = false
+                    capabilityRevoked = true
+                }
+                if (probeStartedFor != sessionId) {
+                    probeStartedFor = sessionId
+                    startProbeFor = sessionId
+                }
             }
         }
 
+        if (capabilityRevoked) {
+            runCatching {
+                onFailure(IOException("Voice-call capability proof is no longer valid for this session."))
+            }
+        }
         startProbeFor?.let(::launchCapabilityProbe)
         claimFor?.let(::claimControlLease)
     }
