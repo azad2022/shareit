@@ -61,6 +61,8 @@ jobs:
             :core:storage:lintDebug \
             :core:transfer:testDebugUnitTest \
             :core:transfer:lintDebug \
+            :core:calling:testDebugUnitTest \
+            :core:calling:lintDebug \
             :app:assembleDebug
 
       - name: Compute debug APK SHA-256
