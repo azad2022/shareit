@@ -105,6 +105,32 @@ class VoiceCallStateMachine(
         }
     }
 
+    fun rejectOutgoingRemotely(callId: UUID) {
+        synchronized(lock) {
+            requireCurrentCall(
+                callId,
+                VoiceCallStatus.OUTGOING_RINGING,
+                VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
+                VoiceCallStatus.NEGOTIATING,
+            )
+            current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.REJECTED)
+        }
+    }
+
+    fun cancelRemotely(callId: UUID) {
+        synchronized(lock) {
+            requireCurrentCall(
+                callId,
+                VoiceCallStatus.OUTGOING_RINGING,
+                VoiceCallStatus.INCOMING_RINGING,
+                VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
+                VoiceCallStatus.NEGOTIATING,
+                VoiceCallStatus.ACTIVE,
+            )
+            current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.CANCELLED)
+        }
+    }
+
     fun cancelOutgoing(callId: UUID) {
         synchronized(lock) {
             requireCurrentCall(
