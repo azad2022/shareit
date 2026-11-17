@@ -4,12 +4,15 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.peyvand.app.PeyvandApplication
 import com.peyvand.app.R
 import com.peyvand.core.domain.call.VoiceCallStatus
@@ -27,6 +30,8 @@ import kotlinx.coroutines.launch
 class PeyvandVoiceCallService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var telecomController: AndroidVoiceCallTelecomController? = null
+    private var microphoneForegroundTypeEnabled = false
+    private var latestForegroundNotification: Notification? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -69,6 +74,11 @@ class PeyvandVoiceCallService : Service() {
                 }
             }
             ACTION_STOP_IF_IDLE -> serviceScope.launch { stopIfIdle(startId) }
+            ACTION_ENABLE_MICROPHONE -> {
+                val enabled = enableMicrophoneForegroundType()
+                (application as PeyvandApplication).voiceCallTelecomServiceClient
+                    .publishMicrophoneForegroundTypeActive(enabled)
+            }
             ACTION_START,
             null,
             -> Unit
@@ -93,8 +103,14 @@ class PeyvandVoiceCallService : Service() {
     }
 
     private fun startForegroundCallNotification(notification: Notification) {
+        latestForegroundNotification = notification
         val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL or
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && microphoneForegroundTypeEnabled) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                } else {
+                    0
+                }
         } else {
             0
         }
@@ -104,6 +120,29 @@ class PeyvandVoiceCallService : Service() {
             notification,
             serviceType,
         )
+    }
+
+    private fun enableMicrophoneForegroundType(): Boolean {
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return true
+
+        microphoneForegroundTypeEnabled = true
+        return try {
+            startForegroundCallNotification(
+                latestForegroundNotification ?: createStartingNotification(),
+            )
+            true
+        } catch (_: SecurityException) {
+            microphoneForegroundTypeEnabled = false
+            false
+        } catch (_: IllegalArgumentException) {
+            microphoneForegroundTypeEnabled = false
+            false
+        }
     }
 
     private fun createStartingNotification(): Notification =
@@ -145,5 +184,6 @@ class PeyvandVoiceCallService : Service() {
         const val ACTION_START = "com.peyvand.app.action.START_VOICE_CALL_SERVICE"
         const val ACTION_ANSWER = "com.peyvand.app.action.ANSWER_VOICE_CALL"
         const val ACTION_STOP_IF_IDLE = "com.peyvand.app.action.STOP_IDLE_VOICE_CALL_SERVICE"
+        const val ACTION_ENABLE_MICROPHONE = "com.peyvand.app.action.ENABLE_VOICE_CALL_MICROPHONE_FGS"
     }
 }

@@ -358,7 +358,15 @@ class ChatViewModel(
         val isIncomingCall = voiceCallSnapshot.value.let {
             it.callId == callId && it.direction == VoiceCallDirection.INCOMING
         }
-        voiceCallOrchestrator.onMicrophonePermissionResult(callId, granted)
+        val microphoneReady = if (granted) {
+            voiceCallTelecomServiceClient.enableMicrophoneForegroundType()
+        } else {
+            false
+        }
+        voiceCallOrchestrator.onMicrophonePermissionResult(
+            callId,
+            granted = granted && microphoneReady,
+        )
         if (granted && isIncomingCall) {
             try {
                 voiceCallTelecomServiceClient.answerIncomingCall(callId)

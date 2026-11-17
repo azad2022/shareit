@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.withTimeout
 
 /**
@@ -19,6 +20,7 @@ class VoiceCallTelecomServiceClient(context: Context) {
     private val appContext = context.applicationContext
     private val mutableRegistered = MutableStateFlow(false)
     private val startRequested = AtomicBoolean(false)
+    private val microphoneForegroundTypeActive = MutableStateFlow<Boolean?>(null)
     val isRegistered: StateFlow<Boolean> = mutableRegistered.asStateFlow()
 
     fun startForCall() {
@@ -52,6 +54,23 @@ class VoiceCallTelecomServiceClient(context: Context) {
         withTimeout(timeoutMillis) { isRegistered.first { it } }
     }
 
+    /** Promote the already-running phoneCall service only after the UI granted RECORD_AUDIO. */
+    suspend fun enableMicrophoneForegroundType(timeoutMillis: Long = 5_000L): Boolean {
+        microphoneForegroundTypeActive.value = null
+        try {
+            appContext.startService(
+                Intent(appContext, PeyvandVoiceCallService::class.java)
+                    .setAction(PeyvandVoiceCallService.ACTION_ENABLE_MICROPHONE),
+            )
+        } catch (_: RuntimeException) {
+            microphoneForegroundTypeActive.value = false
+            return false
+        }
+        return withTimeout(timeoutMillis) {
+            microphoneForegroundTypeActive.filterNotNull().first()
+        }
+    }
+
     fun answerIncomingCall(callId: UUID) {
         appContext.startService(
             Intent(appContext, PeyvandVoiceCallService::class.java)
@@ -64,8 +83,13 @@ class VoiceCallTelecomServiceClient(context: Context) {
         mutableRegistered.value = registered
     }
 
+    internal fun publishMicrophoneForegroundTypeActive(active: Boolean) {
+        microphoneForegroundTypeActive.value = active
+    }
+
     internal fun onServiceStopped() {
         mutableRegistered.value = false
+        microphoneForegroundTypeActive.value = false
         startRequested.set(false)
     }
 }
