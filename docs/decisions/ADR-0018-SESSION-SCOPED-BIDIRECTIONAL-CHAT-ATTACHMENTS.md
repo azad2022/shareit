@@ -125,3 +125,8 @@ Before the first CP-CHAT-003 runtime integration, define and test a versioned at
 - has no silent downgrade and does not alter CP-004's isolated branch.
 
 Do not add a second TLS socket or allow two protocol readers to consume the same FILE_TRANSFER stream.
+
+
+## Protocol amendment reference
+
+The versioned wire-level implementation is specified by ADR-0019 (Correlated Bidirectional Chat Attachment Protocol v4). ADR-0019 preserves CP-004's v3 path, requires batch-ID correlation for every chat attachment frame, supports one-item and multi-item manifests, and defines the single-reader route limits. If ADR-0018 and ADR-0019 appear to differ on frame routing or protocol compatibility, ADR-0019 is authoritative for the chat attachment wire protocol; ADR-0018 remains authoritative for product consent, session scope, UX and lifecycle.
