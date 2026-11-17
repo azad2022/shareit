@@ -45,6 +45,21 @@ class VoiceCallSignalCodecTest {
     }
 
     @Test
+    fun rejectsBlankIceCandidate() {
+        assertThrows(IllegalArgumentException::class.java) {
+            VoiceCallSignalCodec.encode(
+                sessionId,
+                VoiceCallSignal.IceCandidate(
+                    callId = UUID.randomUUID(),
+                    sdpMid = null,
+                    sdpMLineIndex = 0,
+                    candidate = "   ",
+                ),
+            )
+        }
+    }
+
+    @Test
     fun rejectsWrongSessionAndNonCallFrames() {
         val frame = VoiceCallSignalCodec.encode(sessionId, VoiceCallSignal.Invite(UUID.randomUUID()))
         assertThrows(TransferProtocolException::class.java) {

@@ -143,10 +143,10 @@ object VoiceCallSignalCodec {
 
     private fun encodeIceCandidate(signal: VoiceCallSignal.IceCandidate): ByteArray {
         require(signal.sdpMLineIndex >= 0)
+        require(signal.candidate.isNotBlank())
         val mid = signal.sdpMid.orEmpty().toByteArray(StandardCharsets.UTF_8)
         val candidate = signal.candidate.toByteArray(StandardCharsets.UTF_8)
         val username = signal.usernameFragment.orEmpty().toByteArray(StandardCharsets.UTF_8)
-        require(candidate.isNotBlank())
         require(mid.size <= MAX_MID_BYTES)
         require(candidate.size <= MAX_CANDIDATE_BYTES)
         require(username.size <= MAX_USERNAME_FRAGMENT_BYTES)

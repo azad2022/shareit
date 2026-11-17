@@ -127,16 +127,21 @@ class AuthenticatedPeerChannelMultiplexerTest {
         val fileA = pair.first.openChannel(AuthenticatedPeerChannelPurpose.FILE_TRANSFER)!!
         pair.second.openChannel(AuthenticatedPeerChannelPurpose.CHAT)
 
-        TransferFrameCodec.write(
-            TransferFrame(
-                TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
-                TransferFrameType.MANIFEST,
-                sessionId,
-                byteArrayOf(1),
-            ),
-            fileA.outputStream,
-        )
-        fileA.outputStream.flush()
+        // The receiver closes the authenticated multiplexer when a frame targets an
+        // unclaimed logical channel. That teardown may race the writer and make write/flush
+        // fail locally; the receiver failure callback is the authoritative assertion.
+        runCatching {
+            TransferFrameCodec.write(
+                TransferFrame(
+                    TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+                    TransferFrameType.MANIFEST,
+                    sessionId,
+                    byteArrayOf(1),
+                ),
+                fileA.outputStream,
+            )
+            fileA.outputStream.flush()
+        }
 
         assertTrue("The receiver should reject an unclaimed channel frame.", failure.await(2, TimeUnit.SECONDS))
         assertNotNull(failureCause.get())
