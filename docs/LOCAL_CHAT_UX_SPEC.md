@@ -166,3 +166,18 @@ Do not use wording such as “backed up” or “safe in the cloud”. Local per
 The product owner explicitly authorized CP-CHAT-002 implementation on feature/cp-chat-002-chat-experience on 2026-11-13. This supersedes the prior CP-CHAT-001-only authorization note.
 
 The current Compose implementation provides a chat-first home, trusted-peer list, conversation timeline, composer, empty states, and a Nearby hub. Text synchronization uses a separate logical CHAT channel. Attachments currently delegate to the existing FILE_TRANSFER screen/channel and retain the existing consent/integrity pipeline; persistent file attachment message cards, inline previews and background incoming-transfer prompts remain follow-up work. Voice/video icons are disabled placeholders only.
+
+## 12. Owner-approved update — session-scoped bidirectional attachments (2026-11-17)
+
+This section supersedes Section 5 (Attachments) and any earlier separate Send/Prepare to Receive interaction where they conflict.
+
+- The initiating user's Connect action and the recipient's Accept action establish user consent for one authenticated one-to-one session.
+- After secure peer authentication, both devices can send and automatically receive files. No per-file or per-batch Accept/Reject prompt is shown.
+- The receive grant is bound to the exact authenticated session and peer identity. It ends on Wi-Fi/P2P loss, TLS/session failure, identity mismatch or disconnect; it is not a permanent peer setting.
+- The conversation remains visible while selecting and transferring. There is no separate sender/receiver page and no Prepare to Receive action.
+- One attachment action offers Photos & Videos (Android Photo Picker) or Files (Android system document picker). PEYVAND does not build a gallery or general file browser.
+- Incoming and outgoing attachment cards show real progress and a state independent from text-message delivery. A file is received only after durable publication and SHA-256 verification.
+- Users can cancel an individual item or disconnect the session. Received items are not automatically opened, executed or installed.
+- Existing mutual TLS, persistent peer identity and the ADR-0017 SAS security boundary remain mandatory unless a separately reviewed security decision changes them.
+
+See ADR-0018 and CP-CHAT-003 for the architecture, protocol ownership, limits, interruption behavior and acceptance tests.
