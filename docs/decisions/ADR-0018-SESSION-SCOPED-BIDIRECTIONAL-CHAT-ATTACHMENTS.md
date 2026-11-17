@@ -1,6 +1,6 @@
 # ADR-0018 — Session-Scoped Bidirectional Chat Attachments
 
-- **Status:** Accepted product behavior; implementation authorization not granted.
+- **Status:** Accepted product behavior; implementation authorized on feature/cp-chat-003-bidirectional-attachments on 2026-11-17.
 - **Decision date:** 2026-11-17
 - **Owner:** Product owner
 - **Scope:** One-to-one chat attachments during an authenticated local peer session.
@@ -93,4 +93,35 @@ Require repeatable tests for: request/accept and scoped grant; both directions w
 
 Group chat/channels, many-to-many transfer, server/cloud/relay delivery, force-stopped background guarantees, read receipts, delete-for-everyone, voice/video, automatic open/install/execute and a custom gallery/file browser are out of scope.
 
-This ADR records product behavior and design only. It does not authorize Kotlin, Compose, protocol, Room, Gradle or runtime implementation. A separate explicit owner authorization is required.
+This ADR records the approved behavior and constraints for implementation. The product owner explicitly authorized CP-CHAT-003 implementation on feature/cp-chat-003-bidirectional-attachments on 2026-11-17. Consequential protocol/version changes still require an ADR amendment before implementation. Do not change main, CP-004 or PR #3 as part of this checkpoint.
+
+
+## Child-friendly and future classroom constraints
+
+The product owner intends PEYVAND to be simple enough for a child and potentially useful in schools. This ADR does not expand scope beyond one-to-one chat, but the implementation must:
+
+- expose one clear attachment action, native Photos & Videos / Files pickers, and plain-language status/error copy;
+- keep peer identity and connected state visible and provide a straightforward disconnect action;
+- support TalkBack, large font scaling, high-contrast states, minimum 48dp touch targets and correct Persian RTL / English LTR behavior;
+- accept files automatically only from the exact peer whose authenticated session was explicitly accepted, and only until that session ends;
+- never automatically open, execute or install received content;
+- never enable background/public reception when no accepted session is active.
+
+No distance claim is implied by this ADR. Wi-Fi Direct range and throughput vary by handset, radio conditions, obstacles, interference and device behavior. Any product claim must be based on a documented physical-device test matrix.
+
+A future school/classroom mode is a separate milestone and needs its own threat model and ADR. It must define teacher-led pairing or class membership, temporary class-scoped authorization, student privacy, misuse/abuse handling, session revocation and safeguarding. It must not reuse this one-to-one auto-receive grant as a blanket classroom permission.
+
+## Protocol implementation gate
+
+The current v1 single-file protocol has uncorrelated empty ACCEPT/REJECT/CANCEL control frames, while the current batch protocol requires at least two manifest items and asks for receiver consent. Neither may simply be run concurrently on the same FILE_TRANSFER input stream.
+
+Before the first CP-CHAT-003 runtime integration, define and test a versioned attachment-exchange envelope that:
+- correlates every control/data/terminal frame to a unique batch/transfer identifier;
+- supports one-item and multi-item attachments without ambiguous legacy control frames;
+- routes all inbound frames through exactly one dispatcher;
+- serializes complete outbound frames atomically;
+- supports bounded per-transfer queues and backpressure;
+- rejects wrong-session, unknown-ID, replayed, malformed, out-of-order and unsupported-version frames;
+- has no silent downgrade and does not alter CP-004's isolated branch.
+
+Do not add a second TLS socket or allow two protocol readers to consume the same FILE_TRANSFER stream.
