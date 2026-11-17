@@ -5,6 +5,8 @@ import com.peyvand.core.domain.connection.AuthenticatedPeerChannelPurpose
 import com.peyvand.core.transfer.session.AuthenticatedPeerChannelMultiplexer
 import com.peyvand.core.domain.chat.PeerIdentityKeyProvider
 import com.peyvand.core.domain.chat.TrustedPeerRepository
+import com.peyvand.core.domain.chat.LocalPeerIdentity
+import com.peyvand.core.domain.chat.TrustedPeerIdentity
 import com.peyvand.core.domain.chat.TrustedPeerIdentityConflictException
 import com.peyvand.core.domain.chat.LocalPeerIdentityUnavailableException
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
@@ -23,6 +25,7 @@ import com.peyvand.core.transfer.security.PairingShortAuthenticationString
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.net.Socket
+import java.net.Inet4Address
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -68,6 +71,9 @@ internal class WifiDirectSecureSessionController(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableState = MutableStateFlow(SecureSessionSnapshot())
     override val secureSession: StateFlow<SecureSessionSnapshot> = mutableState.asStateFlow()
+    private val mutableVoiceCallCapabilityVerified = MutableStateFlow(false)
+    override val voiceCallCapabilityVerified: StateFlow<Boolean> =
+        mutableVoiceCallCapabilityVerified.asStateFlow()
 
     private val lock = Any()
     private var generation = 0L
@@ -77,6 +83,7 @@ internal class WifiDirectSecureSessionController(
     private var secureSocket: SSLSocket? = null
     private var activeSessionId: UUID? = null
     private var channelMultiplexer: AuthenticatedPeerChannelMultiplexer? = null
+    private var voiceCallCapabilityController: WifiDirectVoiceCallCapabilityController? = null
     private var activeKeyAlias: String? = null
     private val staleAliasCleanupJob = scope.launch { cleanupStaleKeyAliases() }
 
@@ -121,10 +128,36 @@ internal class WifiDirectSecureSessionController(
         }
     }
 
+    override suspend fun verifyVoiceCallCapability(): Boolean {
+        val controller = synchronized(lock) {
+            if (mutableState.value.status == SecureSessionStatus.AUTHENTICATED) {
+                voiceCallCapabilityController
+            } else {
+                null
+            }
+        } ?: return false
+        val verified = controller.verify()
+        if (verified) {
+            synchronized(lock) {
+                if (voiceCallCapabilityController === controller &&
+                    mutableState.value.status == SecureSessionStatus.AUTHENTICATED
+                ) {
+                    mutableVoiceCallCapabilityVerified.value = true
+                }
+            }
+        }
+        return verified
+    }
+
     override fun claimAuthenticatedChannel(
         purpose: AuthenticatedPeerChannelPurpose,
     ): AuthenticatedPeerChannel? = synchronized(lock) {
         if (mutableState.value.status != SecureSessionStatus.AUTHENTICATED) {
+            return@synchronized null
+        }
+        if (purpose == AuthenticatedPeerChannelPurpose.CALL_CONTROL &&
+            !mutableVoiceCallCapabilityVerified.value
+        ) {
             return@synchronized null
         }
 
@@ -423,12 +456,38 @@ internal class WifiDirectSecureSessionController(
             }
             ensureCurrent(expectedGeneration)
 
+            val capabilityController = createVoiceCallCapabilityController(
+                tlsSocket = authenticatedTlsSocket,
+                sessionId = sessionId,
+                peerIdentity = authenticatedPeer.identityId,
+                expectedGeneration = expectedGeneration,
+            )
+
             synchronized(lock) {
-                if (generation != expectedGeneration) throw CancellationException()
+                if (generation != expectedGeneration) {
+                    capabilityController?.close()
+                    throw CancellationException()
+                }
                 secureSocket = authenticatedTlsSocket
                 activeSessionId = sessionId
+                voiceCallCapabilityController = capabilityController
                 rawSocket = null
                 approval = null
+            }
+
+            // Bind the UDP listener before publishing AUTHENTICATED. A legacy peer can
+            // ignore this datagram without receiving any new TLS frame types.
+            if (capabilityController != null && !capabilityController.start()) {
+                synchronized(lock) {
+                    if (voiceCallCapabilityController === capabilityController) {
+                        voiceCallCapabilityController = null
+                    }
+                }
+                capabilityController.close()
+            }
+
+            synchronized(lock) {
+                if (generation != expectedGeneration) throw CancellationException()
                 mutableState.value = SecureSessionSnapshot(
                     status = SecureSessionStatus.AUTHENTICATED,
                     peerIdentityId = authenticatedPeer.identityId.sha256Fingerprint,
@@ -437,7 +496,8 @@ internal class WifiDirectSecureSessionController(
                 )
                 diagnostics.event(
                     "SECURE_SESSION_AUTHENTICATED",
-                    "persistentPeerIdentityBound=true newlyTrusted=${authenticatedPeer.isNewlyTrusted}",
+                    "persistentPeerIdentityBound=true voiceCapabilityListenerReady=${voiceCallCapabilityController != null} " +
+                        "newlyTrusted=${authenticatedPeer.isNewlyTrusted}",
                 )
             }
         } catch (exception: CancellationException) {
@@ -513,6 +573,43 @@ internal class WifiDirectSecureSessionController(
                 ),
             )
         }
+    }
+
+    private suspend fun createVoiceCallCapabilityController(
+        tlsSocket: SSLSocket,
+        sessionId: UUID,
+        peerIdentity: com.peyvand.core.domain.chat.PeerIdentityId,
+        expectedGeneration: Long,
+    ): WifiDirectVoiceCallCapabilityController? {
+        val localAddress = tlsSocket.localAddress as? Inet4Address ?: return null
+        val remoteAddress = tlsSocket.inetAddress as? Inet4Address ?: return null
+        val localIdentity: LocalPeerIdentity
+        val remoteIdentity: TrustedPeerIdentity
+        try {
+            localIdentity = peerIdentityKeyProvider.getOrCreateIdentity()
+            remoteIdentity = trustedPeerRepository.findTrustedPeer(peerIdentity) ?: return null
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            return null
+        }
+
+        return WifiDirectVoiceCallCapabilityController(
+            sessionId = sessionId,
+            localIdentity = localIdentity,
+            remoteIdentity = remoteIdentity,
+            localAddress = localAddress,
+            remoteAddress = remoteAddress,
+            signIdentityProof = peerIdentityKeyProvider::signIdentityProof,
+            scope = scope,
+            onVerified = {
+                synchronized(lock) {
+                    if (generation == expectedGeneration && activeSessionId == sessionId) {
+                        mutableVoiceCallCapabilityVerified.value = true
+                    }
+                }
+            },
+        )
     }
 
     private fun createEphemeralIdentity(alias: String): EphemeralTlsIdentity =
@@ -761,6 +858,9 @@ internal class WifiDirectSecureSessionController(
     }
 
     private fun closeSessionResourcesLocked() {
+        voiceCallCapabilityController?.close()
+        voiceCallCapabilityController = null
+        mutableVoiceCallCapabilityVerified.value = false
         channelMultiplexer?.close()
         channelMultiplexer = null
         closeQuietly(secureSocket)

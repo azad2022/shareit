@@ -137,6 +137,12 @@ class WifiDirectDeviceDiscoveryRepository(
     override val secureSession: StateFlow<SecureSessionSnapshot>
         get() = secureSessionController.value.secureSession
 
+    override val voiceCallCapabilityVerified: StateFlow<Boolean>
+        get() = secureSessionController.value.voiceCallCapabilityVerified
+
+    override suspend fun verifyVoiceCallCapability(): Boolean =
+        secureSessionController.value.verifyVoiceCallCapability()
+
     override fun approvePairing() = secureSessionController.value.approvePairing()
 
     override fun rejectPairing() = secureSessionController.value.rejectPairing()

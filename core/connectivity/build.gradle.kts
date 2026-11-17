@@ -32,6 +32,7 @@ android {
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:transfer"))
+    implementation(project(":core:calling"))
     implementation(libs.androidx.core.ktx)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)

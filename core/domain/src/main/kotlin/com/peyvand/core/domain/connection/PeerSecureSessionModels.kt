@@ -69,6 +69,16 @@ interface AuthenticatedPeerChannel : Closeable {
 interface PeerSecureSessionRepository {
     val secureSession: StateFlow<SecureSessionSnapshot>
 
+    /**
+     * True only after a fresh, nonce-bound signature challenge has proved that the
+     * authenticated peer implements the offline voice-call protocol. This state is
+     * scoped to the current mTLS session and resets when that session ends.
+     */
+    val voiceCallCapabilityVerified: StateFlow<Boolean>
+
+    /** Performs the backwards-compatible signed UDP capability challenge over Wi-Fi Direct. */
+    suspend fun verifyVoiceCallCapability(): Boolean
+
     /** Approve only after comparing the displayed SAS with the other physical device. */
     fun approvePairing()
 
@@ -78,6 +88,7 @@ interface PeerSecureSessionRepository {
     /**
      * Opens a single-consumer logical channel. The session multiplexer owns the TLS socket
      * and guarantees that CHAT and FILE_TRANSFER frames never share competing readers.
+     * CALL_CONTROL must only be claimed after verifyVoiceCallCapability() returns true.
      */
     fun claimAuthenticatedChannel(
         purpose: AuthenticatedPeerChannelPurpose,
