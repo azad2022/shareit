@@ -594,3 +594,25 @@ Before a motion milestone is marked PASSED, verify: the animation is tied to a r
 
 Refer to `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md` for the expanded product identity, localization, RTL, motion, and acceptance specification. Refer to `docs/PRODUCT_REQUIREMENTS.md` for the current confirmed scope. CP-001/CP-002 implementation was authorized by the product owner on 2026-11-01. The owner separately authorized CP-003 on 2026-11-04; its active branch is `feature/secure-file-transfer`. The current CP-003B substage implements a P2P-interface-bound raw TCP channel under ADR-0008. The owner separately authorized CP-CHAT-001 on 2026-11-13 on `feature/cp-chat-001-local-persistence`, limited to encrypted local Room persistence, durable outbox, Android backup/device-transfer exclusions, and tests. Chat Compose UI, stable peer identity, sync protocol, channel multiplexing and all remote/online services remain outside this authorization. Future scope expansions still require explicit approval.
 
+
+
+## 19. Explicit CP-CHAT-003 and CP-CHAT-004 owner decisions (2026-11-17)
+
+These newer approvals supersede earlier planning-only wording where scopes conflict. Historical checkpoint records remain unchanged.
+
+### CP-CHAT-003 — bidirectional in-chat attachments
+
+- The owner authorized CP-CHAT-003 on `feature/cp-chat-003-bidirectional-attachments`.
+- Verified baseline: `ea47156c1750cf62a1865b46bbc13d366db715aa`; exact-head CI Run #512 passed all three jobs.
+- Keep CP-CHAT-003 isolated until session lifecycle, chat attachment UX and physical-device acceptance evidence are complete.
+
+### CP-CHAT-004 — offline one-to-one audio calls
+
+- The owner authorized audio-only implementation on `feature/cp-chat-004-offline-audio-calls`, based on `ea47156c1750cf62a1865b46bbc13d366db715aa`.
+- Scope is one-to-one full-duplex voice within an authenticated local Wi-Fi Direct session. This is not Push-to-Talk.
+- An incoming call requires explicit acceptance. A file auto-receive grant is not call consent. Microphone capture/transmission must not begin before call acceptance and runtime `RECORD_AUDIO` permission.
+- Call signalling uses a dedicated `CALL_CONTROL` logical lease over the existing authenticated TLS multiplexer. Preserve the multiplexer’s one parent-socket reader and serialized complete-frame writer.
+- Live audio uses a separately reviewed real-time media transport. Never send voice packets over the bulk FILE_TRANSFER TCP stream.
+- Public STUN/TURN, cloud relay, server-side signalling, cellular/VPN/uplink fallback, call recording, transcription, group calling and screen sharing are excluded.
+- Video/camera is a separate later milestone. Do not add camera permission or video tracks to CP-CHAT-004.
+- Fail closed unless the media route can be proven to use the exact Wi-Fi Direct interface and media identity is cryptographically bound to the authenticated session.
