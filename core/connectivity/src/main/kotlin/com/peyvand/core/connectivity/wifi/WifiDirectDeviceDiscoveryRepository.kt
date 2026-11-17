@@ -118,6 +118,7 @@ class WifiDirectDeviceDiscoveryRepository(
             peerIdentityKeyProvider = peerIdentityKeyProvider,
             trustedPeerRepository = trustedPeerRepository,
             localDeviceDisplayName = localDeviceDisplayName,
+            p2pInterfaceProvider = { tcpChannelController.value.currentP2pMediaInterfaceBinding() },
         )
     }
 

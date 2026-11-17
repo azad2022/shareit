@@ -14,6 +14,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -149,6 +150,102 @@ class AuthenticatedPeerChannelMultiplexerTest {
         fileA.close()
         pair.first.close()
         pair.second.close()
+    }
+
+    @Test
+    fun `early call frames are buffered until call lease is claimed without interrupting chat or files`() {
+        val failure = CountDownLatch(1)
+        val pair = createPair(onSecondFailure = { failure.countDown() })
+        val callA = pair.first.openChannel(AuthenticatedPeerChannelPurpose.CALL_CONTROL)!!
+        val chatA = pair.first.openChannel(AuthenticatedPeerChannelPurpose.CHAT)!!
+        val chatB = pair.second.openChannel(AuthenticatedPeerChannelPurpose.CHAT)!!
+        val fileA = pair.first.openChannel(AuthenticatedPeerChannelPurpose.FILE_TRANSFER)!!
+        val fileB = pair.second.openChannel(AuthenticatedPeerChannelPurpose.FILE_TRANSFER)!!
+
+        val invite = TransferFrame(
+            TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+            TransferFrameType.CALL_INVITE,
+            sessionId,
+            java.nio.ByteBuffer.allocate(16).putLong(42L).putLong(84L).array(),
+        )
+        TransferFrameCodec.write(invite, callA.outputStream)
+        callA.outputStream.flush()
+
+        // The next frame proves the reader consumed and buffered INVITE before CALL_CONTROL
+        // is claimed on the receiving device.
+        val message = ChatWireMessage(
+            ChatMessageId("aeb0b98f-0b6d-46c0-a6b2-51a4fdd37a51"),
+            7L, 6L, 1_800_000_000_002L,
+            "چت باید در زمان آماده‌شدن کانال تماس فعال بماند.",
+        )
+        TransferFrameCodec.write(ChatMessageFrameCodec.encodeMessage(sessionId, message), chatA.outputStream)
+        chatA.outputStream.flush()
+        assertEquals(message, ChatMessageFrameCodec.decodeMessage(TransferFrameCodec.read(chatB.inputStream)!!))
+
+        val callB = pair.second.openChannel(AuthenticatedPeerChannelPurpose.CALL_CONTROL)!!
+        assertEquals(invite, TransferFrameCodec.read(callB.inputStream))
+
+        val manifest = TransferFrame(
+            TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+            TransferFrameType.MANIFEST,
+            sessionId,
+            byteArrayOf(3, 2, 1),
+        )
+        TransferFrameCodec.write(manifest, fileA.outputStream)
+        fileA.outputStream.flush()
+        assertEquals(manifest, TransferFrameCodec.read(fileB.inputStream))
+        assertFalse("The authenticated parent session must remain open.", failure.await(100, TimeUnit.MILLISECONDS))
+
+        callA.close(); callB.close(); chatA.close(); chatB.close()
+        fileA.close(); fileB.close(); pair.first.close(); pair.second.close()
+    }
+
+    @Test
+    fun `call-control queue overflow disables only calls and preserves chat and file channels`() {
+        val failure = CountDownLatch(1)
+        val pair = createPair(onSecondFailure = { failure.countDown() })
+        val callA = pair.first.openChannel(AuthenticatedPeerChannelPurpose.CALL_CONTROL)!!
+        val chatA = pair.first.openChannel(AuthenticatedPeerChannelPurpose.CHAT)!!
+        val chatB = pair.second.openChannel(AuthenticatedPeerChannelPurpose.CHAT)!!
+        val fileA = pair.first.openChannel(AuthenticatedPeerChannelPurpose.FILE_TRANSFER)!!
+        val fileB = pair.second.openChannel(AuthenticatedPeerChannelPurpose.FILE_TRANSFER)!!
+
+        repeat(25) { index ->
+            TransferFrameCodec.write(
+                TransferFrame(
+                    TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+                    TransferFrameType.CALL_INVITE,
+                    sessionId,
+                    java.nio.ByteBuffer.allocate(4).putInt(index).array(),
+                ),
+                callA.outputStream,
+            )
+            callA.outputStream.flush()
+        }
+
+        val message = ChatWireMessage(
+            ChatMessageId("6a5b8f72-28e1-4136-9c35-7dce6d2c5b3d"),
+            8L, 7L, 1_800_000_000_003L,
+            "سرریز کانال تماس نباید نشست چت را ببندد.",
+        )
+        TransferFrameCodec.write(ChatMessageFrameCodec.encodeMessage(sessionId, message), chatA.outputStream)
+        chatA.outputStream.flush()
+        assertEquals(message, ChatMessageFrameCodec.decodeMessage(TransferFrameCodec.read(chatB.inputStream)!!))
+        assertNull("Overflow must fail closed for CALL_CONTROL only.", pair.second.openChannel(AuthenticatedPeerChannelPurpose.CALL_CONTROL))
+
+        val manifest = TransferFrame(
+            TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+            TransferFrameType.MANIFEST,
+            sessionId,
+            byteArrayOf(4, 5, 6),
+        )
+        TransferFrameCodec.write(manifest, fileA.outputStream)
+        fileA.outputStream.flush()
+        assertEquals(manifest, TransferFrameCodec.read(fileB.inputStream))
+        assertFalse("Call-channel overflow must not close the authenticated session.", failure.await(100, TimeUnit.MILLISECONDS))
+
+        callA.close(); chatA.close(); chatB.close()
+        fileA.close(); fileB.close(); pair.first.close(); pair.second.close()
     }
 
     @Test

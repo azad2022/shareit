@@ -13,6 +13,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.ArrayDeque
 import java.util.EnumMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -42,16 +43,35 @@ class AuthenticatedPeerChannelMultiplexer(
     private val leases = EnumMap<AuthenticatedPeerChannelPurpose, ChannelLease>(
         AuthenticatedPeerChannelPurpose::class.java,
     )
+    // A peer can send INVITE just after capability proof but before this process claims
+    // CALL_CONTROL. Keep a small, bounded pre-claim window for that race.
+    private val pendingCallFrames = ArrayDeque<ByteArray>()
+    private var pendingCallBytes = 0
+    private var callControlOverflowed = false
     private var readerJob: Job? = null
     private var closed = false
 
     fun openChannel(purpose: AuthenticatedPeerChannelPurpose): AuthenticatedPeerChannel? =
         synchronized(lock) {
             if (closed || leases.containsKey(purpose)) return@synchronized null
+            if (purpose == AuthenticatedPeerChannelPurpose.CALL_CONTROL && callControlOverflowed) {
+                return@synchronized null
+            }
             val lease = try {
                 ChannelLease(purpose)
             } catch (_: IOException) {
                 return@synchronized null
+            }
+            if (purpose == AuthenticatedPeerChannelPurpose.CALL_CONTROL && pendingCallFrames.isNotEmpty()) {
+                try {
+                    pendingCallFrames.forEach { lease.pipeOutput.write(it) }
+                    lease.pipeOutput.flush()
+                } catch (_: IOException) {
+                    lease.closePipes()
+                    return@synchronized null
+                }
+                pendingCallFrames.clear()
+                pendingCallBytes = 0
             }
             leases[purpose] = lease
             if (readerJob == null) {
@@ -69,12 +89,22 @@ class AuthenticatedPeerChannelMultiplexer(
                     throw IOException("An authenticated frame has an unexpected session identifier.")
                 }
                 val purpose = purposeFor(frame.type)
-                val lease = synchronized(lock) {
-                    if (closed) return
-                    leases[purpose]
-                } ?: throw IOException(
-                    "The peer sent a ${frame.type.name} frame while its logical channel was not open.",
-                )
+                val lease = if (purpose == AuthenticatedPeerChannelPurpose.CALL_CONTROL) {
+                    val encoded = encodeFrame(frame)
+                    synchronized(lock) {
+                        if (closed) return
+                        val activeLease = leases[purpose]
+                        if (activeLease == null) bufferUnclaimedCallFrameLocked(encoded)
+                        activeLease
+                    }
+                } else {
+                    synchronized(lock) {
+                        if (closed) return
+                        leases[purpose]
+                    } ?: throw IOException(
+                        "The peer sent a ${frame.type.name} frame while its logical channel was not open.",
+                    )
+                } ?: continue
 
                 try {
                     TransferFrameCodec.write(frame, lease.pipeOutput)
@@ -89,6 +119,24 @@ class AuthenticatedPeerChannelMultiplexer(
             fail(exception)
         }
     }
+
+    private fun bufferUnclaimedCallFrameLocked(encodedFrame: ByteArray) {
+        if (callControlOverflowed) return
+        if (pendingCallFrames.size >= MAX_PENDING_CALL_FRAMES ||
+            encodedFrame.size > MAX_PENDING_CALL_BYTES - pendingCallBytes
+        ) {
+            // Flood protection disables only this optional channel, never CHAT or FILE_TRANSFER.
+            pendingCallFrames.clear()
+            pendingCallBytes = 0
+            callControlOverflowed = true
+            return
+        }
+        pendingCallFrames.addLast(encodedFrame)
+        pendingCallBytes += encodedFrame.size
+    }
+
+    private fun encodeFrame(frame: TransferFrame): ByteArray =
+        ByteArrayOutputStream().also { TransferFrameCodec.write(frame, it) }.toByteArray()
 
     private fun sendEncodedFrame(
         purpose: AuthenticatedPeerChannelPurpose,
@@ -145,6 +193,8 @@ class AuthenticatedPeerChannelMultiplexer(
         readerJob?.cancel()
         scope.coroutineContext[Job]?.cancel()
         val current = synchronized(lock) {
+            pendingCallFrames.clear()
+            pendingCallBytes = 0
             leases.values.toList().also { leases.clear() }
         }
         current.forEach(ChannelLease::closePipes)
@@ -289,6 +339,8 @@ class AuthenticatedPeerChannelMultiplexer(
 
     private companion object {
         const val PIPE_BUFFER_BYTES = 128 * 1024
+        const val MAX_PENDING_CALL_FRAMES = 24
+        const val MAX_PENDING_CALL_BYTES = 64 * 1024
         const val OUTPUT_APPEND_CHUNK_BYTES = 4096
         const val MAX_FRAME_PAYLOAD_BYTES =
             TransferFrameCodec.MAX_DATA_CHUNK_BYTES + 40

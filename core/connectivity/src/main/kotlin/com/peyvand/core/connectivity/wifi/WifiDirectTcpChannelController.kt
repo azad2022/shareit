@@ -50,6 +50,12 @@ import kotlin.coroutines.resumeWithException
  * is retained privately for the next session-authentication/mTLS layer. A TCP connection
  * is not peer authentication and must never authorize file metadata or content.
  */
+internal data class P2pMediaInterfaceBinding(
+    val interfaceName: String,
+    val localAddress: Inet4Address,
+    val prefixLength: Int,
+)
+
 internal class WifiDirectTcpChannelController(
     private val managerProvider: () -> WifiP2pManager?,
     private val channelProvider: () -> WifiP2pManager.Channel?,
@@ -72,6 +78,7 @@ internal class WifiDirectTcpChannelController(
     private var listenerSocket: ServerSocket? = null
     private var pendingSocket: Socket? = null
     private var connectedSocket: Socket? = null
+    private var activeP2pInterfaceBinding: P2pMediaInterfaceBinding? = null
 
     init {
         require(port in 1..65535)
@@ -139,6 +146,24 @@ internal class WifiDirectTcpChannelController(
         connectedSocket?.takeIf { it.isConnected && !it.isClosed }
     }
 
+    /** Revalidates the exact WifiP2pGroup interface and its local IPv4/prefix. */
+    internal fun currentP2pMediaInterfaceBinding(): P2pMediaInterfaceBinding? = synchronized(lock) {
+        val binding = activeP2pInterfaceBinding ?: return@synchronized null
+        val networkInterface = try {
+            NetworkInterface.getByName(binding.interfaceName)
+        } catch (_: SocketException) {
+            null
+        } ?: return@synchronized null
+        if (!networkInterface.isUp || networkInterface.isLoopback) return@synchronized null
+        val stillOwnsAddress = networkInterface.interfaceAddresses.any { item ->
+            val address = item.address as? Inet4Address
+            address != null &&
+                address.address.contentEquals(binding.localAddress.address) &&
+                item.networkPrefixLength.toInt() == binding.prefixLength
+        }
+        binding.takeIf { stillOwnsAddress }
+    }
+
     private suspend fun establishChannel(
         connection: PeerConnectionSnapshot,
         requestGeneration: Long,
@@ -190,6 +215,17 @@ internal class WifiDirectTcpChannelController(
             }
             val localAddress = P2pTcpEndpointPolicy.selectLocalAddress(interfaceAddresses)
                 ?: throw ChannelSetupException(P2pTcpChannelFailure.LOCAL_IPV4_UNAVAILABLE)
+
+            synchronized(lock) {
+                if (generation != requestGeneration) {
+                    throw CancellationException("P2P group changed while resolving its interface")
+                }
+                activeP2pInterfaceBinding = P2pMediaInterfaceBinding(
+                    interfaceName = interfaceName,
+                    localAddress = localAddress.address,
+                    prefixLength = localAddress.prefixLength,
+                )
+            }
 
             ensureCurrent(requestGeneration)
             if (isGroupOwner) {
@@ -497,6 +533,7 @@ internal class WifiDirectTcpChannelController(
     }
 
     private fun closeSocketsLocked() {
+        activeP2pInterfaceBinding = null
         closeQuietly(listenerSocket)
         closeQuietly(pendingSocket)
         closeQuietly(connectedSocket)

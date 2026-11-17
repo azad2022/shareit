@@ -43,6 +43,8 @@ internal class WifiDirectVoiceCallCapabilityController(
     private val remoteIdentity: TrustedPeerIdentity,
     private val localAddress: Inet4Address,
     private val remoteAddress: Inet4Address,
+    private val interfaceName: String,
+    private val localPrefixLength: Int,
     private val signIdentityProof: suspend (ByteArray) -> ByteArray,
     private val scope: CoroutineScope,
     private val onVerified: () -> Unit,
@@ -68,21 +70,21 @@ internal class WifiDirectVoiceCallCapabilityController(
         }
 
         return try {
-            val p2pInterface = NetworkInterface.getByInetAddress(localAddress)
+            if (interfaceName.isBlank() || localPrefixLength !in 1..30) return false
+            val p2pInterface = NetworkInterface.getByName(interfaceName)
                 ?: return false
             if (!p2pInterface.isUp || p2pInterface.isLoopback) return false
 
             val localP2pAddress = p2pInterface.interfaceAddresses
                 .mapNotNull { address ->
                     val ipv4 = address.address as? Inet4Address ?: return@mapNotNull null
-                    if (ipv4.address.contentEquals(localAddress.address)) {
-                        P2pIpv4InterfaceAddress(ipv4, address.networkPrefixLength.toInt())
-                    } else {
-                        null
-                    }
+                    if (ipv4.address.contentEquals(localAddress.address) &&
+                        address.networkPrefixLength.toInt() == localPrefixLength
+                    ) {
+                        P2pIpv4InterfaceAddress(ipv4, localPrefixLength)
+                    } else null
                 }
-                .firstOrNull()
-                ?: return false
+                .firstOrNull() ?: return false
 
             if (!P2pTcpEndpointPolicy.isOnSameSubnet(localP2pAddress, remoteAddress)) return false
 

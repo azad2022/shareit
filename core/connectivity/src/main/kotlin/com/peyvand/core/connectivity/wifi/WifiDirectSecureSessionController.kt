@@ -12,6 +12,8 @@ import com.peyvand.core.domain.chat.LocalPeerIdentityUnavailableException
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
 import com.peyvand.core.domain.connection.VoiceCallP2pEndpointProvider
 import com.peyvand.core.domain.connection.VoiceCallP2pEndpoints
+import com.peyvand.core.domain.connection.P2pIpv4InterfaceAddress
+import com.peyvand.core.domain.connection.P2pTcpEndpointPolicy
 import com.peyvand.core.domain.connection.PeerTransferRole
 import com.peyvand.core.domain.connection.SecureSessionFailure
 import com.peyvand.core.domain.connection.SecureSessionSnapshot
@@ -28,6 +30,8 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.net.Socket
 import java.net.Inet4Address
+import java.net.NetworkInterface
+import java.net.SocketException
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -68,6 +72,7 @@ internal class WifiDirectSecureSessionController(
     private val peerIdentityKeyProvider: PeerIdentityKeyProvider,
     private val trustedPeerRepository: TrustedPeerRepository,
     private val localDeviceDisplayName: String,
+    private val p2pInterfaceProvider: () -> P2pMediaInterfaceBinding?,
 ) : com.peyvand.core.domain.connection.PeerSecureSessionRepository, VoiceCallP2pEndpointProvider {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -468,12 +473,17 @@ internal class WifiDirectSecureSessionController(
             }
             ensureCurrent(expectedGeneration)
 
-            val capabilityController = createVoiceCallCapabilityController(
-                tlsSocket = authenticatedTlsSocket,
-                sessionId = sessionId,
-                peerIdentity = authenticatedPeer.identityId,
-                expectedGeneration = expectedGeneration,
-            )
+            // Voice is optional. Require the exact WifiP2pGroup interface captured by
+            // the TCP transport; never infer an interface from an IP address alone.
+            val voiceEndpoints = createVoiceCallP2pEndpoints(authenticatedTlsSocket, sessionId)
+            val capabilityController = voiceEndpoints?.let { endpoints ->
+                createVoiceCallCapabilityController(
+                    endpoints = endpoints,
+                    sessionId = sessionId,
+                    peerIdentity = authenticatedPeer.identityId,
+                    expectedGeneration = expectedGeneration,
+                )
+            }
 
             synchronized(lock) {
                 if (generation != expectedGeneration) {
@@ -482,7 +492,7 @@ internal class WifiDirectSecureSessionController(
                 }
                 secureSocket = authenticatedTlsSocket
                 activeSessionId = sessionId
-                voiceCallP2pEndpoints = createVoiceCallP2pEndpoints(authenticatedTlsSocket, sessionId)
+                voiceCallP2pEndpoints = voiceEndpoints
                 voiceCallCapabilityController = capabilityController
                 rawSocket = null
                 approval = null
@@ -592,23 +602,46 @@ internal class WifiDirectSecureSessionController(
         tlsSocket: SSLSocket,
         sessionId: UUID,
     ): VoiceCallP2pEndpoints? {
+        val binding = p2pInterfaceProvider() ?: return null
         val local = tlsSocket.localAddress as? Inet4Address ?: return null
         val peer = tlsSocket.inetAddress as? Inet4Address ?: return null
+        if (!local.address.contentEquals(binding.localAddress.address)) return null
+
+        val p2pInterface = try {
+            NetworkInterface.getByName(binding.interfaceName)
+        } catch (_: SocketException) {
+            null
+        } ?: return null
+        if (!p2pInterface.isUp || p2pInterface.isLoopback) return null
+        val exactLocalBinding = p2pInterface.interfaceAddresses.any { item ->
+            val address = item.address as? Inet4Address
+            address != null &&
+                address.address.contentEquals(binding.localAddress.address) &&
+                item.networkPrefixLength.toInt() == binding.prefixLength
+        }
+        if (!exactLocalBinding || !P2pTcpEndpointPolicy.isOnSameSubnet(
+                P2pIpv4InterfaceAddress(binding.localAddress, binding.prefixLength),
+                peer,
+            )
+        ) return null
+
         return VoiceCallP2pEndpoints(
             sessionId = sessionId,
+            interfaceName = binding.interfaceName,
             localAddress = local,
+            localPrefixLength = binding.prefixLength,
             peerAddress = peer,
         )
     }
 
     private suspend fun createVoiceCallCapabilityController(
-        tlsSocket: SSLSocket,
+        endpoints: VoiceCallP2pEndpoints,
         sessionId: UUID,
         peerIdentity: com.peyvand.core.domain.chat.PeerIdentityId,
         expectedGeneration: Long,
     ): WifiDirectVoiceCallCapabilityController? {
-        val localAddress = tlsSocket.localAddress as? Inet4Address ?: return null
-        val remoteAddress = tlsSocket.inetAddress as? Inet4Address ?: return null
+        val localAddress = endpoints.localAddress
+        val remoteAddress = endpoints.peerAddress
         val localIdentity: LocalPeerIdentity
         val remoteIdentity: TrustedPeerIdentity
         try {
@@ -626,6 +659,8 @@ internal class WifiDirectSecureSessionController(
             remoteIdentity = remoteIdentity,
             localAddress = localAddress,
             remoteAddress = remoteAddress,
+            interfaceName = endpoints.interfaceName,
+            localPrefixLength = endpoints.localPrefixLength,
             signIdentityProof = peerIdentityKeyProvider::signIdentityProof,
             scope = scope,
             onVerified = {

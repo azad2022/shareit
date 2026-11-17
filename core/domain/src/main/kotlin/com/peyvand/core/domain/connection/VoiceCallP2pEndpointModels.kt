@@ -11,9 +11,17 @@ import java.util.UUID
  */
 data class VoiceCallP2pEndpoints(
     val sessionId: UUID,
+    /** Exact interface returned by WifiP2pGroup.getInterface(). */
+    val interfaceName: String,
     val localAddress: Inet4Address,
+    val localPrefixLength: Int,
     val peerAddress: Inet4Address,
-)
+) {
+    init {
+        require(interfaceName.isNotBlank())
+        require(localPrefixLength in 1..30)
+    }
+}
 
 /** Internal application boundary for obtaining the current authenticated P2P media endpoints. */
 interface VoiceCallP2pEndpointProvider {

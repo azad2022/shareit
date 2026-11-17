@@ -6,8 +6,11 @@ import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import com.peyvand.core.calling.P2pIceCandidatePolicy
 import com.peyvand.core.calling.VoiceCallSdpPolicy
+import com.peyvand.core.domain.connection.P2pIpv4InterfaceAddress
+import com.peyvand.core.domain.connection.P2pTcpEndpointPolicy
 import java.io.Closeable
 import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
@@ -136,19 +139,29 @@ class WebRtcVoiceMediaRuntime(context: Context) : Closeable {
     }
 
     fun createCallSession(
+        p2pInterfaceName: String,
         localP2pAddress: Inet4Address,
+        localP2pPrefixLength: Int,
         authenticatedPeerP2pAddress: Inet4Address,
         scope: CoroutineScope,
         onLocalIceCandidate: suspend (sdpMid: String?, sdpMLineIndex: Int, candidate: String) -> Unit,
         onFailure: (WebRtcVoiceMediaFailure) -> Unit,
     ): WebRtcAudioCallSession {
         check(!closed.get()) { "WebRTC runtime is closed." }
+        require(isExactP2pInterfaceUsable(
+            interfaceName = p2pInterfaceName,
+            localAddress = localP2pAddress,
+            prefixLength = localP2pPrefixLength,
+            peerAddress = authenticatedPeerP2pAddress,
+        )) { "Voice media must use the exact active Wi-Fi Direct interface." }
         synchronized(sessionLock) {
             check(activeSession == null) { "The local audio device is already owned by another call." }
             return WebRtcAudioCallSession(
                 context = appContext,
                 runtime = this,
+                p2pInterfaceName = p2pInterfaceName,
                 localP2pAddress = localP2pAddress,
+                localP2pPrefixLength = localP2pPrefixLength,
                 peerP2pAddress = authenticatedPeerP2pAddress,
                 scope = scope,
                 onLocalIceCandidate = onLocalIceCandidate,
@@ -161,6 +174,27 @@ class WebRtcVoiceMediaRuntime(context: Context) : Closeable {
             ).also { activeSession = it }
         }
     }
+
+    internal fun isExactP2pInterfaceUsable(
+        interfaceName: String,
+        localAddress: Inet4Address,
+        prefixLength: Int,
+        peerAddress: Inet4Address,
+    ): Boolean = runCatching {
+        if (interfaceName.isBlank() || prefixLength !in 1..30) return@runCatching false
+        val networkInterface = NetworkInterface.getByName(interfaceName) ?: return@runCatching false
+        if (!networkInterface.isUp || networkInterface.isLoopback) return@runCatching false
+        val ownsAddressAndPrefix = networkInterface.interfaceAddresses.any { item ->
+            val address = item.address as? Inet4Address
+            address != null &&
+                address.address.contentEquals(localAddress.address) &&
+                item.networkPrefixLength.toInt() == prefixLength
+        }
+        ownsAddressAndPrefix && P2pTcpEndpointPolicy.isOnSameSubnet(
+            P2pIpv4InterfaceAddress(localAddress, prefixLength),
+            peerAddress,
+        )
+    }.getOrDefault(false)
 
     internal fun resetCaptureState() {
         captureMutable.value = WebRtcAudioCaptureState.STOPPED
@@ -194,7 +228,9 @@ class WebRtcVoiceMediaRuntime(context: Context) : Closeable {
 class WebRtcAudioCallSession internal constructor(
     private val context: Context,
     private val runtime: WebRtcVoiceMediaRuntime,
+    private val p2pInterfaceName: String,
     private val localP2pAddress: Inet4Address,
+    private val localP2pPrefixLength: Int,
     private val peerP2pAddress: Inet4Address,
     private val scope: CoroutineScope,
     private val onLocalIceCandidate: suspend (sdpMid: String?, sdpMLineIndex: Int, candidate: String) -> Unit,
@@ -274,6 +310,10 @@ class WebRtcAudioCallSession internal constructor(
     ): Boolean {
         ensureNotClosed()
         ensureMicrophonePermission()
+        if (!hasExactP2pInterface()) {
+            onFailure(WebRtcVoiceMediaFailure.MEDIA_STATS_UNAVAILABLE)
+            return false
+        }
         val connection = synchronized(lock) { peerConnection } ?: return false
         val track = synchronized(lock) { localTrack } ?: return false
 
@@ -313,6 +353,9 @@ class WebRtcAudioCallSession internal constructor(
 
     private fun ensurePeerConnection(): PeerConnection {
         ensureNotClosed()
+        check(hasExactP2pInterface()) {
+            "The active Wi-Fi Direct interface no longer matches the authenticated session."
+        }
         synchronized(lock) { peerConnection?.let { return it } }
         ensureMicrophonePermission()
 
@@ -345,7 +388,9 @@ class WebRtcAudioCallSession internal constructor(
                 override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState) = Unit
 
                 override fun onIceCandidate(candidate: IceCandidate) {
-                    if (!P2pIceCandidatePolicy.isAllowedLocalCandidate(candidate.sdp, localP2pAddress)) return
+                    if (!hasExactP2pInterface() ||
+                        !P2pIceCandidatePolicy.isAllowedLocalCandidate(candidate.sdp, localP2pAddress)
+                    ) return
                     scope.launch(Dispatchers.IO) {
                         try {
                             onLocalIceCandidate(candidate.sdpMid, candidate.sdpMLineIndex, candidate.sdp)
@@ -484,6 +529,7 @@ class WebRtcAudioCallSession internal constructor(
         }
 
     private fun isVerifiedSelectedP2pPair(report: RTCStatsReport): Boolean {
+        if (!hasExactP2pInterface()) return false
         val stats = report.statsMap.values
         val transport = stats.firstOrNull { it.type == "transport" } ?: return false
         val transportMembers = transport.members
@@ -518,6 +564,14 @@ class WebRtcAudioCallSession internal constructor(
             "Only audio-only Opus DTLS-SRTP SDP with trickled ICE is accepted."
         }
     }
+
+    private fun hasExactP2pInterface(): Boolean =
+        runtime.isExactP2pInterfaceUsable(
+            interfaceName = p2pInterfaceName,
+            localAddress = localP2pAddress,
+            prefixLength = localP2pPrefixLength,
+            peerAddress = peerP2pAddress,
+        )
 
     private fun ensureMicrophonePermission() {
         check(
