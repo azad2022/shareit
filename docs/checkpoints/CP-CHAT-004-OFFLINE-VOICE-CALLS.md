@@ -40,6 +40,8 @@ Add private, direct, offline voice calls inside one-to-one PEYVAND chat. Either 
 - Core-Telecom is the Android call lifecycle candidate, subject to current API/policy validation.
 - The media dependency is not approved until binary size, ABI coverage, licence, security maintenance and API 26+ compatibility are audited.
 - Call state becomes ACTIVE only after the verified encrypted media path and audio devices are operational.
+- No `CALL_*` frame may be sent until a backwards-compatible, session-bound and cryptographically authenticated audio-capability proof confirms that the remote peer supports this protocol. DNS-SD metadata is advisory only.
+- Media candidates and the selected ICE pair must be verified against the exact active P2P interface; generic adapter filtering or ICE connected state alone is insufficient.
 
 ## Sub-checkpoints
 
@@ -54,10 +56,11 @@ Add private, direct, offline voice calls inside one-to-one PEYVAND chat. Either 
 
 - [ ] Outgoing/incoming invite; accept, reject, busy, cancel, timeout and hang-up
 - [ ] Duplicate/replayed call IDs rejected for the whole authenticated session
+- [ ] Authenticated, nonce-based call-capability proof is bound to the current peer/session before any new call frame is sent; legacy peers continue text/file service without teardown
 - [ ] No mic access before explicit acceptance and runtime permission
 - [ ] Simultaneous two-way audio (full duplex)
 - [ ] DTLS-SRTP verified and bound to the authenticated peer/session
-- [ ] Only Wi-Fi Direct host candidates selected; no public or alternate network path
+- [ ] Only numeric UDP host candidates on the exact Wi-Fi Direct interface/subnet are admitted; selected ICE pair is verified from stats; no public or alternate network path
 - [ ] Earpiece/speaker/wired/Bluetooth routing where supported
 - [ ] Mute, audio focus, interruption, notification, background and screen-off behaviour
 - [ ] Voice remains intelligible during concurrent file transfer
@@ -68,8 +71,11 @@ Add private, direct, offline voice calls inside one-to-one PEYVAND chat. Either 
 ## Evidence log
 
 - Baseline exact-head CI: Run #512 passed build/unit/lint and Android storage publication + mTLS instrumentation on API 26 and API 36.
-- CP-CHAT-004A implementation commit: `dcd3289a7d73945d1763d72d6caa6b034aa19316` (initial implementation; later documentation/CI updates may add commits).
-- CP-CHAT-004A CI: pending for the latest exact feature head.
+- Initial CP-CHAT-004A implementation commit: `dcd3289a7d73945d1763d72d6caa6b034aa19316`.
+- Run #517 (`44037675327`) on `28797c2595b2848275693f67f437215888e13bbd` failed in Build/Unit/Lint: Kotlin ICE-encoding compile error and one existing multiplexer teardown-race test; Android storage/mTLS instrumentation passed on API 26 and API 36. Both reported issues were corrected in follow-up Commit `3c7455284aba942d827f4fb7aae622822f52129a`; exact-head CI is being rerun.
+- CP-CHAT-004A latest CI: pending.
+- WebRTC dependency, ABI, licence and packaged-size audit: pending.
+- Physical-device tests: not run.
 - WebRTC dependency, ABI, licence and packaged-size audit: pending.
 - Physical-device tests: not run.
 - Current checkpoint: IN_PROGRESS. No usable audio call is claimed.

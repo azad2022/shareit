@@ -28,20 +28,33 @@ Separate call control from real-time media.
 - Retain call IDs for the full authenticated session lifetime with a bounded registry. Reject replayed/duplicate IDs, wrong-session frames, unknown IDs and invalid state transitions.
 - Call state must not become ACTIVE on invite acceptance or SDP success alone. The media adapter may mark ACTIVE only after the Wi-Fi Direct route, DTLS-SRTP and audio devices are verified.
 
+### Backward-compatible peer capability gate
+
+- The new `CALL_*` frame codes are unknown to older PEYVAND builds; an older multiplexer may treat them as a fatal protocol error and close the entire authenticated session.
+- Never send `CALL_INVITE`, SDP, ICE, or any `CALL_*` frame until the remote peer's audio-call capability has been positively established for this exact authenticated peer session.
+- DNS-SD TXT records and application version strings are unauthenticated compatibility hints only. They must not authorize call control, microphone access, or media setup.
+- The capability proof must remain backward-compatible: a legacy peer that does not implement calls must ignore the probe without its existing text/file session being closed. The proof must bind a fresh nonce, current session ID, both persistent peer identities, and the call-protocol version, and must be authenticated against the trusted peer identity keys. Reject replayed, stale, wrong-session, or wrong-peer proofs.
+- A candidate design is a bounded UDP challenge/response on the active Wi-Fi Direct group, signed by the existing trusted peer identity keys. This is a design candidate, not an accepted wire protocol; threat-model it and record a dedicated ADR before implementation. If the proof is absent or invalid, preserve text chat and file transfer and disable voice calling.
+- Claiming or emitting on `CALL_CONTROL` is gated on the positive capability proof. This is a hard acceptance requirement, not a best-effort fallback.
+
 ### Real-time media plane — selected candidate, not yet implemented
 
 - Evaluate a maintained WebRTC native media stack to avoid inventing RTP/RTCP, Opus, congestion/loss recovery, jitter buffers, DTLS-SRTP and acoustic processing.
 - Use host ICE candidates only and an empty ICE server list. No public STUN/TURN and no relay.
 - Keep DTLS-SRTP enabled. Do not use encryption-disable configuration.
 - Bind the DTLS certificate fingerprint exchanged in SDP to the authenticated PEYVAND peer/session over the TLS-protected CALL_CONTROL channel. ICE host candidates and ICE success are not peer authentication.
-- Pin media sockets to the exact Wi-Fi Direct network/interface and validate the selected candidate pair against the current P2P group. If the selected route cannot be proven to be Wi-Fi Direct, fail closed. Never fall back to cellular, VPN, public Wi-Fi uplink, STUN or TURN.
-- Validate WebRTC's Android Wi-Fi Direct network-monitor behaviour on physical devices. Library support for a P2P interface does not prove that a particular handset routes its media through it.
+- Enable WebRTC's `IncludeWifiDirect` Android network-monitor field trial when supported by the pinned build; upstream Android WebRTC includes its Wi-Fi Direct delegate only when that trial is enabled.
+- Use `WifiP2pGroup.getInterface()` and the addresses/prefixes on that exact OS interface as the authoritative local P2P interface input. A generic `networkIgnoreMask` filters broad adapter types; it does not identify one Wi-Fi Direct interface.
+- Admit only numeric UDP host candidates that match an address on the local P2P interface. Remote host candidates must match the active P2P group subnet. Reject server-reflexive, peer-reflexive, relay, TCP, mDNS/DNS-name and non-P2P interface candidates.
+- Verify the selected ICE candidate pair through WebRTC stats (local/remote candidate type, protocol and addresses) before marking the call active. A candidate being present in SDP or ICE reporting connected is insufficient on its own.
+- Bind media sockets to the exact Wi-Fi Direct network where the runtime exposes a bindable `Network`; do not assume every `WifiP2pGroup` has a public `ConnectivityManager.Network`. If the selected route cannot be proven to be Wi-Fi Direct, fail closed. Never fall back to cellular, VPN, public Wi-Fi uplink, STUN or TURN.
+- Validate the WebRTC Wi-Fi Direct network-monitor behaviour and selected-pair stats on physical devices. Library support for a P2P interface does not prove that a particular handset routes its media through it.
 - Do not send live media on the file-transfer TCP stream: head-of-line blocking and bulk transfer backpressure are unacceptable for real-time speech.
 - Measure call quality under simultaneous file transfer. Rate-limit/schedule bulk transfers if they starve audio.
 
 ### Android audio lifecycle — selected candidate, not yet implemented
 
-- Evaluate AndroidX Core-Telecom for self-managed VoIP lifecycle, audio focus, endpoint routing and call concurrency. Confirm current stable release, min API, manifest permissions, foreground-service and notification rules before pinning dependencies.
+- Evaluate AndroidX Core-Telecom for self-managed VoIP lifecycle, audio focus, endpoint routing and call concurrency. AndroidX Core-Telecom 1.1.0 is the current stable release as of 2026-11-17 and its CallsManager supports API 26+; still audit exact manifest permissions, target-SDK foreground-service requirements and notification policy before pinning dependencies.
 - Request `RECORD_AUDIO` just in time. No microphone track or capture before explicit call acceptance and local permission.
 - Start from a visible user action. Respect background microphone restrictions, foreground-service types, notifications, screen-off, process recreation, permission revocation and vendor behaviour.
 - Mute must stop outgoing media at the media engine. Hang-up, P2P loss, TLS/session teardown, identity mismatch, permission revocation or media failure releases microphone, audio route, tracks, PeerConnection, ICE resources, CALL_CONTROL lease and Telecom ownership.
@@ -72,8 +85,8 @@ Compilation or emulator tests do not pass this checkpoint. Report measured laten
 
 ## Implementation sequence
 
-- **CP-CHAT-004A:** call control protocol, CALL_CONTROL lease, bounded codec, call state machine, replay protection, unit tests. No live microphone/media yet.
-- **CP-CHAT-004B:** WebRTC audio adapter, Wi-Fi Direct-only ICE/network binding, DTLS-SRTP identity binding, Opus, AEC/NS/AGC and quality telemetry; dependency/ABI/license/size audit.
+- **CP-CHAT-004A:** call-control protocol, CALL_CONTROL lease, bounded codec, call state machine, replay protection, unit tests, and the backward-compatible authenticated peer-capability proof. No `CALL_*` frame may be sent before that proof. No live microphone/media yet.
+- **CP-CHAT-004B:** WebRTC audio adapter, P2P-interface candidate filtering and selected-pair verification, DTLS-SRTP identity binding, Opus, AEC/NS/AGC and quality telemetry; dependency/ABI/license/size audit.
 - **CP-CHAT-004C:** Core-Telecom, microphone permission, foreground lifecycle, in-chat call UI and notification.
 - **CP-CHAT-004D:** physical-device acceptance, concurrent file/audio stress, security and performance tuning.
 - **Future separate milestone:** video calling. No video/camera implementation in CP-CHAT-004.

@@ -616,3 +616,11 @@ These newer approvals supersede earlier planning-only wording where scopes confl
 - Public STUN/TURN, cloud relay, server-side signalling, cellular/VPN/uplink fallback, call recording, transcription, group calling and screen sharing are excluded.
 - Video/camera is a separate later milestone. Do not add camera permission or video tracks to CP-CHAT-004.
 - Fail closed unless the media route can be proven to use the exact Wi-Fi Direct interface and media identity is cryptographically bound to the authenticated session.
+
+
+### CP-CHAT-004 implementation guardrails — 2026-11-17 follow-up
+
+- Do not send new `CALL_*` frame types to a peer until a backward-compatible, nonce-based capability proof is authenticated and bound to the current session and trusted persistent peer identities. DNS-SD TXT/app-version metadata is only a hint, not authorization. Legacy peers must retain working text/file service.
+- WebRTC must explicitly include the Wi-Fi Direct network-monitor path where required by the pinned build. Candidate admission and selected-pair verification must identify the exact `WifiP2pGroup` interface and address/prefix; generic Wi-Fi adapter filtering alone is insufficient.
+- Reject non-host, non-UDP, mDNS/DNS-name and non-P2P candidates; verify the selected ICE pair through WebRTC stats. Fail closed on ambiguous routing; never fall back to an Internet-facing interface.
+- Keep voice media off the FILE_TRANSFER TCP stream. Do not add camera/video code or permission in CP-CHAT-004.
