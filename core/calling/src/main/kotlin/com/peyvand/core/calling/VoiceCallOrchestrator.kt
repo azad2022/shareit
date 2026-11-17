@@ -59,10 +59,7 @@ class VoiceCallOrchestrator(
         data class CancelOutgoing(val callId: UUID, val reply: CompletableDeferred<Unit>) : Event
         data class HangUp(val callId: UUID, val reply: CompletableDeferred<Unit>) : Event
         data class SetMuted(val muted: Boolean) : Event
-        data class TelecomMediaActive(
-            val active: Boolean,
-            val reply: CompletableDeferred<Boolean>,
-        ) : Event
+        data class TelecomMediaActive(val active: Boolean) : Event
         data class LocalIce(
             val callId: UUID,
             val generation: Long,
@@ -95,7 +92,7 @@ class VoiceCallOrchestrator(
     private var sessionAuthenticated = false
     private var controlReady = false
     private var mediaGeneration = 0L
-    private var mediaSession: VoiceCallMediaSession? = null
+    @Volatile private var mediaSession: VoiceCallMediaSession? = null
     private var actorJob: Job? = null
     private var sessionJob: Job? = null
     private var controlJob: Job? = null
@@ -177,11 +174,30 @@ class VoiceCallOrchestrator(
         if (!closed.get()) events.trySend(Event.SetMuted(muted))
     }
 
-    /** Called from Android Telecom callbacks to pause/resume both directions of media. */
-    suspend fun setTelecomMediaActive(active: Boolean): Boolean {
-        val reply = CompletableDeferred<Boolean>()
-        submit(Event.TelecomMediaActive(active, reply))
-        return reply.await()
+    /**
+     * Called from Android Telecom's 5-second callbacks. Updates the media gate synchronously
+     * and posts only follow-up actor work; it never waits behind SDP/ICE negotiation.
+     */
+    fun setTelecomMediaActive(active: Boolean): Boolean {
+        if (closed.get() || !started.get()) return false
+        val current = snapshot.value
+        if (current.isTerminal || current.status == VoiceCallStatus.IDLE) return false
+
+        telecomMediaActive = active
+        val media = mediaSession
+        if (media != null && !runCatching { media.setTelecomActive(active) }.getOrDefault(false)) {
+            current.callId?.let { callId ->
+                events.trySend(
+                    Event.MediaFailure(
+                        callId = callId,
+                        generation = mediaGeneration,
+                        cause = IllegalStateException("Telecom media state could not be applied."),
+                    ),
+                )
+            }
+            return false
+        }
+        return events.trySend(Event.TelecomMediaActive(active)).isSuccess
     }
 
     private suspend fun submit(event: Event) {
@@ -394,36 +410,16 @@ class VoiceCallOrchestrator(
     }
 
     private fun handleTelecomMediaActive(event: Event.TelecomMediaActive) {
+        if (!event.active) return
         val current = machine.snapshot
-        val media = mediaSession
-        telecomMediaActive = event.active
-
-        val succeeded = try {
-            media?.setTelecomActive(event.active) ?: !current.isTerminal
-        } catch (_: Exception) {
-            false
-        }
-
-        if (!succeeded) {
-            val callId = current.callId
-            if (callId != null && !current.isTerminal) {
-                failCurrentCall(callId, VoiceCallFailure.RESOURCE_UNAVAILABLE, sendEnd = true)
-            }
-            event.reply.complete(false)
-            return
-        }
-
-        if (event.active && media != null &&
-            current.callId != null &&
-            current.status == VoiceCallStatus.ACTIVE &&
-            !media.isActive
-        ) {
-            // Keep any in-flight first activation alive across a brief Telecom hold.
-            // Resume an established call asynchronously only if media is still inactive.
+        val media = mediaSession ?: return
+        val callId = current.callId ?: return
+        if (current.status == VoiceCallStatus.ACTIVE && !media.isActive) {
+            // The synchronous callback already reopened the gate. Resume RTP/audio outside
+            // Telecom's deadline and keep the signalling actor responsive.
             activationStartedFor = null
-            startMediaActivation(current.callId, media)
+            startMediaActivation(callId, media)
         }
-        event.reply.complete(true)
     }
 
     private suspend fun handleRemoteSignal(signal: VoiceCallSignal) {
@@ -526,7 +522,7 @@ class VoiceCallOrchestrator(
         check(mediaSession == null) { "A voice media session is already active." }
         mediaGeneration += 1L
         val generation = mediaGeneration
-        mediaSession = mediaFactory.create(
+        val created = mediaFactory.create(
             endpoints = endpoints,
             scope = scope,
             onLocalIceCandidate = { mid, lineIndex, candidate ->
@@ -538,6 +534,11 @@ class VoiceCallOrchestrator(
                 }
             },
         )
+        if (!created.setTelecomActive(telecomMediaActive)) {
+            created.close()
+            throw IOException("The media session rejected the current Android Telecom state.")
+        }
+        mediaSession = created
     }
 
     private fun startMediaActivation(callId: UUID, media: VoiceCallMediaSession) {
