@@ -83,6 +83,7 @@ internal class BatchFrameReader(
     private val input: InputStream,
     scope: CoroutineScope,
     private val expectedSessionId: UUID,
+    private val expectedProtocolVersion: Int = TransferFrameCodec.BATCH_PROTOCOL_VERSION,
 ) {
     val frames = Channel<TransferFrame>(INBOUND_FRAME_CAPACITY)
     private val readerJob: Job = scope.launch(Dispatchers.IO) {
@@ -203,14 +204,29 @@ internal fun decodeFailure(frame: TransferFrame, expected: BatchItemReference): 
     return failure
 }
 
+internal class VersionedBatchOutputStream(
+    output: OutputStream,
+    bufferBytes: Int,
+    val protocolVersion: Int,
+) : BufferedOutputStream(output, bufferBytes) {
+    init {
+        require(
+            protocolVersion == TransferFrameCodec.BATCH_PROTOCOL_VERSION ||
+                protocolVersion == TransferFrameCodec.CHAT_ATTACHMENT_PROTOCOL_VERSION,
+        )
+    }
+}
+
 internal fun writeFrame(
     output: OutputStream,
     sessionId: UUID,
     type: TransferFrameType,
     payload: ByteArray,
 ) {
+    val protocolVersion = (output as? VersionedBatchOutputStream)?.protocolVersion
+        ?: TransferFrameCodec.BATCH_PROTOCOL_VERSION
     TransferFrameCodec.write(
-        TransferFrame(TransferFrameCodec.BATCH_PROTOCOL_VERSION, type, sessionId, payload),
+        TransferFrame(protocolVersion, type, sessionId, payload),
         output,
     )
     output.flush()

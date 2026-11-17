@@ -102,6 +102,7 @@ class TransferFrame(
 object TransferFrameCodec {
     const val CURRENT_PROTOCOL_VERSION = 1
     const val BATCH_PROTOCOL_VERSION = 3
+    const val CHAT_ATTACHMENT_PROTOCOL_VERSION = 4
     const val HEADER_BYTES = 26
     const val MAX_CONTROL_PAYLOAD_BYTES = 16 * 1024
     const val MAX_DATA_CHUNK_BYTES = 64 * 1024
