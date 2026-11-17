@@ -23,6 +23,8 @@ import com.peyvand.core.domain.connection.AuthenticatedPeerChannelPurpose
 import com.peyvand.core.domain.chat.PeerIdentityKeyProvider
 import com.peyvand.core.domain.chat.TrustedPeerRepository
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
+import com.peyvand.core.domain.connection.VoiceCallP2pEndpointProvider
+import com.peyvand.core.domain.connection.VoiceCallP2pEndpoints
 import com.peyvand.core.domain.connection.SecureSessionSnapshot
 import kotlinx.coroutines.flow.StateFlow
 import com.peyvand.core.domain.discovery.DeviceDiscoveryFailure
@@ -51,7 +53,7 @@ class WifiDirectDeviceDiscoveryRepository(
     context: Context,
     private val peerIdentityKeyProvider: PeerIdentityKeyProvider,
     private val trustedPeerRepository: TrustedPeerRepository,
-) : DeviceDiscoveryRepository, PeerConnectivityRepository {
+) : DeviceDiscoveryRepository, PeerConnectivityRepository, VoiceCallP2pEndpointProvider {
 
     private val localDeviceDisplayName: String
         get() {
@@ -139,6 +141,9 @@ class WifiDirectDeviceDiscoveryRepository(
 
     override val voiceCallCapabilityVerified: StateFlow<Boolean>
         get() = secureSessionController.value.voiceCallCapabilityVerified
+
+    override fun currentVoiceCallP2pEndpoints(): VoiceCallP2pEndpoints? =
+        secureSessionController.value.currentVoiceCallP2pEndpoints()
 
     override suspend fun verifyVoiceCallCapability(): Boolean =
         secureSessionController.value.verifyVoiceCallCapability()
