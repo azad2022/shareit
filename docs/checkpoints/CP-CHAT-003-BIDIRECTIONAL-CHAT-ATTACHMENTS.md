@@ -4,11 +4,11 @@
 - **Status:** IN_PROGRESS
 - **Opened:** 2026-11-17
 - **Product behavior:** Owner-approved 2026-11-17
-- **Implementation authorization:** Not granted
-- **Design branch:** feature/cp-chat-002-chat-experience
-- **Design baseline branch head:** b721b1ff8b4188e4fd729b0a4751c9997f6eac3d
-- **Source baseline candidate:** 8e25b56951ef981dcf85ade834edd94881b655a1
-- **Prerequisite:** CP-CHAT-002 remains IN_PROGRESS. Exact-head CI run 43623779996 was cancelled; physical two-device chat validation is not recorded.
+- **Implementation authorization:** Explicitly granted by the product owner on 2026-11-17
+- **Implementation branch:** feature/cp-chat-003-bidirectional-attachments
+- **Implementation baseline branch head:** 813016d422cd33c54433e897b72fa79cb976690b
+- **CP-CHAT-002 source baseline:** 8e25b56951ef981dcf85ade834edd94881b655a1 (the later 813016d... head contains documentation-only commits on top)
+- **Prerequisite evidence:** CP-CHAT-002 remains IN_PROGRESS pending a fully recorded physical-device acceptance matrix. Source SHA 8e25b569... is covered by successful three-job CI runs [44027746525](https://github.com/azad2022/shareit/actions/runs/44027746525) and [44028513484](https://github.com/azad2022/shareit/actions/runs/44028513484) on documentation head 813016d...; each passed build/unit/lint plus API 26 and API 36 instrumentation. The older run 43623779996 was cancelled and is superseded by those later successful runs. The owner reports text and emoji exchange working, but handset model/API, exact installed APK SHA and repeat count have not yet been recorded.
 
 ## Objective and approved behavior
 
@@ -60,4 +60,29 @@ The source baseline candidate is 8e25b56951ef981dcf85ade834edd94881b655a1. CI ru
 
 ## Governance
 
-Design only. No Kotlin, Compose, Room migration, transfer protocol, Gradle or runtime files are changed by this checkpoint. Implementation remains unauthorized. Status: IN_PROGRESS.
+Implementation is authorized on feature/cp-chat-003-bidirectional-attachments. Keep CP-CHAT-002 acceptance status IN_PROGRESS until its physical two-device matrix is recorded. Do not merge or modify main, CP-004, or PR #3 as part of this work. CP-CHAT-003 remains IN_PROGRESS until automated, storage, security, accessibility and physical-device acceptance evidence is complete.
+
+## Implementation audit and classroom usability constraints (2026-11-17)
+
+The inspected source at baseline 813016d confirms:
+
+- ChatViewModel owns the CHAT logical-channel coordinator only. It does not own a FILE_TRANSFER lease for the conversation lifecycle.
+- PeyvandApp navigates from the conversation to a separate attachment-selection route and then to a directional transfer route.
+- SingleFileTransferCoordinator.prepareSession(isSender, ...) claims FILE_TRANSFER for a fixed local direction; send/receive completion closes the channel. It is not a bidirectional session service.
+- The current batch receiver asks for offer consent and then item selection. Both prompts conflict with the newly accepted session-scoped receive grant.
+- AuthenticatedPeerChannelMultiplexer already owns the single TLS reader and serialized socket writer and permits one lease per logical purpose. The new file exchange must preserve this ownership and add one FILE_TRANSFER frame dispatcher; no second socket or competing channel reader is permitted.
+- Existing batch protocol frames carry a batch identifier and are a better correlation starting point than the v1 single-file protocol, whose ACCEPT/REJECT/CANCEL control frames are empty and cannot independently correlate concurrent operations. A reviewed protocol/version decision and negative tests are required before wiring simultaneous sessions.
+- The existing batch manifest minimum is two items. One-item attachments therefore need an explicit protocol decision; do not silently weaken a versioned manifest constraint or route a single item through an uncorrelated concurrent v1 flow.
+
+The product owner also identified future school/classroom use. CP-CHAT-003 remains strictly one-to-one; it does not implement classes, groups, channels, teacher controls or multi-recipient delivery. Its UX must nevertheless establish these foundations:
+
+- one obvious attachment action and plain-language labels; no sender/receiver mode selection;
+- native pickers, no custom gallery or file browser;
+- large, clearly labelled touch targets; TalkBack semantics; large-font and RTL/LTR support;
+- always-visible peer identity and connection state, with an easy, immediate disconnect action;
+- no unsolicited reception outside an explicitly accepted authenticated session;
+- no automatic file opening, execution or APK installation;
+- concise, actionable error messages rather than protocol jargon;
+- no accounts, public Internet, cloud relay or contact-book access for local chat/file exchange.
+
+A future classroom mode needs its own threat model and ADR for teacher-led pairing, class membership, temporary authorization, student privacy, abuse controls and session teardown. It must not be improvised by extending this one-to-one grant.
