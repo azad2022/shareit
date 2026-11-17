@@ -8,7 +8,10 @@
 - **Implementation branch:** `feature/cp-chat-004-offline-audio-calls`
 - **Latest code implementation SHA:** `5853dff350fb7c8d60f2f86e5dca8a4bf9e15e8b`
 - **Latest completed CI before this correction:** Run #566 (`44065683391`), head `08cead9d9f3652f888ab4c654e9e0afff4c41877`; build/unit/lint failed for two independent reasons: the calling unit test fake incorrectly coupled Telecom-state application to media-path success, and app Lint reported `MissingPermission` at `NotificationManagerCompat.notify`. The API 26 and API 36 storage/mTLS instrumentation jobs passed; they did not test voice calling. The only APK artifacts were Room instrumentation APKs, not the app.
-- **Correction commit:** `5853dff350fb7c8d60f2f86e5dca8a4bf9e15e8b` separates the fake Telecom gate from P2P media verification, strengthens cleanup assertion after media-path failure, and explicitly handles notification-permission revocation between check and notify. Exact-head CI for the new source is pending; no application debug APK is verified yet.
+- **Correction commit:** `5853dff350fb7c8d60f2f86e5dca8a4bf9e15e8b` separates the fake Telecom gate from P2P media verification, strengthens cleanup assertion after media-path failure, and explicitly handles notification-permission revocation between check and notify.
+- **Successful exact-head validation:** Run #567 (`44088466989`) passed all 3 jobs on validation head `7e922e03aa578264444187497dd3ec331d329675`: build/unit tests/lint/debug APK, plus Android storage publication and mTLS instrumentation on API 26 and API 36.
+- **Debug APK artifact:** `peyvand-debug-apk`, artifact ID `14329833541`, produced from the exact validation head above. GitHub artifact retention expires 2026-11-24 13:05:32 UTC.
+- **Extracted APK SHA-256:** `0c515f9980bc1e5adadb180265d400b99103a5ed240751ad45b4d03e97e02295`. This matches the checksum sidecar uploaded by the successful workflow after extracting the application APK from its artifact ZIP.
 - **Last fully green CI for the older baseline:** Run #533 (`44045018880`), exact head `091b539f4acd1c8132c684e2077591d224853b1a`. Its APK artifact is not a build of the current implementation SHA.
 - **Video:** Deferred to a separate milestone; no camera/video implementation is included.
 
@@ -64,7 +67,7 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 - No Android device tests have validated earpiece, speaker, wired and Bluetooth routing; audio focus; competing cellular calls; screen-off; notification interaction; process recreation; permission revocation; or OEM-specific foreground-service behaviour.
 - No concurrent voice-call plus large-file-transfer stress test has been run.
 - No measured latency, jitter, packet loss, CPU, RAM, battery or thermal results exist.
-- No exact-head APK artifact has been verified for SHA `226b6ef574aa2af92ff24a5f354ed3a886746482`. The old #533 APK is not a valid substitute.
+- A debug APK is now available for the exact validated source head in Run #567 (SHA `7e922e03aa578264444187497dd3ec331d329675`); its extracted SHA-256 is recorded above. This build artifact is a debug/test build, not a release build, and does not constitute physical-call acceptance.
 
 ## Sub-checkpoints
 
@@ -83,7 +86,9 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 - Run #533 (`44045018880`) passed build/unit/lint and Android storage/mTLS instrumentation on API 26 and API 36 for exact head `091b539f4acd1c8132c684e2077591d224853b1a`.
 - Run #556 (`44059671482`) failed on an earlier ancestor of the current source line. Its logs identified duplicate availability methods and related Kotlin compile errors plus a call-control queue test that used a malformed 4-byte INVITE payload. The duplicate methods and smart-cast issue were removed, the WebRTC call-site was brought into line with the media API, and the regression test now uses the protocol's required 16-byte call UUID payload.
 - Run #564 (`44061917498`) targeted exact source head `64bc3f8efa38c39e1af540658824ba2e87762178`. Its app Kotlin compilation failed because of a missing coroutine import, a missing notification vector resource (and consequent notification-builder resolution errors), a local function referenced before its declaration, and test helper/import errors. API 26 and API 36 storage/mTLS instrumentation jobs both passed; this does not validate voice-call media.
-- Commit `76777abaad0547f501f6b87480e3a8814a713e4d` applies the targeted compile fixes and triggers a new workflow. The new exact-head result and APK artifact are not yet available at checkpoint publication.
+- Commit `76777abaad0547f501f6b87480e3a8814a713e4d` applies the initial compile fixes; later Run #566 surfaced the notification Lint and test-double issues described above.
+- Commit `5853dff350fb7c8d60f2f86e5dca8a4bf9e15e8b` fixes those Run #566 findings.
+- Run #567 (`44088466989`) passed all 3 jobs for exact validation head `7e922e03aa578264444187497dd3ec331d329675`. The `peyvand-debug-apk` artifact (ID `14329833541`) was uploaded successfully. Extracted `app-debug.apk` SHA-256: `0c515f9980bc1e5adadb180265d400b99103a5ed240751ad45b4d03e97e02295`.
 - Cancelled superseded runs are not reported as test failures.
 
 ## Acceptance matrix
@@ -103,6 +108,6 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 
 ## Current assessment
 
-The current branch contains the signalling host, orchestrator, WebRTC media foundation, P2P interface admission, chat call UI, microphone permission flow and Core-Telecom / foreground-service integration. Run #566 exposed a test-double semantic error and a notification permission Lint error. Both are corrected in code commit `5853dff350fb7c8d60f2f86e5dca8a4bf9e15e8b`; the new exact-head CI and debug APK are pending. These are implementation facts, not yet verified phone-to-phone behaviour. Physical route, audio and lifecycle tests remain outstanding.
+The current branch contains the signalling host, orchestrator, WebRTC media foundation, P2P interface admission, chat call UI, microphone permission flow and Core-Telecom / foreground-service integration. Run #567 passed build/unit/lint and both API 26/API 36 storage/mTLS instrumentation jobs on validation head `7e922e03aa578264444187497dd3ec331d329675`, and the matching debug APK was published and checksum-verified. These CI results do not exercise real-time call media on two handsets. Physical route, bidirectional audio, Telecom routing/lifecycle and concurrent file-transfer tests remain outstanding.
 
 Checkpoint status remains **IN_PROGRESS**. No successful phone-to-phone voice call is claimed.
