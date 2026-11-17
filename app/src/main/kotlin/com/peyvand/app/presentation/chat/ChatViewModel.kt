@@ -329,9 +329,17 @@ class ChatViewModel(
     }
 
     suspend fun startVoiceCall(): UUID {
-        voiceCallTelecomServiceClient.startForCall()
-        voiceCallTelecomServiceClient.awaitRegistered()
-        return voiceCallOrchestrator.startOutgoingCall()
+        try {
+            voiceCallTelecomServiceClient.startForCall()
+            voiceCallTelecomServiceClient.awaitRegistered()
+            return voiceCallOrchestrator.startOutgoingCall()
+        } catch (cancellation: CancellationException) {
+            voiceCallTelecomServiceClient.requestStopIfIdle()
+            throw cancellation
+        } catch (exception: Exception) {
+            voiceCallTelecomServiceClient.requestStopIfIdle()
+            throw exception
+        }
     }
 
     suspend fun acceptIncomingVoiceCall(callId: UUID) =

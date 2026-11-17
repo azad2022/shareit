@@ -78,6 +78,7 @@ import java.util.UUID
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
@@ -143,6 +144,8 @@ fun ChatConversationScreen(
         scope.launch {
             try {
                 onStartVoiceCall()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
             } catch (_: Exception) {
                 Toast.makeText(
                     context,

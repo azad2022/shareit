@@ -68,11 +68,28 @@ class PeyvandVoiceCallService : Service() {
                     }
                 }
             }
+            ACTION_STOP_IF_IDLE -> serviceScope.launch { stopIfIdle(startId) }
             ACTION_START,
             null,
             -> Unit
         }
         return START_NOT_STICKY
+    }
+
+    private fun stopIfIdle(startId: Int) {
+        val app = application as PeyvandApplication
+        val status = app.voiceCallOrchestrator.snapshot.value.status
+        val terminalOrIdle = status in setOf(
+            VoiceCallStatus.IDLE,
+            VoiceCallStatus.ENDED,
+            VoiceCallStatus.FAILED,
+        )
+        if (!terminalOrIdle || telecomController?.hasManagedCall == true) return
+
+        telecomController?.close()
+        telecomController = null
+        stopForeground(Service.STOP_FOREGROUND_REMOVE)
+        stopSelfResult(startId)
     }
 
     private fun startForegroundCallNotification(notification: Notification) {
@@ -119,7 +136,7 @@ class PeyvandVoiceCallService : Service() {
         telecomController?.close()
         telecomController = null
         (application as? PeyvandApplication)?.voiceCallTelecomServiceClient
-            ?.publishRegistered(false)
+            ?.onServiceStopped()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -127,5 +144,6 @@ class PeyvandVoiceCallService : Service() {
     companion object {
         const val ACTION_START = "com.peyvand.app.action.START_VOICE_CALL_SERVICE"
         const val ACTION_ANSWER = "com.peyvand.app.action.ANSWER_VOICE_CALL"
+        const val ACTION_STOP_IF_IDLE = "com.peyvand.app.action.STOP_IDLE_VOICE_CALL_SERVICE"
     }
 }

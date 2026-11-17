@@ -57,7 +57,10 @@ class PeyvandApplication : Application() {
                         ) {
                             runCatching { voiceCallOrchestrator.rejectIncomingCall(callId) }
                         }
+                        voiceCallTelecomServiceClient.requestStopIfIdle()
                     }
+                } else if (call.isTerminal || call.status == VoiceCallStatus.IDLE) {
+                    voiceCallTelecomServiceClient.requestStopIfIdle()
                 }
             }
         }

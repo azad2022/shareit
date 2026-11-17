@@ -77,6 +77,9 @@ class AndroidVoiceCallTelecomController(
         }
     }
 
+    val hasManagedCall: Boolean
+        get() = activeEntry.value != null
+
     fun start() {
         check(!closed.get()) { "Voice call Telecom controller is closed." }
         check(monitorJob == null) { "Voice call Telecom controller already started." }
