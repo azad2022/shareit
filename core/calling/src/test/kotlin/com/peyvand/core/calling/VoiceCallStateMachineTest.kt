@@ -54,6 +54,42 @@ class VoiceCallStateMachineTest {
     }
 
     @Test
+    fun incomingCallRequiresUserAcceptanceThenSeparateMicrophoneGrant() {
+        val machine = VoiceCallStateMachine()
+        val id = UUID.randomUUID()
+        assertTrue(machine.receiveInvite(id))
+        machine.beginAcceptIncoming(id)
+        assertEquals(VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION, machine.snapshot.status)
+        assertThrows(IllegalStateException::class.java) { machine.mediaConnected(id) }
+        machine.incomingMicrophonePermissionGranted(id)
+        assertEquals(VoiceCallStatus.NEGOTIATING, machine.snapshot.status)
+        machine.mediaConnected(id)
+        assertEquals(VoiceCallStatus.ACTIVE, machine.snapshot.status)
+    }
+
+    @Test
+    fun incomingMicrophonePermissionDenialFailsBeforeMediaNegotiation() {
+        val machine = VoiceCallStateMachine()
+        val id = UUID.randomUUID()
+        assertTrue(machine.receiveInvite(id))
+        machine.beginAcceptIncoming(id)
+        machine.incomingMicrophonePermissionDenied(id)
+        assertEquals(VoiceCallStatus.FAILED, machine.snapshot.status)
+        assertEquals(VoiceCallFailure.MICROPHONE_PERMISSION_DENIED, machine.snapshot.failure)
+    }
+
+    @Test
+    fun remoteCancelIsNotAcceptedAfterNegotiationBegins() {
+        val machine = VoiceCallStateMachine()
+        val id = UUID.randomUUID()
+        assertTrue(machine.receiveInvite(id))
+        machine.beginAcceptIncoming(id)
+        machine.incomingMicrophonePermissionGranted(id)
+        assertThrows(IllegalStateException::class.java) { machine.cancelRemotely(id) }
+        assertEquals(VoiceCallStatus.NEGOTIATING, machine.snapshot.status)
+    }
+
+    @Test
     fun secondCallIsRejectedWhileAnotherCallIsRingingOrActive() {
         val machine = VoiceCallStateMachine()
         val first = UUID.randomUUID()

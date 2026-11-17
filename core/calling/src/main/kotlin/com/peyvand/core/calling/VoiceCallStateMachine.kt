@@ -54,15 +54,41 @@ class VoiceCallStateMachine(
         true
     }
 
-    /** Called only after explicit incoming-call acceptance and RECORD_AUDIO grant. */
-    fun acceptIncoming(callId: UUID, microphonePermissionGranted: Boolean) {
+    /** User acceptance is recorded before the runtime permission request is launched. */
+    fun beginAcceptIncoming(callId: UUID) {
         synchronized(lock) {
             requireCurrentCall(callId, VoiceCallStatus.INCOMING_RINGING)
-            check(microphonePermissionGranted) {
-                "The microphone permission must be granted before accepting a voice call."
-            }
+            check(current.direction == VoiceCallDirection.INCOMING)
+            current = current.copy(status = VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION)
+        }
+    }
+
+    fun incomingMicrophonePermissionGranted(callId: UUID) {
+        synchronized(lock) {
+            requireCurrentCall(callId, VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION)
+            check(current.direction == VoiceCallDirection.INCOMING)
             current = current.copy(status = VoiceCallStatus.NEGOTIATING)
         }
+    }
+
+    fun incomingMicrophonePermissionDenied(callId: UUID) {
+        synchronized(lock) {
+            requireCurrentCall(callId, VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION)
+            check(current.direction == VoiceCallDirection.INCOMING)
+            current = current.copy(
+                status = VoiceCallStatus.FAILED,
+                failure = VoiceCallFailure.MICROPHONE_PERMISSION_DENIED,
+            )
+        }
+    }
+
+    /** Convenience transition for callers that already hold the permission grant. */
+    fun acceptIncoming(callId: UUID, microphonePermissionGranted: Boolean) {
+        check(microphonePermissionGranted) {
+            "The microphone permission must be granted after explicit call acceptance."
+        }
+        beginAcceptIncoming(callId)
+        incomingMicrophonePermissionGranted(callId)
     }
 
     /** Remote acceptance requires a separate local permission request before media setup. */
@@ -101,6 +127,7 @@ class VoiceCallStateMachine(
     fun rejectIncoming(callId: UUID) {
         synchronized(lock) {
             requireCurrentCall(callId, VoiceCallStatus.INCOMING_RINGING)
+            check(current.direction == VoiceCallDirection.INCOMING)
             current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.REJECTED)
         }
     }
@@ -121,12 +148,10 @@ class VoiceCallStateMachine(
         synchronized(lock) {
             requireCurrentCall(
                 callId,
-                VoiceCallStatus.OUTGOING_RINGING,
                 VoiceCallStatus.INCOMING_RINGING,
                 VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
-                VoiceCallStatus.NEGOTIATING,
-                VoiceCallStatus.ACTIVE,
             )
+            check(current.direction == VoiceCallDirection.INCOMING)
             current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.CANCELLED)
         }
     }
@@ -138,6 +163,7 @@ class VoiceCallStateMachine(
                 VoiceCallStatus.OUTGOING_RINGING,
                 VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
             )
+            check(current.direction == VoiceCallDirection.OUTGOING)
             current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.CANCELLED)
         }
     }

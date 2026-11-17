@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import com.peyvand.core.calling.P2pIceCandidatePolicy
+import com.peyvand.core.calling.VoiceCallMediaSession
 import com.peyvand.core.calling.VoiceCallSdpPolicy
 import com.peyvand.core.domain.connection.P2pIpv4InterfaceAddress
 import com.peyvand.core.domain.connection.P2pTcpEndpointPolicy
@@ -236,7 +237,7 @@ class WebRtcAudioCallSession internal constructor(
     private val onLocalIceCandidate: suspend (sdpMid: String?, sdpMLineIndex: Int, candidate: String) -> Unit,
     private val onFailure: (WebRtcVoiceMediaFailure) -> Unit,
     private val onClosed: (WebRtcAudioCallSession) -> Unit,
-) : Closeable {
+) : VoiceCallMediaSession {
     private val closed = AtomicBoolean(false)
     private val signallingMutex = Mutex()
     private val lock = Any()
@@ -249,7 +250,7 @@ class WebRtcAudioCallSession internal constructor(
     private var muted = false
     private var activated = false
 
-    suspend fun createOffer(): String = signallingMutex.withLock {
+    override suspend fun createOffer(): String = signallingMutex.withLock {
         ensureMicrophonePermission()
         val connection = ensurePeerConnection()
         val offer = createDescription(connection, isOffer = true)
@@ -258,7 +259,7 @@ class WebRtcAudioCallSession internal constructor(
         offer.description
     }
 
-    suspend fun acceptOfferAndCreateAnswer(remoteOfferSdp: String): String = signallingMutex.withLock {
+    override suspend fun acceptOfferAndCreateAnswer(remoteOfferSdp: String): String = signallingMutex.withLock {
         ensureMicrophonePermission()
         val connection = ensurePeerConnection()
         requireValidSdp(remoteOfferSdp)
@@ -270,7 +271,7 @@ class WebRtcAudioCallSession internal constructor(
         answer.description
     }
 
-    suspend fun applyRemoteAnswer(remoteAnswerSdp: String) = signallingMutex.withLock {
+    override suspend fun applyRemoteAnswer(remoteAnswerSdp: String) = signallingMutex.withLock {
         ensureNotClosed()
         requireValidSdp(remoteAnswerSdp)
         val connection = synchronized(lock) { peerConnection }
@@ -279,7 +280,7 @@ class WebRtcAudioCallSession internal constructor(
         flushRemoteCandidates(connection)
     }
 
-    suspend fun addRemoteIceCandidate(
+    override suspend fun addRemoteIceCandidate(
         sdpMid: String?,
         sdpMLineIndex: Int,
         candidateSdp: String,
@@ -305,7 +306,7 @@ class WebRtcAudioCallSession internal constructor(
      * Starts recording/playout only after stats prove the selected host/UDP pair and
      * DTLS-SRTP are active on the exact P2P IP addresses.
      */
-    suspend fun activateAfterVerifiedP2pPath(
+    override suspend fun activateAfterVerifiedP2pPath(
         timeoutMillis: Long = MEDIA_PATH_TIMEOUT_MILLIS,
     ): Boolean {
         ensureNotClosed()
@@ -338,17 +339,17 @@ class WebRtcAudioCallSession internal constructor(
     }
 
     /** Mute disables the outgoing WebRTC AudioTrack. */
-    fun setMuted(value: Boolean) {
+    override fun setMuted(value: Boolean) {
         synchronized(lock) {
             muted = value
             localTrack?.setEnabled(activated && !value)
         }
     }
 
-    val isMuted: Boolean
+    override val isMuted: Boolean
         get() = synchronized(lock) { muted }
 
-    val isActive: Boolean
+    override val isActive: Boolean
         get() = synchronized(lock) { activated && !closed.get() }
 
     private fun ensurePeerConnection(): PeerConnection {
