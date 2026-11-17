@@ -477,6 +477,100 @@ fun ChatConversationScreen(
             }
         }
     }
+
+    val activeCallId = state.voiceCall.callId
+    when (state.voiceCall.status) {
+        VoiceCallStatus.INCOMING_RINGING -> if (activeCallId != null) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text(stringResource(R.string.voice_call_incoming_title)) },
+                text = { Text(stringResource(R.string.voice_call_incoming_body, peer?.displayName.orEmpty())) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch { onAcceptIncomingVoiceCall(activeCallId) }
+                    }) {
+                        Text(stringResource(R.string.voice_call_accept))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        scope.launch { onRejectIncomingVoiceCall(activeCallId) }
+                    }) {
+                        Text(stringResource(R.string.voice_call_decline))
+                    }
+                },
+            )
+        }
+
+        VoiceCallStatus.OUTGOING_RINGING -> if (activeCallId != null) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text(stringResource(R.string.voice_call_outgoing_title)) },
+                text = { Text(stringResource(R.string.voice_call_outgoing_body, peer?.displayName.orEmpty())) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch { onCancelOutgoingVoiceCall(activeCallId) }
+                    }) {
+                        Text(stringResource(R.string.voice_call_cancel))
+                    }
+                },
+            )
+        }
+
+        VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text(stringResource(R.string.voice_call_permission_title)) },
+            text = { Text(stringResource(R.string.voice_call_permission_body)) },
+            confirmButton = {},
+        )
+
+        VoiceCallStatus.NEGOTIATING -> if (activeCallId != null) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text(stringResource(R.string.voice_call_connecting_title)) },
+                text = { Text(stringResource(R.string.voice_call_connecting_body)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch { onHangUpVoiceCall(activeCallId) }
+                    }) {
+                        Text(stringResource(R.string.voice_call_cancel))
+                    }
+                },
+            )
+        }
+
+        VoiceCallStatus.ACTIVE -> if (activeCallId != null) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text(stringResource(R.string.voice_call_active_title)) },
+                text = { Text(stringResource(R.string.voice_call_active_body, peer?.displayName.orEmpty())) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onSetVoiceCallMuted(!state.isVoiceCallMuted)
+                    }) {
+                        Text(
+                            stringResource(
+                                if (state.isVoiceCallMuted) R.string.voice_call_unmute
+                                else R.string.voice_call_mute,
+                            ),
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        scope.launch { onHangUpVoiceCall(activeCallId) }
+                    }) {
+                        Text(stringResource(R.string.voice_call_hang_up))
+                    }
+                },
+            )
+        }
+
+        VoiceCallStatus.IDLE,
+        VoiceCallStatus.ENDED,
+        VoiceCallStatus.FAILED,
+        -> Unit
+    }
 }
 
 @Composable
@@ -577,99 +671,8 @@ private fun ChatMessageBubble(message: ChatMessage) {
         }
     }
 
-    val activeCallId = state.voiceCall.callId
-    when (state.voiceCall.status) {
-        VoiceCallStatus.INCOMING_RINGING -> if (activeCallId != null) {
-            AlertDialog(
-                onDismissRequest = {},
-                title = { Text(stringResource(R.string.voice_call_incoming_title)) },
-                text = { Text(stringResource(R.string.voice_call_incoming_body, peer?.displayName.orEmpty())) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        scope.launch { onAcceptIncomingVoiceCall(activeCallId) }
-                    }) {
-                        Text(stringResource(R.string.voice_call_accept))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        scope.launch { onRejectIncomingVoiceCall(activeCallId) }
-                    }) {
-                        Text(stringResource(R.string.voice_call_decline))
-                    }
-                },
-            )
-        }
 
-        VoiceCallStatus.OUTGOING_RINGING -> if (activeCallId != null) {
-            AlertDialog(
-                onDismissRequest = {},
-                title = { Text(stringResource(R.string.voice_call_outgoing_title)) },
-                text = { Text(stringResource(R.string.voice_call_outgoing_body, peer?.displayName.orEmpty())) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        scope.launch { onCancelOutgoingVoiceCall(activeCallId) }
-                    }) {
-                        Text(stringResource(R.string.voice_call_cancel))
-                    }
-                },
-            )
-        }
 
-        VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION -> AlertDialog(
-            onDismissRequest = {},
-            title = { Text(stringResource(R.string.voice_call_permission_title)) },
-            text = { Text(stringResource(R.string.voice_call_permission_body)) },
-            confirmButton = {},
-        )
-
-        VoiceCallStatus.NEGOTIATING -> if (activeCallId != null) {
-            AlertDialog(
-                onDismissRequest = {},
-                title = { Text(stringResource(R.string.voice_call_connecting_title)) },
-                text = { Text(stringResource(R.string.voice_call_connecting_body)) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        scope.launch { onHangUpVoiceCall(activeCallId) }
-                    }) {
-                        Text(stringResource(R.string.voice_call_cancel))
-                    }
-                },
-            )
-        }
-
-        VoiceCallStatus.ACTIVE -> if (activeCallId != null) {
-            AlertDialog(
-                onDismissRequest = {},
-                title = { Text(stringResource(R.string.voice_call_active_title)) },
-                text = { Text(stringResource(R.string.voice_call_active_body, peer?.displayName.orEmpty())) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        onSetVoiceCallMuted(!state.isVoiceCallMuted)
-                    }) {
-                        Text(
-                            stringResource(
-                                if (state.isVoiceCallMuted) R.string.voice_call_unmute
-                                else R.string.voice_call_mute,
-                            ),
-                        )
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        scope.launch { onHangUpVoiceCall(activeCallId) }
-                    }) {
-                        Text(stringResource(R.string.voice_call_hang_up))
-                    }
-                },
-            )
-        }
-
-        VoiceCallStatus.IDLE,
-        VoiceCallStatus.ENDED,
-        VoiceCallStatus.FAILED,
-        -> Unit
-    }
 }
 
 @Composable
