@@ -119,6 +119,42 @@ class BatchTransferFrameRouterTest {
         }
     }
 
+    @Test
+    fun thirdActiveBatchOfferFailsClosed() = runBlocking {
+        val sessionId = UUID.randomUUID()
+        val peerInput = PipedInputStream(64 * 1024)
+        val peerOutput = PipedOutputStream(peerInput)
+        val channel = TestChannel(sessionId, peerInput, ByteArrayOutputStream())
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val failure = CompletableDeferred<Throwable>()
+        val router = BatchTransferFrameRouter(
+            channel = channel,
+            scope = scope,
+            onIncomingOffer = { _, _ -> },
+            onFailure = { failure.complete(it) },
+        )
+        try {
+            router.start()
+            router.registerOutgoing(UUID.randomUUID())
+            router.registerOutgoing(UUID.randomUUID())
+            writePeerFrame(
+                peerOutput,
+                sessionId,
+                TransferFrameType.BATCH_OFFER,
+                UUID.randomUUID(),
+                16,
+            )
+            peerOutput.flush()
+            val actual = withTimeout(TEST_TIMEOUT_MILLIS) { failure.await() }
+            assertTrue(actual is java.io.IOException)
+            assertTrue(channel.isClosed.get())
+        } finally {
+            router.close()
+            scope.cancel()
+            runCatching { peerOutput.close() }
+        }
+    }
+
     private fun writePeerFrame(
         output: PipedOutputStream,
         sessionId: UUID,
