@@ -58,7 +58,7 @@ Replace the three-button Send/Receive/Files home with a polished, original PEYVA
 - The old `MainHomeScreen` is no longer the app's main route; `PeyvandApp` opens the new chat-first Compose home.
 - Attachments launch the existing transfer UI/channel from the conversation; attachment cards are not yet persisted/rendered in the chat timeline.
 - Previous code snapshot `3cbc8c2f5abb920f23a0bc8314eca2f1eff78ec9` passed exact-head CI run [43599087732](https://github.com/azad2022/shareit/actions/runs/43599087732) and produced a Debug APK. That run predates the security fixes and added coordinator tests.
-- Exact-head CI for updated implementation `8e25b56951ef981dcf85ade834edd94881b655a1` is run [43623779996](https://github.com/azad2022/shareit/actions/runs/43623779996); it was still pending at the last status read. Do not treat the updated code or its new tests as validated until that run completes.
+- Exact-head CI for updated implementation `8e25b56951ef981dcf85ade834edd94881b655a1` is run [43623779996](https://github.com/azad2022/shareit/actions/runs/43623779996), which concluded **CANCELLED**. Do not treat this source snapshot or its new tests as validated; the preceding successful run is not validation of this revision.
 - No physical two-device chat validation has been completed. The checkpoint remains `IN_PROGRESS`; emulator CI is not hardware interoperability evidence.
 
 ## Evidence and remaining risk
