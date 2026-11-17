@@ -1,9 +1,9 @@
 # PEYVAND (پیوند) — Product Identity, Localization, and Motion Specification
 
-- **Status:** Confirmed product direction; CP-CHAT-001 local-persistence implementation authorized on 2026-11-13; other implementation scopes remain subject to explicit approval.
+- **Status:** Confirmed PEYVAND identity/localization direction; CP-CHAT-001 local persistence authorized on 2026-11-13; CP-CHAT-003 bidirectional attachments and CP-CHAT-004 audio-only offline one-to-one voice calling separately authorized on 2026-11-17. Other scopes remain subject to explicit approval.
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit` — keep repository name unless separately approved.
-- **Last updated:** 2026-11-01.
+- **Last updated:** 2026-11-17.
 
 ## 1. Brand identity
 
@@ -148,4 +148,4 @@ No decorative infinite loops without a user purpose; no fake counters; no false 
 
 ## 8. Governance
 
-This document defines product identity, localization and motion requirements. The product owner has separately authorized CP-CHAT-001 local persistence; this does not authorize chat UI, networking, or unrelated implementation. Keep decisions and evidence in Git. Update the engineering skill when requirements change. Any implementation milestone must include scope, acceptance criteria, tests, device/API details, commit SHA, evidence, and honest status. A checkpoint is `PASSED` only with reproducible evidence.
+This document defines product identity, localization and motion requirements. CP-CHAT-001 local persistence was separately authorized; CP-CHAT-003 bidirectional in-chat attachments and CP-CHAT-004 audio-only offline one-to-one voice calling were also explicitly authorized on 2026-11-17 in their own checkpoints. CP-CHAT-004 does not authorize camera/video, voice notes, call recording, transcription, group calls, public Internet, servers, STUN/TURN, or relay. Keep implementation and decisions isolated by branch/checkpoint. Update the engineering skill when requirements change. Any implementation milestone must include scope, acceptance criteria, tests, device/API details, commit SHA, evidence, and honest status. A checkpoint is `PASSED` only with reproducible evidence.
