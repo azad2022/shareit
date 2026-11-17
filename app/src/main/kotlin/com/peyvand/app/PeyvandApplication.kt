@@ -1,6 +1,7 @@
 package com.peyvand.app
 
 import android.app.Application
+import com.peyvand.app.calling.AndroidVoiceCallTelecomController
 import com.peyvand.core.calling.VoiceCallControlSessionHost
 import com.peyvand.core.calling.VoiceCallMediaSessionFactory
 import com.peyvand.core.calling.VoiceCallOrchestrator
@@ -36,9 +37,10 @@ class PeyvandApplication : Application() {
         // Starts authenticated call-control listening. The WebRTC runtime remains lazy:
         // no PeerConnection or microphone capture exists until acceptance and permission.
         voiceCallOrchestrator
+        voiceCallTelecomController.start()
     }
 
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    internal val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pendingVoiceCallSignals = Channel<VoiceCallSignal>(capacity = 64)
 
     /** One ordered consumer receives signals from the active authenticated session. */
@@ -129,6 +131,17 @@ class PeyvandApplication : Application() {
             mediaFactory = voiceCallMediaSessionFactory,
             scope = applicationScope,
         ).also(VoiceCallOrchestrator::start)
+    }
+
+    val voiceCallTelecomController: AndroidVoiceCallTelecomController by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        AndroidVoiceCallTelecomController(
+            context = applicationContext,
+            scope = applicationScope,
+            secureSession = peerConnectionRepository.secureSession,
+            orchestrator = voiceCallOrchestrator,
+        )
     }
 
     val networkEnvironmentRepository: NetworkEnvironmentRepository by lazy(
