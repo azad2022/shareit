@@ -4,6 +4,7 @@ import com.peyvand.core.domain.connection.AuthenticatedPeerChannel
 import com.peyvand.core.transfer.protocol.TransferFrame
 import com.peyvand.core.transfer.protocol.TransferFrameCodec
 import com.peyvand.core.transfer.protocol.TransferFrameType
+import com.peyvand.core.transfer.protocol.TransferProtocolException
 import java.io.ByteArrayOutputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
@@ -111,6 +112,46 @@ class BatchTransferFrameRouterTest {
             runCatching { peerOutput.close() }
         }
     }
+
+@Test
+    fun replayedOfferIsRejectedAfterItsOriginalRouteCloses() = runBlocking {
+        val sessionId = UUID.randomUUID()
+        val peerInput = PipedInputStream(64 * 1024)
+        val peerOutput = PipedOutputStream(peerInput)
+        val channel = TestChannel(sessionId, peerInput, ByteArrayOutputStream())
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val failure = CompletableDeferred<Throwable>()
+        val handled = CompletableDeferred<Unit>()
+        val batchId = UUID.randomUUID()
+        val router = BatchTransferFrameRouter(
+            channel = channel,
+            scope = scope,
+            onIncomingOffer = { route, _ ->
+                route.close()
+                handled.complete(Unit)
+            },
+            onFailure = { failure.complete(it) },
+        )
+        try {
+            router.start()
+            writePeerFrame(peerOutput, sessionId, TransferFrameType.BATCH_OFFER, batchId, 16)
+            peerOutput.flush()
+            withTimeout(TEST_TIMEOUT_MILLIS) { handled.await() }
+
+            // The first route is no longer active. Reusing its ID must still fail.
+            writePeerFrame(peerOutput, sessionId, TransferFrameType.BATCH_OFFER, batchId, 16)
+            peerOutput.flush()
+            val actual = withTimeout(TEST_TIMEOUT_MILLIS) { failure.await() }
+
+            assertTrue(actual is TransferProtocolException)
+            assertTrue(channel.isClosed.get())
+        } finally {
+            router.close()
+            scope.cancel()
+            runCatching { peerOutput.close() }
+        }
+    }
+
 
     @Test
     fun frameForUnknownBatchFailsTheLogicalChannelClosed() = runBlocking {

@@ -36,7 +36,7 @@ Introduce **chat attachment protocol version 4** using the existing authenticate
 
 - Exactly one BatchTransferFrameRouter reads FILE_TRANSFER input.
 - It validates session ID, protocol version, batch frame type and the batch UUID before routing.
-- One bounded route exists per active batch. Unknown batch IDs, duplicate inbound offers, wrong-session frames, unsupported versions and malformed payloads fail closed.
+- One bounded route exists per active batch. The router retains every batch UUID used in either direction for the lifetime of the FILE_TRANSFER session. The registry is capped at 1,024 unique IDs and never evicts old IDs; once the cap is reached, new batches are rejected until a new authenticated session. Reuse or replay after a route closes, unknown batch IDs, wrong-session frames, unsupported versions and malformed payloads fail closed.
 - At most one outbound batch and one inbound batch may be active per session initially. Items within each batch are processed sequentially. Additional local selections are queued in the UI; a second inbound batch in the same direction is rejected as a protocol/resource violation.
 - Each route has a bounded 128 KiB pipe. At most two routes exist, bounding route buffering to 256 KiB, in addition to the existing bounded channel and protocol buffers.
 - All protocol writers use the existing channel output stream; the multiplexer must serialize complete encoded frames atomically. No concurrent raw stream readers or independent socket writers are allowed.
@@ -60,4 +60,4 @@ Introduce **chat attachment protocol version 4** using the existing authenticate
 
 ## Acceptance tests
 
-Require tests for v4 one-item and multi-item manifests; v3 minimum-two-item compatibility; simultaneous one-outbound/one-inbound batches; frame interleaving and correlation; one-reader ownership; complete-frame writer serialization; unknown/duplicate/replayed batch IDs; wrong session/version; malformed/out-of-order frames; route and buffer limits; auto-reception only with an active session grant; cancellation and failure isolation; low storage/quota; and digest-verified publication.
+Require tests for v4 one-item and multi-item manifests; v3 minimum-two-item compatibility; simultaneous one-outbound/one-inbound batches; frame interleaving and correlation; one-reader ownership; complete-frame writer serialization; unknown/duplicate/replayed batch IDs including replay after route closure; the 1,024-ID session quota; wrong session/version; malformed/out-of-order frames; route and buffer limits; auto-reception only with an active session grant; cancellation and failure isolation; low storage/quota; and digest-verified publication.

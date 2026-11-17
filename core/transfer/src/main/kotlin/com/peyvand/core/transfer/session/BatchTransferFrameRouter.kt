@@ -11,6 +11,7 @@ import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.LinkedHashSet
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +40,9 @@ internal class BatchTransferFrameRouter(
 
     private val lock = Any()
     private val routes = LinkedHashMap<UUID, RoutedBatchChannel>()
+    // Keep every ID for this session, including closed routes, so a completed or
+    // cancelled batch cannot be replayed as a new inbound offer.
+    private val seenBatchIds = LinkedHashSet<UUID>()
     private var readerJob: Job? = null
     private var closed = false
 
@@ -53,11 +57,15 @@ internal class BatchTransferFrameRouter(
     /** Registers a locally initiated batch before its BATCH_OFFER is written. */
     fun registerOutgoing(batchId: UUID): RoutedBatchChannel = synchronized(lock) {
         check(!closed) { "The batch frame router is closed" }
-        check(!routes.containsKey(batchId)) { "A route already exists for this batch" }
+        check(!seenBatchIds.contains(batchId)) { "A batch identifier was already used in this session" }
+        check(seenBatchIds.size < MAX_BATCH_IDS_PER_SESSION) {
+            "The session batch identifier limit has been reached"
+        }
         check(routes.values.none { it.direction == BatchRouteDirection.OUTGOING }) {
             "An outbound batch is already active"
         }
         check(routes.size < MAX_ACTIVE_BATCHES) { "The active batch limit has been reached" }
+        seenBatchIds.add(batchId)
         createRouteLocked(batchId, BatchRouteDirection.OUTGOING)
     }
 
@@ -89,8 +97,11 @@ internal class BatchTransferFrameRouter(
         if (frame.type == TransferFrameType.BATCH_OFFER) {
             val route = synchronized(lock) {
                 if (closed) throw IOException("The batch frame router is closed")
-                if (routes.containsKey(batchId)) {
-                    throw TransferProtocolException("A batch offer reused an active batch identifier")
+                if (seenBatchIds.contains(batchId)) {
+                    throw TransferProtocolException("A batch offer reused a session batch identifier")
+                }
+                if (seenBatchIds.size >= MAX_BATCH_IDS_PER_SESSION) {
+                    throw TransferProtocolException("The session batch identifier limit has been reached")
                 }
                 if (routes.values.any { it.direction == BatchRouteDirection.INCOMING }) {
                     throw TransferProtocolException("The peer exceeded the inbound batch limit")
@@ -98,6 +109,8 @@ internal class BatchTransferFrameRouter(
                 if (routes.size >= MAX_ACTIVE_BATCHES) {
                     throw TransferProtocolException("The peer exceeded the active batch limit")
                 }
+                // Do not evict IDs: eviction would make old offers replayable within this session.
+                seenBatchIds.add(batchId)
                 createRouteLocked(batchId, BatchRouteDirection.INCOMING)
             }
             // The offer itself is passed separately. The receiver protocol must not
@@ -183,6 +196,7 @@ internal class BatchTransferFrameRouter(
         const val LAST_BATCH_FRAME_CODE = 31
         const val BATCH_ID_BYTES = 16
         const val MAX_ACTIVE_BATCHES = 2
+        const val MAX_BATCH_IDS_PER_SESSION = 1_024
         const val ROUTE_BUFFER_BYTES = 128 * 1024
     }
 }
