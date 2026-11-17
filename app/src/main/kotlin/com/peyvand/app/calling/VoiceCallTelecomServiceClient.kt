@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Application-facing command gateway. CallsManager itself is hosted only by the
@@ -66,9 +67,9 @@ class VoiceCallTelecomServiceClient(context: Context) {
             microphoneForegroundTypeActive.value = false
             return false
         }
-        return withTimeout(timeoutMillis) {
+        return withTimeoutOrNull(timeoutMillis) {
             microphoneForegroundTypeActive.filterNotNull().first()
-        }
+        } ?: false
     }
 
     fun answerIncomingCall(callId: UUID) {
