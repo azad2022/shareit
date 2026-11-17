@@ -2,6 +2,7 @@ package com.peyvand.app.calling
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -32,6 +33,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,16 +43,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
 /**
- * Registers PEYVAND audio calls with Android Telecom. The remote peer and the media engine
- * remain governed by the authenticated, direct Wi-Fi Direct session.
+ * Service-owned bridge to Android Telecom. The controller must be constructed by
+ * PeyvandVoiceCallService, not by Application or an Activity. Media and signalling remain
+ * in their separate authenticated Wi-Fi Direct layers.
  */
 class AndroidVoiceCallTelecomController(
     context: Context,
     private val scope: CoroutineScope,
     private val secureSession: StateFlow<SecureSessionSnapshot>,
     private val orchestrator: VoiceCallOrchestrator,
+    private val onForegroundNotification: (Notification) -> Unit,
+    private val onCallSessionFinished: () -> Unit,
 ) : Closeable {
-    private val appContext = context.applicationContext
+    private val appContext = context
     private val callsManager = CallsManager(appContext)
     private val notificationManager = NotificationManagerCompat.from(appContext)
     private val mutableRegistered = MutableStateFlow(false)
@@ -63,7 +68,6 @@ class AndroidVoiceCallTelecomController(
     init {
         createNotificationChannel()
         try {
-            // Baseline exposes only standard audio call capability; no video is registered.
             callsManager.registerAppWithTelecom(
                 CallsManager.CAPABILITY_BASELINE,
                 Build.VERSION_CODES.TIRAMISU,
@@ -83,7 +87,7 @@ class AndroidVoiceCallTelecomController(
         }
     }
 
-    /** Invoked only after the incoming call was accepted and RECORD_AUDIO was granted. */
+    /** Queues the system answer only after explicit in-app acceptance and RECORD_AUDIO grant. */
     suspend fun answerIncomingCall(callId: UUID) {
         val entry = withTimeout(CALL_ENTRY_TIMEOUT_MILLIS) {
             activeEntry.first { it?.callId == callId }
@@ -94,8 +98,10 @@ class AndroidVoiceCallTelecomController(
 
     private fun reconcile(call: VoiceCallSnapshot, session: SecureSessionSnapshot) {
         if (closed.get()) return
-        val shouldRegister = call.status == VoiceCallStatus.INCOMING_RINGING ||
-            call.status == VoiceCallStatus.ACTIVE
+        val shouldRegister = call.callId != null &&
+            call.direction != null &&
+            !call.isTerminal &&
+            call.status != VoiceCallStatus.IDLE
         val current = activeEntry.value
 
         if (!shouldRegister) {
@@ -154,14 +160,13 @@ class AndroidVoiceCallTelecomController(
                 },
                 onSetActive = {
                     val current = orchestrator.snapshot.value
-                    if (current.status == VoiceCallStatus.ACTIVE ||
-                        current.status == VoiceCallStatus.NEGOTIATING
+                    if (current.callId != entry.callId ||
+                        current.status !in setOf(VoiceCallStatus.ACTIVE, VoiceCallStatus.NEGOTIATING)
                     ) {
-                        if (!orchestrator.setTelecomMediaActive(true)) {
-                            throw IllegalStateException("PEYVAND could not resume its verified audio path.")
-                        }
-                    } else if (!current.isTerminal) {
                         throw IllegalStateException("The PEYVAND call is not ready to become active.")
+                    }
+                    if (!orchestrator.setTelecomMediaActive(true)) {
+                        throw IllegalStateException("PEYVAND could not resume its verified audio path.")
                     }
                 },
                 onSetInactive = {
@@ -170,35 +175,42 @@ class AndroidVoiceCallTelecomController(
                     }
                 },
             ) {
-                postNotification(
-                    entry,
-                    incoming = entry.direction == VoiceCallDirection.INCOMING,
-                )
-                if (entry.direction == VoiceCallDirection.OUTGOING) {
-                    entry.commands.trySend(CallCommand.SetActive)
-                }
-                launch {
-                    for (command in entry.commands) {
-                        when (command) {
-                            CallCommand.Answer -> {
-                                val result = answer(CallAttributesCompat.CALL_TYPE_AUDIO_CALL)
-                                requireSuccess(result, "Telecom could not answer the PEYVAND call.")
-                            }
-                            CallCommand.SetActive -> {
+                updateNotification(entry, orchestrator.snapshot.value.status)
+                coroutineScope {
+                    val muteJob = launch {
+                        isMuted.collect { muted -> orchestrator.setMuted(muted) }
+                    }
+                    val activationJob = launch {
+                        orchestrator.snapshot.collect { current ->
+                            if (entry.direction == VoiceCallDirection.OUTGOING &&
+                                current.callId == entry.callId &&
+                                current.status == VoiceCallStatus.ACTIVE &&
+                                entry.setActiveRequested.compareAndSet(false, true)
+                            ) {
                                 val result = setActive()
                                 requireSuccess(result, "Telecom could not activate the PEYVAND call.")
                             }
-                            CallCommand.Disconnect -> {
-                                entry.closing.set(true)
-                                val result = disconnect(DisconnectCause(DisconnectCause.LOCAL))
-                                requireSuccess(result, "Telecom could not disconnect the PEYVAND call.")
-                                break
-                            }
                         }
                     }
-                }
-                launch {
-                    isMuted.collect { muted -> orchestrator.setMuted(muted) }
+                    try {
+                        for (command in entry.commands) {
+                            when (command) {
+                                CallCommand.Answer -> {
+                                    val result = answer(CallAttributesCompat.CALL_TYPE_AUDIO_CALL)
+                                    requireSuccess(result, "Telecom could not answer the PEYVAND call.")
+                                }
+                                CallCommand.Disconnect -> {
+                                    entry.closing.set(true)
+                                    val result = disconnect(DisconnectCause(DisconnectCause.LOCAL))
+                                    requireSuccess(result, "Telecom could not disconnect the PEYVAND call.")
+                                    break
+                                }
+                            }
+                        }
+                    } finally {
+                        muteJob.cancel()
+                        activationJob.cancel()
+                    }
                 }
             }
         } catch (cancellation: CancellationException) {
@@ -212,6 +224,7 @@ class AndroidVoiceCallTelecomController(
             synchronized(lock) {
                 if (activeEntry.value === entry) activeEntry.value = null
             }
+            runCatching(onCallSessionFinished)
         }
     }
 
@@ -227,24 +240,22 @@ class AndroidVoiceCallTelecomController(
     private suspend fun terminateFromTelecom(callId: UUID) {
         val current = orchestrator.snapshot.value
         if (current.callId != callId || current.isTerminal) return
-        if (current.status == VoiceCallStatus.INCOMING_RINGING) {
-            orchestrator.rejectIncomingCall(callId)
-        } else {
-            orchestrator.hangUp(callId)
+        when (current.status) {
+            VoiceCallStatus.INCOMING_RINGING -> orchestrator.rejectIncomingCall(callId)
+            VoiceCallStatus.OUTGOING_RINGING -> orchestrator.cancelOutgoingCall(callId)
+            else -> orchestrator.hangUp(callId)
         }
     }
 
     private fun updateNotification(entry: ManagedCall, status: VoiceCallStatus) {
-        postNotification(
-            entry = entry,
-            incoming = entry.direction == VoiceCallDirection.INCOMING &&
-                status == VoiceCallStatus.INCOMING_RINGING,
-        )
-    }
-
-    private fun postNotification(entry: ManagedCall, incoming: Boolean) {
-        if (!canPostNotifications()) return
+        val incoming = entry.direction == VoiceCallDirection.INCOMING &&
+            status == VoiceCallStatus.INCOMING_RINGING
         val person = Person.Builder().setName(entry.peerName).build()
+        val title = when {
+            incoming -> R.string.voice_call_notification_incoming
+            status == VoiceCallStatus.OUTGOING_RINGING -> R.string.voice_call_notification_outgoing
+            else -> R.string.voice_call_notification_active
+        }
         val builder = NotificationCompat.Builder(appContext, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_call)
             .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -252,12 +263,7 @@ class AndroidVoiceCallTelecomController(
             .setOngoing(true)
             .setOnlyAlertOnce(!incoming)
             .setContentIntent(activityPendingIntent(entry.callId))
-            .setContentTitle(
-                appContext.getString(
-                    if (incoming) R.string.voice_call_notification_incoming
-                    else R.string.voice_call_notification_active,
-                ),
-            )
+            .setContentTitle(appContext.getString(title))
             .setContentText(entry.peerName)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
 
@@ -274,7 +280,11 @@ class AndroidVoiceCallTelecomController(
             )
         }
         builder.setStyle(style)
-        runCatching { notificationManager.notify(NOTIFICATION_ID, builder.build()) }
+        val notification = builder.build()
+        if (canPostNotifications()) {
+            runCatching { notificationManager.notify(NOTIFICATION_ID, notification) }
+        }
+        runCatching { onForegroundNotification(notification) }
     }
 
     private fun canPostNotifications(): Boolean =
@@ -335,7 +345,6 @@ class AndroidVoiceCallTelecomController(
         activeEntry.value?.let { entry ->
             entry.closing.set(true)
             entry.commands.trySend(CallCommand.Disconnect)
-            entry.job?.cancel()
         }
         notificationManager.cancel(NOTIFICATION_ID)
         mutableRegistered.value = false
@@ -348,12 +357,12 @@ class AndroidVoiceCallTelecomController(
     ) {
         val commands = Channel<CallCommand>(capacity = 8)
         val closing = AtomicBoolean(false)
+        val setActiveRequested = AtomicBoolean(false)
         var job: Job? = null
     }
 
     private sealed interface CallCommand {
         data object Answer : CallCommand
-        data object SetActive : CallCommand
         data object Disconnect : CallCommand
     }
 
@@ -363,7 +372,7 @@ class AndroidVoiceCallTelecomController(
         const val ACTION_HANG_UP = "com.peyvand.app.action.HANG_UP_VOICE_CALL"
         const val EXTRA_CALL_ID = "com.peyvand.app.extra.VOICE_CALL_ID"
         const val NOTIFICATION_ID = 64004
-        private const val NOTIFICATION_CHANNEL_ID = "peyvand_voice_calls"
+        const val NOTIFICATION_CHANNEL_ID = "peyvand_voice_calls"
         private const val CALL_ENTRY_TIMEOUT_MILLIS = 5_000L
     }
 }
