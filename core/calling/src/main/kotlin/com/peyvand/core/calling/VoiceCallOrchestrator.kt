@@ -413,17 +413,13 @@ class VoiceCallOrchestrator(
             return
         }
 
-        if (!event.active) {
-            // Do not leave an ICE/statistics wait running after Telecom placed the call on hold.
-            activationJob?.cancel()
-            activationJob = null
-            activationStartedFor = null
-        } else if (media != null &&
+        if (event.active && media != null &&
             current.callId != null &&
-            current.status == VoiceCallStatus.ACTIVE
+            current.status == VoiceCallStatus.ACTIVE &&
+            !media.isActive
         ) {
-            // Core-Telecom callbacks have a 5-second deadline. Resume media asynchronously;
-            // failure is fed back through MediaActivated and terminates the call safely.
+            // Keep any in-flight first activation alive across a brief Telecom hold.
+            // Resume an established call asynchronously only if media is still inactive.
             activationStartedFor = null
             startMediaActivation(current.callId, media)
         }
