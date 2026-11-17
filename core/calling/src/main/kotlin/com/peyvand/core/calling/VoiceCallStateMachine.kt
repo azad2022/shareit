@@ -10,7 +10,9 @@ import java.util.UUID
 
 /**
  * One-call-per-authenticated-session state machine. Instantiate it per authenticated
- * peer session; the bounded replay registry survives call completion/reset.
+ * peer session; its bounded replay registry survives call completion/reset.
+ *
+ * Outgoing calls request RECORD_AUDIO only after the remote peer has accepted.
  */
 class VoiceCallStateMachine(
     private val maximumCallIdsPerSession: Int = DEFAULT_MAX_CALL_IDS_PER_SESSION,
@@ -26,11 +28,9 @@ class VoiceCallStateMachine(
     val snapshot: VoiceCallSnapshot
         get() = synchronized(lock) { current }
 
-    fun beginOutgoing(callId: UUID, microphonePermissionGranted: Boolean) {
+    /** Creates an invitation without requesting microphone access. */
+    fun beginOutgoing(callId: UUID) {
         synchronized(lock) {
-            check(microphonePermissionGranted) {
-                "RECORD_AUDIO permission is required before placing a voice call."
-            }
             check(canStartNewCall()) { "A voice call is already active." }
             reserveCallId(callId)
             current = VoiceCallSnapshot(
@@ -41,13 +41,10 @@ class VoiceCallStateMachine(
         }
     }
 
-    /** False means busy, duplicate/replayed call ID, or the session call quota was reached. */
     fun receiveInvite(callId: UUID): Boolean = synchronized(lock) {
         if (!canStartNewCall() || seenCallIds.contains(callId) ||
             seenCallIds.size >= maximumCallIdsPerSession
-        ) {
-            return@synchronized false
-        }
+        ) return@synchronized false
         reserveCallId(callId)
         current = VoiceCallSnapshot(
             callId = callId,
@@ -57,7 +54,7 @@ class VoiceCallStateMachine(
         true
     }
 
-    /** Local acceptance requires Android RECORD_AUDIO permission before media negotiation. */
+    /** Called only after explicit incoming-call acceptance and RECORD_AUDIO grant. */
     fun acceptIncoming(callId: UUID, microphonePermissionGranted: Boolean) {
         synchronized(lock) {
             requireCurrentCall(callId, VoiceCallStatus.INCOMING_RINGING)
@@ -68,14 +65,32 @@ class VoiceCallStateMachine(
         }
     }
 
+    /** Remote acceptance requires a separate local permission request before media setup. */
     fun remoteAccepted(callId: UUID) {
         synchronized(lock) {
             requireCurrentCall(callId, VoiceCallStatus.OUTGOING_RINGING)
+            current = current.copy(status = VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION)
+        }
+    }
+
+    fun outgoingMicrophonePermissionGranted(callId: UUID) {
+        synchronized(lock) {
+            requireCurrentCall(callId, VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION)
             current = current.copy(status = VoiceCallStatus.NEGOTIATING)
         }
     }
 
-    /** Media adapter calls this only after verified P2P route, DTLS-SRTP and audio readiness. */
+    fun outgoingMicrophonePermissionDenied(callId: UUID) {
+        synchronized(lock) {
+            requireCurrentCall(callId, VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION)
+            current = current.copy(
+                status = VoiceCallStatus.FAILED,
+                failure = VoiceCallFailure.MICROPHONE_PERMISSION_DENIED,
+            )
+        }
+    }
+
+    /** Called only after the P2P route, DTLS-SRTP and audio devices are verified. */
     fun mediaConnected(callId: UUID) {
         synchronized(lock) {
             requireCurrentCall(callId, VoiceCallStatus.NEGOTIATING)
@@ -86,20 +101,18 @@ class VoiceCallStateMachine(
     fun rejectIncoming(callId: UUID) {
         synchronized(lock) {
             requireCurrentCall(callId, VoiceCallStatus.INCOMING_RINGING)
-            current = current.copy(
-                status = VoiceCallStatus.ENDED,
-                terminationReason = VoiceCallTerminationReason.REJECTED,
-            )
+            current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.REJECTED)
         }
     }
 
     fun cancelOutgoing(callId: UUID) {
         synchronized(lock) {
-            requireCurrentCall(callId, VoiceCallStatus.OUTGOING_RINGING)
-            current = current.copy(
-                status = VoiceCallStatus.ENDED,
-                terminationReason = VoiceCallTerminationReason.CANCELLED,
+            requireCurrentCall(
+                callId,
+                VoiceCallStatus.OUTGOING_RINGING,
+                VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
             )
+            current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.CANCELLED)
         }
     }
 
@@ -109,13 +122,11 @@ class VoiceCallStateMachine(
                 callId,
                 VoiceCallStatus.OUTGOING_RINGING,
                 VoiceCallStatus.INCOMING_RINGING,
+                VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
                 VoiceCallStatus.NEGOTIATING,
                 VoiceCallStatus.ACTIVE,
             )
-            current = current.copy(
-                status = VoiceCallStatus.ENDED,
-                terminationReason = VoiceCallTerminationReason.LOCAL_HANGUP,
-            )
+            current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.LOCAL_HANGUP)
         }
     }
 
@@ -125,23 +136,18 @@ class VoiceCallStateMachine(
                 callId,
                 VoiceCallStatus.OUTGOING_RINGING,
                 VoiceCallStatus.INCOMING_RINGING,
+                VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
                 VoiceCallStatus.NEGOTIATING,
                 VoiceCallStatus.ACTIVE,
             )
-            current = current.copy(
-                status = VoiceCallStatus.ENDED,
-                terminationReason = VoiceCallTerminationReason.REMOTE_HANGUP,
-            )
+            current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.REMOTE_HANGUP)
         }
     }
 
     fun sessionLost() {
         synchronized(lock) {
             if (current.callId != null && !current.isTerminal && current.status != VoiceCallStatus.IDLE) {
-                current = current.copy(
-                    status = VoiceCallStatus.ENDED,
-                    terminationReason = VoiceCallTerminationReason.SESSION_LOST,
-                )
+                current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.SESSION_LOST)
             }
         }
     }
@@ -152,13 +158,11 @@ class VoiceCallStateMachine(
                 callId,
                 VoiceCallStatus.OUTGOING_RINGING,
                 VoiceCallStatus.INCOMING_RINGING,
+                VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
                 VoiceCallStatus.NEGOTIATING,
                 VoiceCallStatus.ACTIVE,
             )
-            current = current.copy(
-                status = VoiceCallStatus.ENDED,
-                terminationReason = VoiceCallTerminationReason.NETWORK_LOST,
-            )
+            current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.NETWORK_LOST)
         }
     }
 
@@ -170,7 +174,6 @@ class VoiceCallStateMachine(
         }
     }
 
-    /** Reset visible state only; the session replay registry remains intact. */
     fun resetAfterTerminalCall() {
         synchronized(lock) {
             check(current.isTerminal) { "Only an ended or failed call can be reset." }
