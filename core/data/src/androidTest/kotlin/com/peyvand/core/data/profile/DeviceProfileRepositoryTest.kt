@@ -163,6 +163,33 @@ class DeviceProfileRepositoryTest {
     }
 
     @Test
+    fun trustedPeerProfileRejectsNonCanonicalAvatarDimensions() = runBlocking {
+        val publicKey = generatePeerPublicKey()
+        val identityId = PeerIdentityId.fromSha256Fingerprint(sha256Hex(publicKey))
+        val trustedPeers = RoomTrustedPeerRepository(database)
+        val nonCanonicalAvatar = createCanonicalAvatar(width = 128, height = 128)
+
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            runBlocking {
+                trustedPeers.recordAuthenticatedPeer(
+                    TrustedPeerIdentity(
+                        identityId = identityId,
+                        publicKeyEncoded = publicKey,
+                        displayName = "Android device",
+                        firstSeenAtEpochMillis = 100L,
+                        lastAuthenticatedAtEpochMillis = 200L,
+                        profileName = "Profile",
+                        profileAvatarHash = sha256Hex(nonCanonicalAvatar),
+                        profileAvatarBytes = nonCanonicalAvatar,
+                        profileRevision = 1L,
+                    ),
+                )
+            }
+        }
+        assertNull(trustedPeers.findTrustedPeer(identityId))
+    }
+
+    @Test
     fun localProfileFlowPublishesLatestCommittedRevision() = runBlocking {
         repository.saveLocalProfile(
             deviceNameOverride = "Device",
@@ -180,8 +207,8 @@ class DeviceProfileRepositoryTest {
         repository = RoomDeviceProfileRepository(context, database)
     }
 
-    private fun createCanonicalAvatar(): ByteArray {
-        val bitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
+    private fun createCanonicalAvatar(width: Int = 256, height: Int = 256): ByteArray {
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         return try {
             val output = ByteArrayOutputStream()
             check(bitmap.compress(Bitmap.CompressFormat.JPEG, 70, output))
