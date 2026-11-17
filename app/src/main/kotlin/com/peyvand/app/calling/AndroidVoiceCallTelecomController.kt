@@ -33,7 +33,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -176,22 +175,22 @@ class AndroidVoiceCallTelecomController(
                 },
             ) {
                 updateNotification(entry, orchestrator.snapshot.value.status)
-                coroutineScope {
-                    val muteJob = launch {
-                        isMuted.collect { muted -> orchestrator.setMuted(muted) }
-                    }
-                    val activationJob = launch {
-                        orchestrator.snapshot.collect { current ->
-                            if (entry.direction == VoiceCallDirection.OUTGOING &&
-                                current.callId == entry.callId &&
-                                current.status == VoiceCallStatus.ACTIVE &&
-                                entry.setActiveRequested.compareAndSet(false, true)
-                            ) {
-                                val result = setActive()
-                                requireSuccess(result, "Telecom could not activate the PEYVAND call.")
-                            }
+                val muteJob = launch {
+                    isMuted.collect { muted -> orchestrator.setMuted(muted) }
+                }
+                val activationJob = launch {
+                    orchestrator.snapshot.collect { current ->
+                        if (entry.direction == VoiceCallDirection.OUTGOING &&
+                            current.callId == entry.callId &&
+                            current.status == VoiceCallStatus.ACTIVE &&
+                            entry.setActiveRequested.compareAndSet(false, true)
+                        ) {
+                            val result = setActive()
+                            requireSuccess(result, "Telecom could not activate the PEYVAND call.")
                         }
                     }
+                }
+                launch {
                     try {
                         for (command in entry.commands) {
                             when (command) {
