@@ -312,14 +312,6 @@ class AndroidVoiceCallTelecomController(
         )
     }
 
-    private fun canPostNotifications() =
-        notificationManager.areNotificationsEnabled() &&
-            (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(
-                    appContext,
-                    Manifest.permission.POST_NOTIFICATIONS,
-                ) == PackageManager.PERMISSION_GRANTED)
-
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = appContext.getSystemService(NotificationManager::class.java)
