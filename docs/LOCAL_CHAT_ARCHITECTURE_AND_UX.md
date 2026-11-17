@@ -312,3 +312,19 @@ The product owner explicitly authorized CP-CHAT-002 on 2026-11-13 on feature/cp-
 The authenticated TLS socket is owned only by AuthenticatedPeerChannelMultiplexer: one bounded reader routes complete frames and one serialized writer emits frames. The chat coordinator receives only CHAT frames; the existing file-transfer coordinator receives only FILE_TRANSFER frames. Logical channel close releases that child without directly closing the parent TLS session. Parent session failure closes both children.
 
 Current limitations: no group chat, read receipts, voice/video calls, cloud/server/relay delivery, or remote deletion. Attachments currently hand off to the existing transfer UI from the conversation; durable attachment bubbles/previews in the chat timeline and automatic incoming-transfer prompts are not yet implemented. Exact-head CI, two-device interoperability, reconnect/replay and security tests remain acceptance gates.
+
+## 16. Owner-approved attachment-session update (2026-11-17)
+
+This update supersedes the earlier attachment rule in Section 9 that required existing receiver consent for each attachment.
+
+The product now treats a successful, user-approved one-to-one connection as a session-scoped bidirectional exchange. The initiator's Connect action and recipient's Accept action express user intent; after the secure peer identity and mutual-TLS checks complete, both endpoints may send and automatically receive files without a per-file or per-batch prompt. The grant is tied to the authenticated session ID and trusted peer identity and is destroyed on disconnect or session failure.
+
+This is a product consent decision, not permission to weaken cryptographic authentication. ADR-0017's current bilateral SAS and pinned mTLS requirements remain until a security review approves a change. A trusted peer identity mismatch must fail closed.
+
+The FILE_TRANSFER logical channel must be owned for the conversation session by one peer file-exchange coordinator and one inbound dispatcher. Both endpoints may initiate transfers. Multiple readers must never compete for the same logical input stream. The current direction-prepared SingleFileTransferCoordinator is not a valid two-way session supervisor and must not simply be started twice.
+
+File bytes remain in the bounded FILE_TRANSFER data plane. The chat timeline stores typed attachment references and independent transfer state. Use Android Photo Picker for photos/videos and the system document picker for arbitrary files; resolve content URIs through ContentResolver. Do not add a custom gallery, general file manager, raw-path assumptions or broad storage permission for selection.
+
+Incoming items are staged privately, streamed with backpressure, checked against protocol/resource limits, and published only after byte-count and SHA-256 verification. No file is opened, executed or installed automatically. On Wi-Fi/P2P or TLS loss, destroy the session grant, release channel resources and retain only verified durable checkpoints. Text history/outbox remains local.
+
+Full target behavior and validation requirements are recorded in ADR-0018 and CP-CHAT-003. This is a documentation/design update only; it does not authorize runtime implementation.
