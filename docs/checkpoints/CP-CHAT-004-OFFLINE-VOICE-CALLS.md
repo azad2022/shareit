@@ -6,12 +6,11 @@
 - **Product approval:** Explicitly granted 2026-11-17
 - **Implementation authorization:** Audio-only, one-to-one, full-duplex calls
 - **Implementation branch:** `feature/cp-chat-004-offline-audio-calls`
-- **Latest code implementation SHA:** `5853dff350fb7c8d60f2f86e5dca8a4bf9e15e8b`
+- **Latest code implementation SHA:** `06b617cca6e317c8706fc44bfb1d9f22dac16f3d`
 - **Latest completed CI before this correction:** Run #566 (`44065683391`), head `08cead9d9f3652f888ab4c654e9e0afff4c41877`; build/unit/lint failed for two independent reasons: the calling unit test fake incorrectly coupled Telecom-state application to media-path success, and app Lint reported `MissingPermission` at `NotificationManagerCompat.notify`. The API 26 and API 36 storage/mTLS instrumentation jobs passed; they did not test voice calling. The only APK artifacts were Room instrumentation APKs, not the app.
 - **Correction commit:** `5853dff350fb7c8d60f2f86e5dca8a4bf9e15e8b` separates the fake Telecom gate from P2P media verification, strengthens cleanup assertion after media-path failure, and explicitly handles notification-permission revocation between check and notify.
-- **Successful exact-head validation:** Run #567 (`44088466989`) passed all 3 jobs on validation head `7e922e03aa578264444187497dd3ec331d329675`: build/unit tests/lint/debug APK, plus Android storage publication and mTLS instrumentation on API 26 and API 36.
-- **Debug APK artifact:** `peyvand-debug-apk`, artifact ID `14329833541`, produced from the exact validation head above. GitHub artifact retention expires 2026-11-24 13:05:32 UTC.
-- **Extracted APK SHA-256:** `0c515f9980bc1e5adadb180265d400b99103a5ed240751ad45b4d03e97e02295`. This matches the checksum sidecar uploaded by the successful workflow after extracting the application APK from its artifact ZIP.
+- **Last successful exact-head validation before the current integration:** Run #567 (`44088466989`) passed all 3 jobs on validation head `7e922e03aa578264444187497dd3ec331d329675`: build/unit tests/lint/debug APK, plus Android storage publication and mTLS instrumentation on API 26 and API 36. This run predates profile restoration, avatar hardening and ABI split changes in `06b617...`; it is historical evidence only, not validation of the latest source.
+- **Previous universal Debug APK:** artifact `14329833541`, produced from validation head `7e922e03aa578264444187497dd3ec331d329675`; 45,104,972 bytes; SHA-256 `0c515f9980bc1e5adadb180265d400b99103a5ed240751ad45b4d03e97e02295`. This is an earlier call build, not the profile-restored/ABI-split build.
 - **Last fully green CI for the older baseline:** Run #533 (`44045018880`), exact head `091b539f4acd1c8132c684e2077591d224853b1a`. Its APK artifact is not a build of the current implementation SHA.
 - **Video:** Deferred to a separate milestone; no camera/video implementation is included.
 
@@ -69,6 +68,25 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 - No measured latency, jitter, packet loss, CPU, RAM, battery or thermal results exist.
 - A debug APK is now available for the exact validated source head in Run #567 (SHA `7e922e03aa578264444187497dd3ec331d329675`); its extracted SHA-256 is recorded above. This build artifact is a debug/test build, not a release build, and does not constitute physical-call acceptance.
 
+
+## Device profile restoration (integrated 2026-11-17)
+
+- CP-PROFILE-001's separate implementation was absent from the CP-CHAT-004 branch used for the previous APK. It has now been ported without replacing CP-CHAT-004's call and attachment code.
+- The chat-home header exposes the profile editor. The local user can edit the PEYVAND-only device label, optional profile name, optional avatar and peer-sharing preference. Profile name/avatar render beside the device label in the chat list and conversation header.
+- The existing Room database is upgraded from schema version 2 to 3. Migration 2→3 adds the local profile row and optional trusted-peer profile fields while retaining chat data.
+- Device label/profile exchange uses identity HELLO v2 inside the existing post-SAS, pinned-mTLS handshake. It remains bound to the existing persistent peer fingerprint; no new socket, reader, channel, backend or relay was added. Both devices must run compatible HELLO v2 builds. Profile changes synchronize on the next secure connection, not mid-session.
+- Incoming avatar validation checks bounded JPEG bytes, SHA-256, decoded MIME type, exact 256×256 dimensions and successful bitmap decode before Room caching. An instrumentation test rejects a non-canonical 128×128 peer avatar; combined-branch test execution is pending.
+- See [CP-PROFILE-001](CP-PROFILE-001-DEVICE-PROFILE.md) and [ADR-0022](../decisions/ADR-0022-DEVICE-LABEL-AND-USER-PROFILE.md).
+
+## APK size analysis and ABI-specific packaging
+
+- The previous universal APK measured **45,104,972 bytes**. ZIP inspection found `libjingle_peerconnection_so.so` copies for `arm64-v8a` (7,686,440 bytes), `armeabi-v7a` (4,471,732), `x86` (8,770,716) and `x86_64` (8,530,048), totaling **29,458,936 bytes** before other small native libraries.
+- The 40+ MB size is expected for a universal WebRTC APK that bundles four native ABIs; it is not evidence of duplicate Kotlin code or unnecessary UI features. Removing WebRTC would remove the audio-call capability and is not an acceptable optimization.
+- The app now configures Gradle ABI splits for all four ABIs and keeps a universal APK. CI is configured to publish the universal APK plus dedicated `arm64-v8a` and `armeabi-v7a` debug APKs. The x86/x86_64 splits remain built for architecture coverage.
+- Based on the previous universal APK's native ZIP entries, a single-ABI output is estimated around 23.3 MB for arm64-v8a and 20.1 MB for armeabi-v7a before packaging/signature differences. These are estimates only; actual sizes and checksums must be read from successful CI artifacts.
+- The universal APK intentionally retains all architectures; users should install the ABI-matched APK. All feature code and the WebRTC native library are retained for each supported ABI.
+- **Current integrated source SHA:** `06b617cca6e317c8706fc44bfb1d9f22dac16f3d`. The combined-head CI and actual split APK sizes have not yet been verified. Do not infer success from Run #567.
+
 ## Sub-checkpoints
 
 | Sub-checkpoint | Scope | Status |
@@ -108,6 +126,6 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 
 ## Current assessment
 
-The current branch contains the signalling host, orchestrator, WebRTC media foundation, P2P interface admission, chat call UI, microphone permission flow and Core-Telecom / foreground-service integration. Run #567 passed build/unit/lint and both API 26/API 36 storage/mTLS instrumentation jobs on validation head `7e922e03aa578264444187497dd3ec331d329675`, and the matching debug APK was published and checksum-verified. These CI results do not exercise real-time call media on two handsets. Physical route, bidirectional audio, Telecom routing/lifecycle and concurrent file-transfer tests remain outstanding.
+The current branch contains the signalling host, orchestrator, WebRTC media foundation, P2P interface admission, call UI and Telecom lifecycle, and now also the restored local device/profile editor, authenticated HELLO v2 profile exchange, avatar validation, and ABI-specific debug APK packaging. The last green CI (#567) validates the predecessor code only; integrated source SHA `06b617cca6e317c8706fc44bfb1d9f22dac16f3d` has not yet been validated. Physical route, bidirectional audio, Telecom routing/lifecycle, concurrent transfer, profile interoperability and actual split APK size/installation checks remain outstanding.
 
 Checkpoint status remains **IN_PROGRESS**. No successful phone-to-phone voice call is claimed.
