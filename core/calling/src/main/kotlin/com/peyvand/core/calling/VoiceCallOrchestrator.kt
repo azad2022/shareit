@@ -59,6 +59,10 @@ class VoiceCallOrchestrator(
         data class CancelOutgoing(val callId: UUID, val reply: CompletableDeferred<Unit>) : Event
         data class HangUp(val callId: UUID, val reply: CompletableDeferred<Unit>) : Event
         data class SetMuted(val muted: Boolean) : Event
+        data class TelecomMediaActive(
+            val active: Boolean,
+            val reply: CompletableDeferred<Boolean>,
+        ) : Event
         data class LocalIce(
             val callId: UUID,
             val generation: Long,
@@ -172,6 +176,13 @@ class VoiceCallOrchestrator(
         if (!closed.get()) events.trySend(Event.SetMuted(muted))
     }
 
+    /** Called from Android Telecom callbacks to pause/resume both directions of media. */
+    suspend fun setTelecomMediaActive(active: Boolean): Boolean {
+        val reply = CompletableDeferred<Boolean>()
+        submit(Event.TelecomMediaActive(active, reply))
+        return reply.await()
+    }
+
     private suspend fun submit(event: Event) {
         check(!closed.get()) { "Voice call orchestrator is closed." }
         check(started.get()) { "Voice call orchestrator has not been started." }
@@ -190,6 +201,7 @@ class VoiceCallOrchestrator(
             is Event.CancelOutgoing -> handleCancelOutgoing(event)
             is Event.HangUp -> handleHangUp(event)
             is Event.SetMuted -> handleSetMuted(event.muted)
+            is Event.TelecomMediaActive -> handleTelecomMediaActive(event)
             is Event.LocalIce -> handleLocalIce(event)
             is Event.MediaFailure -> handleMediaFailure(event)
             is Event.MediaActivated -> handleMediaActivated(event)
@@ -377,6 +389,30 @@ class VoiceCallOrchestrator(
     private fun handleSetMuted(muted: Boolean) {
         mediaSession?.setMuted(muted)
         mutableMuted.value = mediaSession?.isMuted ?: false
+    }
+
+    private suspend fun handleTelecomMediaActive(event: Event.TelecomMediaActive) {
+        val current = machine.snapshot
+        val media = mediaSession
+        if (media == null) {
+            // A ringing call has no media session yet; there is nothing to pause.
+            event.reply.complete(!event.active && !current.isTerminal)
+            return
+        }
+        val succeeded = try {
+            media.setTelecomActive(event.active)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            false
+        }
+        if (!succeeded) {
+            val callId = current.callId
+            if (callId != null && !current.isTerminal) {
+                failCurrentCall(callId, VoiceCallFailure.RESOURCE_UNAVAILABLE, sendEnd = true)
+            }
+        }
+        event.reply.complete(succeeded)
     }
 
     private suspend fun handleRemoteSignal(signal: VoiceCallSignal) {

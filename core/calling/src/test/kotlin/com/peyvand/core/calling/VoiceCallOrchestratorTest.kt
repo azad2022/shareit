@@ -62,6 +62,11 @@ class VoiceCallOrchestratorTest {
             rig.awaitStatus(VoiceCallStatus.ACTIVE)
             assertTrue(rig.mediaFactory.lastSession?.isActive == true)
 
+            assertTrue(rig.orchestrator.setTelecomMediaActive(false))
+            assertFalse(rig.mediaFactory.lastSession?.isActive == true)
+            assertTrue(rig.orchestrator.setTelecomMediaActive(true))
+            assertTrue(rig.mediaFactory.lastSession?.isActive == true)
+
             rig.remote.send(VoiceCallSignal.End(callId, VoiceCallEndCause.NORMAL))
             rig.awaitStatus(VoiceCallStatus.ENDED)
             assertTrue(rig.mediaFactory.lastSession?.closed == true)
@@ -231,8 +236,9 @@ class VoiceCallOrchestratorTest {
         @Volatile var closed = false
             private set
         private var muted = false
+        private var telecomActive = mediaPathSucceeds
         override val isMuted: Boolean get() = muted
-        override val isActive: Boolean get() = mediaPathSucceeds && !closed
+        override val isActive: Boolean get() = mediaPathSucceeds && telecomActive && !closed
 
         override suspend fun createOffer(): String = "audio-offer"
 
@@ -251,7 +257,14 @@ class VoiceCallOrchestratorTest {
             candidateSdp: String,
         ): Boolean = true
 
-        override suspend fun activateAfterVerifiedP2pPath(): Boolean = mediaPathSucceeds
+        override suspend fun activateAfterVerifiedP2pPath(): Boolean {
+            telecomActive = mediaPathSucceeds
+            return mediaPathSucceeds
+        }
+        override suspend fun setTelecomActive(active: Boolean): Boolean {
+            telecomActive = active && mediaPathSucceeds
+            return mediaPathSucceeds
+        }
         override fun setMuted(value: Boolean) { muted = value }
         override fun close() { closed = true }
     }

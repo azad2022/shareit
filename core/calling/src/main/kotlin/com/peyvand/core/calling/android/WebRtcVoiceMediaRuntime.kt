@@ -307,17 +307,41 @@ class WebRtcAudioCallSession internal constructor(
      * DTLS-SRTP are active on the exact P2P IP addresses.
      */
     override suspend fun activateAfterVerifiedP2pPath(
-        timeoutMillis: Long = MEDIA_PATH_TIMEOUT_MILLIS,
-    ): Boolean {
+        timeoutMillis: Long,
+    ): Boolean = signallingMutex.withLock {
         ensureNotClosed()
         ensureMicrophonePermission()
         if (!hasExactP2pInterface()) {
             onFailure(WebRtcVoiceMediaFailure.MEDIA_STATS_UNAVAILABLE)
-            return false
+            return@withLock false
         }
-        val connection = synchronized(lock) { peerConnection } ?: return false
-        val track = synchronized(lock) { localTrack } ?: return false
+        val alreadyActive = synchronized(lock) { activated }
+        if (alreadyActive) return@withLock true
 
+        val connection = synchronized(lock) { peerConnection } ?: return@withLock false
+        val track = synchronized(lock) { localTrack } ?: return@withLock false
+        activateAudioPath(connection, track, timeoutMillis)
+    }
+
+    override suspend fun setTelecomActive(active: Boolean): Boolean {
+        if (active) return activateAfterVerifiedP2pPath(MEDIA_PATH_TIMEOUT_MILLIS)
+        return signallingMutex.withLock {
+            ensureNotClosed()
+            val connection = synchronized(lock) { peerConnection } ?: return@withLock true
+            val track = synchronized(lock) { localTrack }
+            runCatching { track?.setEnabled(false) }
+            runCatching { connection.setAudioRecording(false) }
+            runCatching { connection.setAudioPlayout(false) }
+            synchronized(lock) { activated = false }
+            true
+        }
+    }
+
+    private suspend fun activateAudioPath(
+        connection: PeerConnection,
+        track: AudioTrack,
+        timeoutMillis: Long,
+    ): Boolean {
         if (!awaitVerifiedP2pMediaPath(connection, timeoutMillis)) {
             onFailure(WebRtcVoiceMediaFailure.MEDIA_STATS_UNAVAILABLE)
             return false
