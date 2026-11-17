@@ -44,6 +44,7 @@ class VoiceCallControlSessionHost(
 
     private data class SignalEnvelope(
         val sessionId: UUID,
+        val leaseToken: UUID,
         val signal: VoiceCallSignal,
     )
 
@@ -55,6 +56,7 @@ class VoiceCallControlSessionHost(
     val isReady: StateFlow<Boolean> = mutableReady.asStateFlow()
 
     private var currentSessionId: UUID? = null
+    private var activeLeaseToken: UUID? = null
     private var probeStartedFor: UUID? = null
     private var claimStartedFor: UUID? = null
     private var activeCoordinator: VoiceCallControlCoordinator? = null
@@ -72,7 +74,7 @@ class VoiceCallControlSessionHost(
             for (envelope in queuedSignals) {
                 val belongsToCurrentSession = synchronized(lock) {
                     !closed.get() && currentSessionId == envelope.sessionId &&
-                        activeCoordinator != null
+                        activeLeaseToken == envelope.leaseToken && activeCoordinator != null
                 }
                 if (!belongsToCurrentSession) continue
                 try {
@@ -128,6 +130,7 @@ class VoiceCallControlSessionHost(
             if (currentSessionId != desiredSessionId) {
                 activeCoordinator?.close()
                 activeCoordinator = null
+                activeLeaseToken = null
                 currentSessionId = desiredSessionId
                 probeStartedFor = null
                 claimStartedFor = null
@@ -146,6 +149,7 @@ class VoiceCallControlSessionHost(
                 if (activeCoordinator != null) {
                     activeCoordinator?.close()
                     activeCoordinator = null
+                    activeLeaseToken = null
                     claimStartedFor = null
                     mutableReady.value = false
                     capabilityRevoked = true
@@ -208,12 +212,13 @@ class VoiceCallControlSessionHost(
             return
         }
 
+        val leaseToken = UUID.randomUUID()
         lateinit var coordinator: VoiceCallControlCoordinator
         coordinator = VoiceCallControlCoordinator(
             channel = channel,
             scope = scope,
             onSignal = { signal ->
-                val result = queuedSignals.trySend(SignalEnvelope(sessionId, signal))
+                val result = queuedSignals.trySend(SignalEnvelope(sessionId, leaseToken, signal))
                 if (result.isFailure) {
                     failCurrentSessionForCoordinator(
                         coordinator,
@@ -232,6 +237,7 @@ class VoiceCallControlSessionHost(
                 capabilityVerified.value && activeCoordinator == null
             ) {
                 activeCoordinator = coordinator
+                activeLeaseToken = leaseToken
                 mutableReady.value = true
                 true
             } else {
@@ -269,6 +275,7 @@ class VoiceCallControlSessionHost(
             } else {
                 activeCoordinator?.close()
                 activeCoordinator = null
+                activeLeaseToken = null
                 claimStartedFor = sessionId
                 mutableReady.value = false
                 true
@@ -286,6 +293,7 @@ class VoiceCallControlSessionHost(
         synchronized(lock) {
             activeCoordinator?.close()
             activeCoordinator = null
+            activeLeaseToken = null
             currentSessionId = null
             mutableReady.value = false
         }
