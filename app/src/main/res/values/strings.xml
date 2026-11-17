@@ -325,6 +325,14 @@
     <string name="voice_call_mute">بی‌صدا کردن میکروفون</string>
     <string name="voice_call_unmute">فعال کردن میکروفون</string>
     <string name="voice_call_hang_up">پایان تماس</string>
+    <string name="voice_call_notification_channel">تماس‌های پیوند</string>
+    <string name="voice_call_notification_incoming">تماس صوتی ورودی</string>
+    <string name="voice_call_notification_outgoing">در حال تماس با مخاطب</string>
+    <string name="voice_call_notification_active">تماس صوتی برقرار است</string>
+    <string name="voice_call_notification_starting">آماده‌سازی تماس صوتی پیوند</string>
+    <string name="voice_call_notification_starting_body">در حال آماده‌سازی مدیریت امن تماس محلی</string>
+    <string name="voice_call_notification_permission_denied">برای تماس صوتی، اعلان‌های پیوند باید فعال باشند تا وضعیت تماس و کنترل پایان آن در پس‌زمینه در دسترس بماند.</string>
+    <string name="voice_call_service_unavailable">مدیریت تماس صوتی سیستم در دسترس نیست. اتصال احرازشده را بررسی و دوباره تلاش کنید.</string>
     <string name="chat_accessibility_video_call">تماس تصویری؛ قابلیت در مرحله آینده فعال می‌شود</string>
     <string name="chat_accessibility_attachment">افزودن پیوست</string>
     <string name="chat_accessibility_emoji">افزودن شکلک</string>

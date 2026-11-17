@@ -2,9 +2,12 @@ package com.peyvand.app.presentation.chat
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -103,6 +106,30 @@ fun ChatConversationScreen(
     val listState = rememberLazyListState()
     var permissionRequestCallId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingPermissionCallId by remember { mutableStateOf<UUID?>(null) }
+    var pendingNotificationIncomingCallId by remember { mutableStateOf<UUID?>(null) }
+    var pendingNotificationOutgoingCall by remember { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val incomingCallId = pendingNotificationIncomingCallId
+        val outgoingPending = pendingNotificationOutgoingCall
+        pendingNotificationIncomingCallId = null
+        pendingNotificationOutgoingCall = false
+        if (granted && NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            when {
+                incomingCallId != null -> scope.launch {
+                    onAcceptIncomingVoiceCall(incomingCallId)
+                }
+                outgoingPending -> startOutgoingVoiceCall()
+            }
+        } else {
+            Toast.makeText(
+                context,
+                R.string.voice_call_notification_permission_denied,
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
     val microphonePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -112,6 +139,64 @@ fun ChatConversationScreen(
             scope.launch { onMicrophonePermissionResult(callId, granted) }
         }
     }
+    fun startOutgoingVoiceCall() {
+        scope.launch {
+            try {
+                onStartVoiceCall()
+            } catch (_: Exception) {
+                Toast.makeText(
+                    context,
+                    R.string.voice_call_service_unavailable,
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+
+    fun requestCallNotificationForOutgoing() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingNotificationOutgoingCall = true
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            Toast.makeText(
+                context,
+                R.string.voice_call_notification_permission_denied,
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        startOutgoingVoiceCall()
+    }
+
+    fun requestCallNotificationForIncoming(callId: UUID) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingNotificationIncomingCallId = callId
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            Toast.makeText(
+                context,
+                R.string.voice_call_notification_permission_denied,
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        scope.launch { onAcceptIncomingVoiceCall(callId) }
+    }
+
     val voiceCallDescription = stringResource(R.string.chat_accessibility_voice_call)
     val videoCallDescription = stringResource(R.string.chat_accessibility_video_call)
     val attachmentDescription = stringResource(R.string.chat_accessibility_attachment)
@@ -232,7 +317,7 @@ fun ChatConversationScreen(
                             VoiceCallStatus.ENDED,
                             VoiceCallStatus.FAILED,
                         ),
-                    onClick = { scope.launch { onStartVoiceCall() } },
+                    onClick = ::requestCallNotificationForOutgoing,
                     modifier = Modifier.semantics {
                         contentDescription = voiceCallDescription
                     },
@@ -487,7 +572,7 @@ fun ChatConversationScreen(
                 text = { Text(stringResource(R.string.voice_call_incoming_body, peer?.displayName.orEmpty())) },
                 confirmButton = {
                     TextButton(onClick = {
-                        scope.launch { onAcceptIncomingVoiceCall(activeCallId) }
+                        requestCallNotificationForIncoming(activeCallId)
                     }) {
                         Text(stringResource(R.string.voice_call_accept))
                     }
