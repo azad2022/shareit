@@ -31,6 +31,9 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:transfer"))
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.core.telecom)
+    implementation(libs.webrtc.android.prefixed.stripped)
     testImplementation(libs.junit)
 }
 
