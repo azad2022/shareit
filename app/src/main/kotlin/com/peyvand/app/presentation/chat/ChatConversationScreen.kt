@@ -109,6 +109,21 @@ fun ChatConversationScreen(
     var pendingPermissionCallId by remember { mutableStateOf<UUID?>(null) }
     var pendingNotificationIncomingCallId by remember { mutableStateOf<UUID?>(null) }
     var pendingNotificationOutgoingCall by remember { mutableStateOf(false) }
+    fun startOutgoingVoiceCall() {
+        scope.launch {
+            try {
+                onStartVoiceCall()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                Toast.makeText(
+                    context,
+                    R.string.voice_call_service_unavailable,
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -140,22 +155,6 @@ fun ChatConversationScreen(
             scope.launch { onMicrophonePermissionResult(callId, granted) }
         }
     }
-    fun startOutgoingVoiceCall() {
-        scope.launch {
-            try {
-                onStartVoiceCall()
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (_: Exception) {
-                Toast.makeText(
-                    context,
-                    R.string.voice_call_service_unavailable,
-                    Toast.LENGTH_LONG,
-                ).show()
-            }
-        }
-    }
-
     fun requestCallNotificationForOutgoing() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(

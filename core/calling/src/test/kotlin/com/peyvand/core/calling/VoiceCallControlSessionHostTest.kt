@@ -7,6 +7,7 @@ import com.peyvand.core.domain.connection.SecureSessionStatus
 import com.peyvand.core.domain.connection.VoiceCallP2pEndpointProvider
 import com.peyvand.core.domain.connection.VoiceCallP2pEndpoints
 import com.peyvand.core.transfer.protocol.TransferFrameCodec
+import java.io.ByteArrayOutputStream
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.net.Inet4Address
@@ -205,9 +206,9 @@ class VoiceCallControlSessionHostTest {
         private val endpoints = VoiceCallP2pEndpoints(
             sessionId = sessionId,
             interfaceName = "p2p-test",
-            localAddress = "192.168.49.1".asIpv4(),
+            localAddress = "192.168.49.1".asIpv4Address(),
             localPrefixLength = 24,
-            peerAddress = "192.168.49.2".asIpv4(),
+            peerAddress = "192.168.49.2".asIpv4Address(),
         )
 
         override fun currentVoiceCallP2pEndpoints(): VoiceCallP2pEndpoints = endpoints
@@ -231,6 +232,8 @@ class VoiceCallControlSessionHostTest {
         }
     }
 
-    private fun String.asIpv4(): Inet4Address =
-        InetAddress.getByName(this) as Inet4Address
 }
+
+private fun String.asIpv4Address(): Inet4Address =
+    InetAddress.getByName(this) as Inet4Address
+

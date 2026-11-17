@@ -210,9 +210,9 @@ class VoiceCallOrchestratorTest {
         private val endpoint = VoiceCallP2pEndpoints(
             sessionId = UUID.fromString("dc1cc7db-6e1f-45d9-95c5-0f0e555be7c7"),
             interfaceName = "p2p-test",
-            localAddress = "192.168.49.1".asIpv4(),
+            localAddress = "192.168.49.1".asIpv4Address(),
             localPrefixLength = 24,
-            peerAddress = "192.168.49.2".asIpv4(),
+            peerAddress = "192.168.49.2".asIpv4Address(),
         )
         override fun currentVoiceCallP2pEndpoints(): VoiceCallP2pEndpoints = endpoint
     }
@@ -272,6 +272,8 @@ class VoiceCallOrchestratorTest {
         override fun close() { closed = true }
     }
 
-    private fun String.asIpv4(): Inet4Address =
-        InetAddress.getByName(this) as Inet4Address
 }
+
+private fun String.asIpv4Address(): Inet4Address =
+    InetAddress.getByName(this) as Inet4Address
+
