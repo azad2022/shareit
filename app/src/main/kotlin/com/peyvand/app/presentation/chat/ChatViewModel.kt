@@ -8,6 +8,10 @@ import com.peyvand.core.domain.chat.ChatRepository
 import com.peyvand.core.domain.chat.PeerIdentityId
 import com.peyvand.core.domain.chat.TrustedPeerIdentity
 import com.peyvand.core.domain.chat.TrustedPeerRepository
+import com.peyvand.core.calling.VoiceCallOrchestrator
+import com.peyvand.core.domain.call.VoiceCallSnapshot
+import com.peyvand.core.domain.call.VoiceCallStatus
+import java.util.UUID
 import com.peyvand.core.domain.connection.AuthenticatedPeerChannelPurpose
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
 import com.peyvand.core.domain.connection.SecureSessionStatus
@@ -46,6 +50,9 @@ data class ChatConversationUiState(
     val isSyncChannelReady: Boolean = false,
     val isConnectedToDifferentPeer: Boolean = false,
     val notice: ChatUiNotice? = null,
+    val voiceCall: VoiceCallSnapshot = VoiceCallSnapshot(),
+    val canStartVoiceCall: Boolean = false,
+    val isVoiceCallMuted: Boolean = false,
 )
 
 enum class ChatUiNotice {
@@ -67,7 +74,10 @@ class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val trustedPeerRepository: TrustedPeerRepository,
     private val connectivityRepository: PeerConnectivityRepository,
+    private val voiceCallOrchestrator: VoiceCallOrchestrator,
 ) : ViewModel() {
+
+    val voiceCallSnapshot: StateFlow<VoiceCallSnapshot> = voiceCallOrchestrator.snapshot
 
     private val trustedPeers: StateFlow<List<TrustedPeerIdentity>> =
         trustedPeerRepository.observeTrustedPeers().stateIn(
@@ -149,10 +159,16 @@ class ChatViewModel(
                     combine(notice, activeCoordinatorPeerState) { currentNotice, coordinatorPeer ->
                         currentNotice to coordinatorPeer
                     },
-                ) { peerMessages, pendingSession, noticeCoordinator ->
+                    combine(
+                        voiceCallOrchestrator.snapshot,
+                        voiceCallOrchestrator.canCall,
+                        voiceCallOrchestrator.isMuted,
+                    ) { call, canCall, muted -> Triple(call, canCall, muted) },
+                ) { peerMessages, pendingSession, noticeCoordinator, callUi ->
                     val (peers, messages) = peerMessages
                     val (pending, session) = pendingSession
                     val (currentNotice, coordinatorPeer) = noticeCoordinator
+                    val (voiceCall, canStartVoiceCall, isVoiceCallMuted) = callUi
                     val peer = peers.firstOrNull { it.identityId == identityId }
                     val connectedPeer = session.peerIdentityId?.let {
                         runCatching { PeerIdentityId.fromSha256Fingerprint(it) }.getOrNull()
@@ -184,6 +200,9 @@ class ChatViewModel(
                             session.status == SecureSessionStatus.AUTHENTICATED &&
                                 connectedPeer != null && connectedPeer != identityId,
                         notice = currentNotice,
+                        voiceCall = voiceCall,
+                        canStartVoiceCall = canStartVoiceCall,
+                        isVoiceCallMuted = isVoiceCallMuted,
                     )
                 }
             }
@@ -199,6 +218,13 @@ class ChatViewModel(
     private var activeCoordinatorPeer: PeerIdentityId? = null
 
     init {
+        viewModelScope.launch {
+            voiceCallOrchestrator.snapshot.collect { call ->
+                if (call.status == VoiceCallStatus.INCOMING_RINGING) {
+                    openAuthenticatedConversation()
+                }
+            }
+        }
         viewModelScope.launch {
             connectivityRepository.secureSession.collect { snapshot ->
                 val peerFingerprint = snapshot.peerIdentityId
@@ -288,6 +314,25 @@ class ChatViewModel(
             ChatSendResult.NotSaved
         }
     }
+
+    suspend fun startVoiceCall(): UUID = voiceCallOrchestrator.startOutgoingCall()
+
+    suspend fun acceptIncomingVoiceCall(callId: UUID) =
+        voiceCallOrchestrator.acceptIncomingCall(callId)
+
+    suspend fun rejectIncomingVoiceCall(callId: UUID) =
+        voiceCallOrchestrator.rejectIncomingCall(callId)
+
+    suspend fun cancelOutgoingVoiceCall(callId: UUID) =
+        voiceCallOrchestrator.cancelOutgoingCall(callId)
+
+    suspend fun hangUpVoiceCall(callId: UUID) =
+        voiceCallOrchestrator.hangUp(callId)
+
+    suspend fun onMicrophonePermissionResult(callId: UUID, granted: Boolean) =
+        voiceCallOrchestrator.onMicrophonePermissionResult(callId, granted)
+
+    fun setVoiceCallMuted(muted: Boolean) = voiceCallOrchestrator.setMuted(muted)
 
     fun disconnectCurrentPeer() {
         closeActiveCoordinator()

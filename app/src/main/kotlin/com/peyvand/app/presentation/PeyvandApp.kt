@@ -53,6 +53,7 @@ import com.peyvand.core.domain.connection.PeerConnectionStatus
 import com.peyvand.core.domain.connection.SecureSessionStatus
 import com.peyvand.core.domain.discovery.DiscoveryRole
 import com.peyvand.core.domain.chat.PeerIdentityId
+import com.peyvand.core.domain.call.VoiceCallStatus
 
 private enum class HomeDestination {
     HOME,
@@ -82,6 +83,7 @@ fun PeyvandApp(
     val selectionState by shareSelectionViewModel.state.collectAsStateWithLifecycle()
     val chatHomeState by chatViewModel.homeUiState.collectAsStateWithLifecycle()
     val conversationState by chatViewModel.conversationUiState.collectAsStateWithLifecycle()
+    val voiceCallSnapshot by chatViewModel.voiceCallSnapshot.collectAsStateWithLifecycle()
     val selectedItems = selectionState.selectedItems.values.toList()
     var destination by rememberSaveable { mutableStateOf(HomeDestination.HOME) }
     var selectedChatPeerFingerprint by rememberSaveable { mutableStateOf<String?>(null) }
@@ -114,6 +116,22 @@ fun PeyvandApp(
                 isSender = destination == HomeDestination.CHAT_ATTACHMENT_SEND,
                 selectedItems = selectedItems,
             )
+        }
+    }
+
+    LaunchedEffect(
+        voiceCallSnapshot.callId,
+        voiceCallSnapshot.status,
+        secureSession.status,
+        secureSession.peerIdentityId,
+    ) {
+        if (voiceCallSnapshot.status == VoiceCallStatus.INCOMING_RINGING &&
+            secureSession.status == SecureSessionStatus.AUTHENTICATED
+        ) {
+            secureSession.peerIdentityId?.let { fingerprint ->
+                selectedChatPeerFingerprint = fingerprint
+                destination = HomeDestination.CHAT_CONVERSATION
+            }
         }
     }
 
@@ -255,6 +273,13 @@ fun PeyvandApp(
                         destination = HomeDestination.CHAT_ATTACHMENT_RECEIVE
                     },
                     onSendMessage = chatViewModel::sendMessage,
+                    onStartVoiceCall = chatViewModel::startVoiceCall,
+                    onAcceptIncomingVoiceCall = chatViewModel::acceptIncomingVoiceCall,
+                    onRejectIncomingVoiceCall = chatViewModel::rejectIncomingVoiceCall,
+                    onCancelOutgoingVoiceCall = chatViewModel::cancelOutgoingVoiceCall,
+                    onHangUpVoiceCall = chatViewModel::hangUpVoiceCall,
+                    onSetVoiceCallMuted = chatViewModel::setVoiceCallMuted,
+                    onMicrophonePermissionResult = chatViewModel::onMicrophonePermissionResult,
                 )
 
                 HomeDestination.CHAT_ATTACHMENT_SELECTION -> FileSelectionScreen(

@@ -173,6 +173,7 @@ class MainActivity : AppCompatActivity() {
                         chatRepository = peyvandApplication.chatRepository,
                         trustedPeerRepository = peyvandApplication.trustedPeerRepository,
                         connectivityRepository = peerConnectivityRepository,
+                        voiceCallOrchestrator = peyvandApplication.voiceCallOrchestrator,
                     ),
                 )[ChatViewModel::class.java]
 

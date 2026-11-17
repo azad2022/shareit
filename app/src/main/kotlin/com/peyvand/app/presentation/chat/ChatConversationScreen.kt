@@ -1,5 +1,10 @@
 package com.peyvand.app.presentation.chat
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
@@ -45,6 +51,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +70,8 @@ import com.peyvand.core.designsystem.theme.PeyvandColors
 import com.peyvand.core.domain.chat.ChatMessage
 import com.peyvand.core.domain.chat.ChatMessageDeliveryState
 import com.peyvand.core.domain.chat.ChatMessageDirection
+import com.peyvand.core.domain.call.VoiceCallStatus
+import java.util.UUID
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
@@ -76,6 +85,13 @@ fun ChatConversationScreen(
     onSendAttachment: () -> Unit,
     onPrepareReceive: () -> Unit,
     onSendMessage: suspend (String) -> ChatSendResult,
+    onStartVoiceCall: suspend () -> UUID,
+    onAcceptIncomingVoiceCall: suspend (UUID) -> Unit,
+    onRejectIncomingVoiceCall: suspend (UUID) -> Unit,
+    onCancelOutgoingVoiceCall: suspend (UUID) -> Unit,
+    onHangUpVoiceCall: suspend (UUID) -> Unit,
+    onSetVoiceCallMuted: (Boolean) -> Unit,
+    onMicrophonePermissionResult: suspend (UUID, Boolean) -> Unit,
 ) {
     val peer = state.peer
     var draft by rememberSaveable(peer?.identityId?.sha256Fingerprint) { mutableStateOf("") }
@@ -83,13 +99,44 @@ fun ChatConversationScreen(
     var emojiMenuExpanded by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val listState = rememberLazyListState()
+    var permissionRequestCallId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingPermissionCallId by remember { mutableStateOf<UUID?>(null) }
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val callId = pendingPermissionCallId
+        pendingPermissionCallId = null
+        if (callId != null) {
+            scope.launch { onMicrophonePermissionResult(callId, granted) }
+        }
+    }
     val voiceCallDescription = stringResource(R.string.chat_accessibility_voice_call)
     val videoCallDescription = stringResource(R.string.chat_accessibility_video_call)
     val attachmentDescription = stringResource(R.string.chat_accessibility_attachment)
     val emojiDescription = stringResource(R.string.chat_accessibility_emoji)
     val sendDescription = stringResource(R.string.chat_accessibility_send)
     val verifiedPeerDescription = stringResource(R.string.chat_accessibility_verified_peer)
+
+    LaunchedEffect(state.voiceCall.callId, state.voiceCall.status) {
+        val callId = state.voiceCall.callId ?: return@LaunchedEffect
+        if (state.voiceCall.status != VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION ||
+            permissionRequestCallId == callId.toString()
+        ) return@LaunchedEffect
+
+        permissionRequestCallId = callId.toString()
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO,
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            onMicrophonePermissionResult(callId, true)
+        } else {
+            pendingPermissionCallId = callId
+            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     LaunchedEffect(state.messages.lastOrNull()?.id) {
         if (state.messages.isNotEmpty()) {
@@ -179,12 +226,23 @@ fun ChatConversationScreen(
                     }
                 }
                 IconButton(
-                    enabled = false,
-                    onClick = {},
+                    enabled = state.canStartVoiceCall &&
+                        state.voiceCall.status in setOf(
+                            VoiceCallStatus.IDLE,
+                            VoiceCallStatus.ENDED,
+                            VoiceCallStatus.FAILED,
+                        ),
+                    onClick = { scope.launch { onStartVoiceCall() } },
                     modifier = Modifier.semantics {
                         contentDescription = voiceCallDescription
                     },
-                ) { PeyvandChatIcon(PeyvandChatIconType.VOICE_CALL, PeyvandColors.Outline, Modifier.size(22.dp)) }
+                ) {
+                    PeyvandChatIcon(
+                        PeyvandChatIconType.VOICE_CALL,
+                        if (state.canStartVoiceCall) ChatBlue else PeyvandColors.Outline,
+                        Modifier.size(22.dp),
+                    )
+                }
                 IconButton(
                     enabled = false,
                     onClick = {},
@@ -517,6 +575,100 @@ private fun ChatMessageBubble(message: ChatMessage) {
                 }
             }
         }
+    }
+
+    val activeCallId = state.voiceCall.callId
+    when (state.voiceCall.status) {
+        VoiceCallStatus.INCOMING_RINGING -> if (activeCallId != null) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text(stringResource(R.string.voice_call_incoming_title)) },
+                text = { Text(stringResource(R.string.voice_call_incoming_body, peer?.displayName.orEmpty())) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch { onAcceptIncomingVoiceCall(activeCallId) }
+                    }) {
+                        Text(stringResource(R.string.voice_call_accept))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        scope.launch { onRejectIncomingVoiceCall(activeCallId) }
+                    }) {
+                        Text(stringResource(R.string.voice_call_decline))
+                    }
+                },
+            )
+        }
+
+        VoiceCallStatus.OUTGOING_RINGING -> if (activeCallId != null) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text(stringResource(R.string.voice_call_outgoing_title)) },
+                text = { Text(stringResource(R.string.voice_call_outgoing_body, peer?.displayName.orEmpty())) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch { onCancelOutgoingVoiceCall(activeCallId) }
+                    }) {
+                        Text(stringResource(R.string.voice_call_cancel))
+                    }
+                },
+            )
+        }
+
+        VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text(stringResource(R.string.voice_call_permission_title)) },
+            text = { Text(stringResource(R.string.voice_call_permission_body)) },
+            confirmButton = {},
+        )
+
+        VoiceCallStatus.NEGOTIATING -> if (activeCallId != null) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text(stringResource(R.string.voice_call_connecting_title)) },
+                text = { Text(stringResource(R.string.voice_call_connecting_body)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch { onHangUpVoiceCall(activeCallId) }
+                    }) {
+                        Text(stringResource(R.string.voice_call_cancel))
+                    }
+                },
+            )
+        }
+
+        VoiceCallStatus.ACTIVE -> if (activeCallId != null) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text(stringResource(R.string.voice_call_active_title)) },
+                text = { Text(stringResource(R.string.voice_call_active_body, peer?.displayName.orEmpty())) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onSetVoiceCallMuted(!state.isVoiceCallMuted)
+                    }) {
+                        Text(
+                            stringResource(
+                                if (state.isVoiceCallMuted) R.string.voice_call_unmute
+                                else R.string.voice_call_mute,
+                            ),
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        scope.launch { onHangUpVoiceCall(activeCallId) }
+                    }) {
+                        Text(stringResource(R.string.voice_call_hang_up))
+                    }
+                },
+            )
+        }
+
+        VoiceCallStatus.IDLE,
+        VoiceCallStatus.ENDED,
+        VoiceCallStatus.FAILED,
+        -> Unit
     }
 }
 

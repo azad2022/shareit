@@ -2,7 +2,11 @@ package com.peyvand.app
 
 import android.app.Application
 import com.peyvand.core.calling.VoiceCallControlSessionHost
+import com.peyvand.core.calling.VoiceCallMediaSessionFactory
+import com.peyvand.core.calling.VoiceCallOrchestrator
 import com.peyvand.core.calling.VoiceCallSignal
+import com.peyvand.core.calling.android.AndroidWebRtcVoiceCallMediaSessionFactory
+import com.peyvand.core.calling.android.WebRtcVoiceMediaRuntime
 import com.peyvand.core.connectivity.network.AndroidNetworkEnvironmentRepository
 import com.peyvand.core.connectivity.wifi.WifiDirectDeviceDiscoveryRepository
 import com.peyvand.core.domain.discovery.DeviceDiscoveryRepository
@@ -29,8 +33,9 @@ import kotlinx.coroutines.flow.receiveAsFlow
 class PeyvandApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        // Starts only protocol/capability monitoring. Microphone and Telecom remain idle.
-        voiceCallControlSessionHost
+        // Starts authenticated call-control listening. The WebRTC runtime remains lazy:
+        // no PeerConnection or microphone capture exists until acceptance and permission.
+        voiceCallOrchestrator
     }
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -89,6 +94,41 @@ class PeyvandApplication : Application() {
                 }
             },
         ).also(VoiceCallControlSessionHost::start)
+    }
+
+    private val voiceCallMediaSessionFactory: VoiceCallMediaSessionFactory by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        object : VoiceCallMediaSessionFactory {
+            private val runtime by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+                WebRtcVoiceMediaRuntime(applicationContext)
+            }
+            private val delegate by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+                AndroidWebRtcVoiceCallMediaSessionFactory(runtime)
+            }
+
+            override fun create(
+                endpoints: com.peyvand.core.domain.connection.VoiceCallP2pEndpoints,
+                scope: CoroutineScope,
+                onLocalIceCandidate: suspend (sdpMid: String?, sdpMLineIndex: Int, candidate: String) -> Unit,
+                onFailure: (Throwable) -> Unit,
+            ) = delegate.create(endpoints, scope, onLocalIceCandidate, onFailure)
+        }
+    }
+
+    /** One actor coordinates call state; media is created only after consent and microphone grant. */
+    val voiceCallOrchestrator: VoiceCallOrchestrator by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED,
+    ) {
+        VoiceCallOrchestrator(
+            secureSession = peerConnectionRepository.secureSession,
+            callControlReady = voiceCallControlSessionHost.isReady,
+            incomingSignals = incomingVoiceCallSignals,
+            endpointProvider = wifiDirectRepository,
+            sendSignal = voiceCallControlSessionHost::send,
+            mediaFactory = voiceCallMediaSessionFactory,
+            scope = applicationScope,
+        ).also(VoiceCallOrchestrator::start)
     }
 
     val networkEnvironmentRepository: NetworkEnvironmentRepository by lazy(

@@ -16,6 +16,11 @@
     <!-- Required for local TCP sockets; PEYVAND does not use public Internet. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Requested only after the remote peer accepts a voice call. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Registers PEYVAND's self-managed VoIP calls with Android Telecom. -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />

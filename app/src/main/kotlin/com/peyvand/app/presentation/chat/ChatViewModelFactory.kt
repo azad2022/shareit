@@ -5,11 +5,13 @@ import androidx.lifecycle.ViewModelProvider
 import com.peyvand.core.domain.chat.ChatRepository
 import com.peyvand.core.domain.chat.TrustedPeerRepository
 import com.peyvand.core.domain.connection.PeerConnectivityRepository
+import com.peyvand.core.calling.VoiceCallOrchestrator
 
 class ChatViewModelFactory(
     private val chatRepository: ChatRepository,
     private val trustedPeerRepository: TrustedPeerRepository,
     private val connectivityRepository: PeerConnectivityRepository,
+    private val voiceCallOrchestrator: VoiceCallOrchestrator,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -20,6 +22,7 @@ class ChatViewModelFactory(
             chatRepository = chatRepository,
             trustedPeerRepository = trustedPeerRepository,
             connectivityRepository = connectivityRepository,
+            voiceCallOrchestrator = voiceCallOrchestrator,
         ) as T
     }
 }
