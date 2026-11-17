@@ -233,6 +233,9 @@ class SingleFileTransferCoordinatorTest {
         override val connection: StateFlow<PeerConnectionSnapshot> = connectionState
         override val tcpChannel: StateFlow<P2pTcpChannelSnapshot> = tcpState
         override val secureSession: StateFlow<SecureSessionSnapshot> = sessionState
+        override val voiceCallCapabilityVerified: StateFlow<Boolean> = MutableStateFlow(false)
+
+        override suspend fun verifyVoiceCallCapability(): Boolean = false
 
         override fun connectToPeer(peerId: String) = Unit
 
