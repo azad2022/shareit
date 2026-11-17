@@ -284,7 +284,11 @@ class AndroidVoiceCallTelecomController(
         builder.setStyle(style)
         val notification = builder.build()
         if (canPostNotifications()) {
-            runCatching { notificationManager.notify(NOTIFICATION_ID, notification) }
+            try {
+                notificationManager.notify(NOTIFICATION_ID, notification)
+            } catch (_: SecurityException) {
+                // Notification permission can be revoked between the permission check and notify().
+            }
         }
         runCatching { onForegroundNotification(notification) }
     }

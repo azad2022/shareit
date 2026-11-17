@@ -141,6 +141,7 @@ class VoiceCallOrchestratorTest {
             rig.remote.send(VoiceCallSignal.SdpAnswer(callId, "audio-answer"))
             rig.awaitStatus(VoiceCallStatus.FAILED)
             assertFalse(rig.orchestrator.snapshot.value.status == VoiceCallStatus.ACTIVE)
+            assertTrue(rig.mediaFactory.lastSession?.closed == true)
         } finally {
             rig.close()
         }
@@ -265,8 +266,8 @@ class VoiceCallOrchestratorTest {
             return mediaPathSucceeds && telecomActive
         }
         override fun setTelecomActive(active: Boolean): Boolean {
-            telecomActive = active && mediaPathSucceeds
-            return mediaPathSucceeds
+            telecomActive = active
+            return true
         }
         override fun setMuted(value: Boolean) { muted = value }
         override fun close() { closed = true }
