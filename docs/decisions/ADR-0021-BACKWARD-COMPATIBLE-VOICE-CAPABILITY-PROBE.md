@@ -31,7 +31,8 @@ Use a bounded UDP challenge/response on the authenticated Wi-Fi Direct link, out
 - Only a bounded number of authenticated requests and cached responses are processed per session.
 - Capability state and listener lifetime are scoped to one mTLS session and reset on teardown.
 - Capability proof is not call consent and does not grant microphone permission.
-- Media setup remains separately gated by remote call acceptance, local runtime permission, P2P-only ICE candidate validation, and DTLS-SRTP verification.
+- Media setup remains separately gated by remote call acceptance, local runtime permission, exact-interface P2P ICE candidate validation, and DTLS-SRTP verification.
+- After a valid proof, a peer can send its first `CALL_CONTROL` frame before the recipient UI has claimed that logical lease. The multiplexer now buffers a maximum of 24 frames / 64 KiB, then replays them to the single channel consumer when it claims the lease. Overflow disables only calls for that session and does not tear down chat or file transfer. This pre-claim buffer does not authorize any unverified peer; the capability proof remains a mandatory prerequisite for sending call frames.
 
 ## Consequences
 
