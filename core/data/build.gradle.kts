@@ -33,6 +33,7 @@ android {
 dependencies {
     implementation(project(":core:domain"))
     implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
 

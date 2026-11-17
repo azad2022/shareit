@@ -65,11 +65,41 @@ jobs:
             :core:calling:lintDebug \
             :app:assembleDebug
 
-      - name: Compute debug APK SHA-256
+      - name: Prepare ABI APKs and compute SHA-256
         if: success()
+        shell: bash
         run: |
-          test -f app/build/outputs/apk/debug/app-debug.apk
-          sha256sum app/build/outputs/apk/debug/app-debug.apk | tee app/build/outputs/apk/debug/app-debug.apk.sha256
+          set -euo pipefail
+          output_dir="app/build/outputs/apk/debug"
+          find_apk() {
+            local pattern="$1"
+            find "$output_dir" -maxdepth 1 -type f -iname "$pattern" ! -name 'peyvand-*' -print -quit
+          }
+          universal_apk="$(find_apk '*universal*debug.apk')"
+          arm64_apk="$(find_apk '*arm64-v8a*debug.apk')"
+          armv7_apk="$(find_apk '*armeabi-v7a*debug.apk')"
+          x86_apk="$(find_apk '*x86-debug.apk')"
+          x86_64_apk="$(find_apk '*x86_64-debug.apk')"
+          test -n "$universal_apk"
+          test -n "$arm64_apk"
+          test -n "$armv7_apk"
+          test -n "$x86_apk"
+          test -n "$x86_64_apk"
+          cp "$universal_apk" "$output_dir/peyvand-universal-debug.apk"
+          cp "$arm64_apk" "$output_dir/peyvand-arm64-v8a-debug.apk"
+          cp "$armv7_apk" "$output_dir/peyvand-armeabi-v7a-debug.apk"
+          sha256sum "$output_dir/peyvand-universal-debug.apk" > "$output_dir/peyvand-universal-debug.apk.sha256"
+          sha256sum "$output_dir/peyvand-arm64-v8a-debug.apk" > "$output_dir/peyvand-arm64-v8a-debug.apk.sha256"
+          sha256sum "$output_dir/peyvand-armeabi-v7a-debug.apk" > "$output_dir/peyvand-armeabi-v7a-debug.apk.sha256"
+          {
+            echo "| Debug APK variant | Bytes | SHA-256 |"
+            echo "|---|---:|---|"
+            for apk in "$output_dir"/peyvand-*-debug.apk; do
+              bytes="$(stat -c '%s' "$apk")"
+              digest="$(sha256sum "$apk" | cut -d ' ' -f 1)"
+              echo "| $(basename "$apk") | $bytes | `$digest` |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload validation reports
         if: always()
@@ -83,14 +113,36 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload debug APK
+      - name: Upload universal debug APK
         if: success()
         uses: actions/upload-artifact@v7
         with:
           name: peyvand-debug-apk
           path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/debug/app-debug.apk.sha256
+            app/build/outputs/apk/debug/peyvand-universal-debug.apk
+            app/build/outputs/apk/debug/peyvand-universal-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload arm64-v8a debug APK
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: peyvand-debug-apk-arm64-v8a
+          path: |
+            app/build/outputs/apk/debug/peyvand-arm64-v8a-debug.apk
+            app/build/outputs/apk/debug/peyvand-arm64-v8a-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload armeabi-v7a debug APK
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: peyvand-debug-apk-armeabi-v7a
+          path: |
+            app/build/outputs/apk/debug/peyvand-armeabi-v7a-debug.apk
+            app/build/outputs/apk/debug/peyvand-armeabi-v7a-debug.apk.sha256
           if-no-files-found: error
           retention-days: 7
 

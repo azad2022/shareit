@@ -49,12 +49,16 @@ import com.peyvand.core.designsystem.theme.PeyvandColors
 import com.peyvand.core.domain.chat.ChatMessageDeliveryState
 import com.peyvand.core.domain.chat.ChatMessageDirection
 import com.peyvand.core.domain.chat.PeerIdentityId
+import com.peyvand.core.domain.profile.LocalDeviceProfile
 
 @Composable
 fun ChatHomeScreen(
     state: ChatHomeUiState,
+    localProfile: LocalDeviceProfile,
+    defaultDeviceName: String,
     onOpenConversation: (PeerIdentityId) -> Unit,
     onOpenNearby: () -> Unit,
+    onOpenProfile: () -> Unit,
     onOpenTransfers: () -> Unit,
 ) {
     var search by rememberSaveable { mutableStateOf("") }
@@ -62,6 +66,7 @@ fun ChatHomeScreen(
         if (search.isBlank()) state.conversations
         else state.conversations.filter {
             it.peer.displayName.contains(search, ignoreCase = true) ||
+                it.peer.profileName?.contains(search, ignoreCase = true) == true ||
                 it.latestMessage?.body?.contains(search, ignoreCase = true) == true
         }
     }
@@ -97,15 +102,32 @@ fun ChatHomeScreen(
                     )
                 }
             }
-            val nearbyDescription = stringResource(R.string.chat_accessibility_nearby)
-            IconButton(
-                onClick = onOpenNearby,
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(ChatPaleBlue, CircleShape)
-                    .semantics { contentDescription = nearbyDescription },
-            ) {
-                PeyvandChatIcon(PeyvandChatIconType.ADD, ChatBlue)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                val profileDescription = stringResource(R.string.device_profile_open_accessibility)
+                IconButton(
+                    onClick = onOpenProfile,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .semantics { contentDescription = profileDescription },
+                ) {
+                    PeerAvatar(
+                        label = localProfile.profileName
+                            ?: localProfile.deviceNameOverride
+                            ?: defaultDeviceName,
+                        avatarBytes = localProfile.avatarBytes,
+                        modifier = Modifier.size(40.dp),
+                    )
+                }
+                val nearbyDescription = stringResource(R.string.chat_accessibility_nearby)
+                IconButton(
+                    onClick = onOpenNearby,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(ChatPaleBlue, CircleShape)
+                        .semantics { contentDescription = nearbyDescription },
+                ) {
+                    PeyvandChatIcon(PeyvandChatIconType.ADD, ChatBlue)
+                }
             }
         }
 
@@ -295,7 +317,8 @@ private fun ChatConversationRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             PeerAvatar(
-                label = preview.peer.displayName,
+                label = preview.peer.profileName ?: preview.peer.displayName,
+                avatarBytes = preview.peer.profileAvatarBytes,
                 modifier = Modifier.size(52.dp),
             )
             Column(
@@ -307,7 +330,7 @@ private fun ChatConversationRow(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = preview.peer.displayName,
+                        text = preview.peer.profileName ?: preview.peer.displayName,
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -326,6 +349,15 @@ private fun ChatConversationRow(
                         text = preview.latestMessage?.let(::formatChatTime) ?: "",
                         color = ChatMuted,
                         style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+                if (!preview.peer.profileName.isNullOrBlank()) {
+                    Text(
+                        text = stringResource(R.string.device_profile_device_label, preview.peer.displayName),
+                        color = ChatMuted,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Row(

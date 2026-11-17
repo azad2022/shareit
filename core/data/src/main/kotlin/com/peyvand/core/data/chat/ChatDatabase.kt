@@ -14,8 +14,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChatOutboxEntity::class,
         ChatCryptoStateEntity::class,
         ChatTrustedPeerEntity::class,
+        LocalDeviceProfileEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class ChatDatabase : RoomDatabase() {
@@ -24,6 +25,7 @@ abstract class ChatDatabase : RoomDatabase() {
     abstract fun outbox(): ChatOutboxDao
     abstract fun cryptoState(): ChatCryptoStateDao
     abstract fun trustedPeers(): ChatTrustedPeerDao
+    abstract fun localDeviceProfile(): LocalDeviceProfileDao
 }
 
 object ChatDatabaseFactory {
@@ -43,6 +45,27 @@ object ChatDatabaseFactory {
         }
     }
 
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE chat_trusted_peers ADD COLUMN profile_name TEXT")
+            database.execSQL("ALTER TABLE chat_trusted_peers ADD COLUMN profile_avatar_hash TEXT")
+            database.execSQL("ALTER TABLE chat_trusted_peers ADD COLUMN profile_avatar_bytes BLOB")
+            database.execSQL(
+                "ALTER TABLE chat_trusted_peers ADD COLUMN profile_revision INTEGER NOT NULL DEFAULT 0",
+            )
+            database.execSQL(
+                "CREATE TABLE IF NOT EXISTS local_device_profile (" +
+                    "id INTEGER NOT NULL, " +
+                    "device_name_override TEXT, " +
+                    "profile_name TEXT, " +
+                    "avatar_bytes BLOB, " +
+                    "profile_revision INTEGER NOT NULL, " +
+                    "share_with_trusted_peers INTEGER NOT NULL, " +
+                    "PRIMARY KEY(id))",
+            )
+        }
+    }
+
     fun open(
         context: Context,
         databaseName: String = DATABASE_NAME,
@@ -53,7 +76,7 @@ object ChatDatabaseFactory {
             ChatDatabase::class.java,
             databaseName,
         )
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .build()
     }

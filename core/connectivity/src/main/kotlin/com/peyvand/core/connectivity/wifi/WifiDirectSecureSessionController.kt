@@ -5,6 +5,8 @@ import com.peyvand.core.domain.connection.AuthenticatedPeerChannelPurpose
 import com.peyvand.core.transfer.session.AuthenticatedPeerChannelMultiplexer
 import com.peyvand.core.domain.chat.PeerIdentityKeyProvider
 import com.peyvand.core.domain.chat.TrustedPeerRepository
+import com.peyvand.core.domain.chat.TrustedPeerProfileConflictException
+import com.peyvand.core.domain.profile.DeviceProfileRepository
 import com.peyvand.core.domain.chat.LocalPeerIdentity
 import com.peyvand.core.domain.chat.TrustedPeerIdentity
 import com.peyvand.core.domain.chat.TrustedPeerIdentityConflictException
@@ -71,6 +73,7 @@ internal class WifiDirectSecureSessionController(
     private val rawSocketProvider: () -> Socket?,
     private val peerIdentityKeyProvider: PeerIdentityKeyProvider,
     private val trustedPeerRepository: TrustedPeerRepository,
+    private val deviceProfileRepository: DeviceProfileRepository,
     private val localDeviceDisplayName: String,
     private val p2pInterfaceProvider: () -> P2pMediaInterfaceBinding?,
 ) : com.peyvand.core.domain.connection.PeerSecureSessionRepository, VoiceCallP2pEndpointProvider {
@@ -458,7 +461,8 @@ internal class WifiDirectSecureSessionController(
                 PeerIdentityHandshake(
                     keyProvider = peerIdentityKeyProvider,
                     trustedPeers = trustedPeerRepository,
-                    localDisplayName = localDeviceDisplayName,
+                    deviceProfileRepository = deviceProfileRepository,
+                    fallbackDeviceName = localDeviceDisplayName,
                 ).exchange(
                     socket = authenticatedTlsSocket,
                     sessionId = sessionId,
@@ -468,6 +472,8 @@ internal class WifiDirectSecureSessionController(
                 )
             } catch (exception: TrustedPeerIdentityConflictException) {
                 throw SessionSetupException(SecureSessionFailure.PEER_IDENTITY_MISMATCH, exception)
+            } catch (exception: TrustedPeerProfileConflictException) {
+                throw SessionSetupException(SecureSessionFailure.PROTOCOL_ERROR, exception)
             } catch (exception: PeerIdentityHandshakeException) {
                 throw SessionSetupException(SecureSessionFailure.PEER_IDENTITY_PROOF_INVALID, exception)
             }
@@ -514,7 +520,7 @@ internal class WifiDirectSecureSessionController(
                 mutableState.value = SecureSessionSnapshot(
                     status = SecureSessionStatus.AUTHENTICATED,
                     peerIdentityId = authenticatedPeer.identityId.sha256Fingerprint,
-                    peerDisplayName = authenticatedPeer.displayName,
+                    peerDisplayName = authenticatedPeer.deviceName,
                     isNewlyTrustedPeer = authenticatedPeer.isNewlyTrusted,
                 )
                 diagnostics.event(

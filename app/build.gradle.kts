@@ -20,6 +20,17 @@ android {
         compose = true
     }
 
+    // WebRTC ships large native libraries. Produce installable per-ABI APKs as well
+    // as a universal debug APK; no media capability or architecture is dropped.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
     sourceSets {
         named("main") {
             kotlin.directories.add("src/main/kotlin")

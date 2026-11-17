@@ -27,10 +27,18 @@ data class TrustedPeerIdentity(
     val displayName: String,
     val firstSeenAtEpochMillis: Long,
     val lastAuthenticatedAtEpochMillis: Long,
+    /** Optional user-authored profile metadata; never part of the cryptographic identity. */
+    val profileName: String? = null,
+    val profileAvatarHash: String? = null,
+    val profileAvatarBytes: ByteArray? = null,
+    val profileRevision: Long = 0L,
 )
 
 class TrustedPeerIdentityConflictException :
     IllegalStateException("The trusted peer fingerprint is already bound to a different public key.")
+
+class TrustedPeerProfileConflictException :
+    IllegalStateException("The same peer profile revision was received with different content.")
 
 interface TrustedPeerRepository {
     fun observeTrustedPeers(): Flow<List<TrustedPeerIdentity>>
