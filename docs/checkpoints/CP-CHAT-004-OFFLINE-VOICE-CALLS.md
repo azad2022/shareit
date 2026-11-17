@@ -6,10 +6,10 @@
 - **Product approval:** Explicitly granted 2026-11-17
 - **Implementation authorization:** Audio-only, one-to-one, full-duplex calls
 - **Implementation branch:** `feature/cp-chat-004-offline-audio-calls`
-- **Latest implementation source commit:** `cb0a2d5d7384cb324ef80ef2a96113b8c2a03e96`
-- **Latest fully green CI before this source commit:** Run #533 (`44045018880`), exact head `091b539f4acd1c8132c684e2077591d224853b1a`
-- **CI for latest source commit:** No exact-head run observed at checkpoint update; no build/test claim is made for `cb0a2d5`.
-- **APK:** No debug APK artifact has been verified for `cb0a2d5`. The prior run #533 artifact belongs to the previous SHA and is not a test build for these changes.
+- **Latest implementation source commit:** `c12af16d2f2f8b53a810f13344330bad2ebddff2`
+- **Latest fully green CI before the current source line:** Run #533 (`44045018880`), exact head `091b539f4acd1c8132c684e2077591d224853b1a`
+- **Current exact-head CI:** Run #538 (`44055153343`), exact head `c12af16d2f2f8b53a810f13344330bad2ebddff2`, `IN_PROGRESS` at this checkpoint update. Run #537 was cancelled when the follow-up test-import commit superseded it; cancellation is not recorded as a test failure.
+- **APK:** No debug APK artifact has been verified for `c12af16`. The prior run #533 artifact belongs to an earlier SHA and is not a test APK for the current code.
 - **Video:** Deferred to a separate milestone; no camera/video implementation is included.
 
 ## Objective
@@ -34,7 +34,7 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 - One-call-per-authenticated-session state machine and bounded call-ID replay registry.
 - State ordering requires remote acceptance before requesting microphone permission on outgoing calls.
 - Remote rejection/cancellation handling and timeout rejection reason.
-- Unit-test source covers channel routing, state transitions, call-ID replay, codec bounds and control exchange; new multiplexer regressions are added in source commit `cb0a2d5`, but have not yet been run by CI.
+- Unit-test source covers channel routing, state transitions, call-ID replay, codec bounds and control exchange. Source commit `cb0a2d5` adds regressions for pre-claim INVITE and bounded-queue overflow while chat/file channels remain alive. Source commits `abd050b` and `6c412a0` add the per-session `VoiceCallControlSessionHost`: it probes capability after authentication, claims exactly one `CALL_CONTROL` lease automatically after proof, dispatches incoming signals through a bounded ordered queue, releases the lease when the session ends or the capability proof is revoked, and rejects sends while proof is not valid. Test source covers automatic lease claim, invite reception, legacy-peer no-claim, capability revocation and session teardown. The tests are present but have not been reported green for the current exact head until Run #538 completes.
 - New bounded pre-claim `CALL_CONTROL` queue: max 24 frames / 64 KiB. Early frames are replayed in order when the sole call-channel consumer claims the lease. Queue overflow disables calling only for that authenticated session; chat and file transfer remain operational.
 
 ### Backwards-compatible capability proof
@@ -62,7 +62,7 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 
 ## Not implemented / not yet accepted
 
-- No complete end-to-end call orchestrator yet connects invitation, permission result, SDP/ICE control, WebRTC lifecycle and state machine.
+- The persistent session-scoped CALL_CONTROL listener now exists, but no complete end-to-end call orchestrator yet connects invitation, user acceptance, runtime permission result, Core-Telecom state, SDP/ICE, WebRTC lifecycle and the call state machine.
 - `:app` does not yet depend on `:core:calling`; no application service owns the call runtime.
 - No Android Core-Telecom integration or managed audio endpoint routing yet.
 - No microphone foreground-service lifecycle, incoming-call notification or background/screen-off handling yet.
