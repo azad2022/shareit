@@ -181,7 +181,7 @@ class VoiceCallOrchestrator(
     fun setTelecomMediaActive(active: Boolean): Boolean {
         if (closed.get() || !started.get()) return false
         val current = snapshot.value
-        if (current.isTerminal || current.status == VoiceCallStatus.IDLE) return false
+        if (current.isTerminal || current.status == VoiceCallStatus.IDLE) return !active
 
         telecomMediaActive = active
         val media = mediaSession
@@ -270,9 +270,10 @@ class VoiceCallOrchestrator(
         controlReady = ready
         if (previouslyReady && !ready) {
             val current = machine.snapshot
-            if (current.callId != null && !current.isTerminal) {
+            val callId = current.callId
+            if (callId != null && !current.isTerminal) {
                 failCurrentCall(
-                    current.callId,
+                    callId,
                     VoiceCallFailure.AUTHENTICATED_SESSION_LOST,
                     sendEnd = false,
                 )
@@ -679,23 +680,6 @@ class VoiceCallOrchestrator(
     private fun publish() {
         mutableSnapshot.value = machine.snapshot
         refreshAvailability()
-    }
-
-    private fun refreshAvailability() {
-        val endpoints = endpointProvider.currentVoiceCallP2pEndpoints()
-        mutableCanCall.value =
-            !closed.get() &&
-            sessionAuthenticated &&
-            controlReady &&
-            activeSessionId != null &&
-            endpoints?.sessionId == activeSessionId
-    }
-
-    private fun ensureAvailable() {
-        synchronizeExternalState()
-        check(mutableCanCall.value) {
-            "Voice calling requires an authenticated peer and verified call capability."
-        }
     }
 
     private fun handleUnexpectedFailure(event: Event, exception: Exception) {

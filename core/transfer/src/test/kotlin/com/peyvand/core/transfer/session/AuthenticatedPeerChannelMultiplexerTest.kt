@@ -216,7 +216,10 @@ class AuthenticatedPeerChannelMultiplexerTest {
                     TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
                     TransferFrameType.CALL_INVITE,
                     sessionId,
-                    java.nio.ByteBuffer.allocate(4).putInt(index).array(),
+                    java.nio.ByteBuffer.allocate(16)
+                        .putLong(index.toLong())
+                        .putLong(index.toLong() + 1L)
+                        .array(),
                 ),
                 callA.outputStream,
             )
