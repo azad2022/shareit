@@ -79,3 +79,7 @@ Highest-risk areas:
 - [CP-CHAT-001 — Local encrypted persistence](CP-CHAT-001-LOCAL-PERSISTENCE.md)
 - [Local Chat UX Specification](../LOCAL_CHAT_UX_SPEC.md)
 - [Local Chat Architecture and UX](../LOCAL_CHAT_ARCHITECTURE_AND_UX.md)
+
+## Next owner-approved scope — CP-CHAT-003
+
+On 2026-11-17 the product owner approved the product behavior for bidirectional in-chat attachments with session-scoped automatic reception. The work is tracked separately in [CP-CHAT-003](CP-CHAT-003-BIDIRECTIONAL-CHAT-ATTACHMENTS.md) and [ADR-0018](../decisions/ADR-0018-SESSION-SCOPED-BIDIRECTIONAL-CHAT-ATTACHMENTS.md). This does not expand the already inspected CP-CHAT-002 implementation authorization; no attachment runtime changes are authorized by this documentation update.
