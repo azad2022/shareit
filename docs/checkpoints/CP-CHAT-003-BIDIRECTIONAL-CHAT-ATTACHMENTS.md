@@ -86,3 +86,12 @@ The product owner also identified future school/classroom use. CP-CHAT-003 remai
 - no accounts, public Internet, cloud relay or contact-book access for local chat/file exchange.
 
 A future classroom mode needs its own threat model and ADR for teacher-led pairing, class membership, temporary authorization, student privacy, abuse controls and session teardown. It must not be improvised by extending this one-to-one grant.
+
+
+## Protocol decision and first implementation slice (2026-11-17)
+
+- ADR-0019 defines chat attachment protocol v4 while preserving CP-004's v3 batch protocol. v4 is required for one-item and multi-item attachment batches with complete batch/item correlation; there is no silent fallback to v1/v3.
+- Source commit 34f05893b70c27c8b505073dd143229db7b15287 added the first single-reader BatchTransferFrameRouter and routing tests.
+- Follow-up hardening commits 8781645a36d8602ed5a19b610d25e9c7657ae201 and 8aae1ca55554e4eb7988ac5664617a5c022f9498 bound the number of active routes and add an inbound-route exhaustion test.
+- The initial router implementation currently routes v3 batch frames only. It is a foundational slice, not yet the v4 chat attachment implementation; it must be upgraded and validated against ADR-0019 before any chat UI integration.
+- Initial CI run 44032541586 was cancelled by the newer push under the branch's cancel-in-progress concurrency policy. Run 44032993411 was also cancelled by the subsequent push. Exact-head CI for 8aae1ca55554e4eb7988ac5664617a5c022f9498 is run 44033005923 and was queued/in progress at the time of this update. Do not mark the router or checkpoint PASSED until the latest exact-head run completes.
