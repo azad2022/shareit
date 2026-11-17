@@ -10,6 +10,8 @@ import com.peyvand.core.domain.chat.TrustedPeerIdentity
 import com.peyvand.core.domain.chat.TrustedPeerIdentityConflictException
 import com.peyvand.core.domain.chat.LocalPeerIdentityUnavailableException
 import com.peyvand.core.domain.connection.PeerConnectionSnapshot
+import com.peyvand.core.domain.connection.VoiceCallP2pEndpointProvider
+import com.peyvand.core.domain.connection.VoiceCallP2pEndpoints
 import com.peyvand.core.domain.connection.PeerTransferRole
 import com.peyvand.core.domain.connection.SecureSessionFailure
 import com.peyvand.core.domain.connection.SecureSessionSnapshot
@@ -66,7 +68,7 @@ internal class WifiDirectSecureSessionController(
     private val peerIdentityKeyProvider: PeerIdentityKeyProvider,
     private val trustedPeerRepository: TrustedPeerRepository,
     private val localDeviceDisplayName: String,
-) : com.peyvand.core.domain.connection.PeerSecureSessionRepository {
+) : com.peyvand.core.domain.connection.PeerSecureSessionRepository, VoiceCallP2pEndpointProvider {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableState = MutableStateFlow(SecureSessionSnapshot())
@@ -82,6 +84,7 @@ internal class WifiDirectSecureSessionController(
     private var rawSocket: Socket? = null
     private var secureSocket: SSLSocket? = null
     private var activeSessionId: UUID? = null
+    private var voiceCallP2pEndpoints: VoiceCallP2pEndpoints? = null
     private var channelMultiplexer: AuthenticatedPeerChannelMultiplexer? = null
     private var voiceCallCapabilityController: WifiDirectVoiceCallCapabilityController? = null
     private var activeKeyAlias: String? = null
@@ -127,6 +130,15 @@ internal class WifiDirectSecureSessionController(
             }
         }
     }
+
+    override fun currentVoiceCallP2pEndpoints(): VoiceCallP2pEndpoints? =
+        synchronized(lock) {
+            if (mutableState.value.status != SecureSessionStatus.AUTHENTICATED) {
+                return@synchronized null
+            }
+            val activeId = activeSessionId ?: return@synchronized null
+            voiceCallP2pEndpoints?.takeIf { it.sessionId == activeId }
+        }
 
     override suspend fun verifyVoiceCallCapability(): Boolean {
         val controller = synchronized(lock) {
@@ -470,6 +482,7 @@ internal class WifiDirectSecureSessionController(
                 }
                 secureSocket = authenticatedTlsSocket
                 activeSessionId = sessionId
+                voiceCallP2pEndpoints = createVoiceCallP2pEndpoints(authenticatedTlsSocket, sessionId)
                 voiceCallCapabilityController = capabilityController
                 rawSocket = null
                 approval = null
@@ -573,6 +586,19 @@ internal class WifiDirectSecureSessionController(
                 ),
             )
         }
+    }
+
+    private fun createVoiceCallP2pEndpoints(
+        tlsSocket: SSLSocket,
+        sessionId: UUID,
+    ): VoiceCallP2pEndpoints? {
+        val local = tlsSocket.localAddress as? Inet4Address ?: return null
+        val peer = tlsSocket.inetAddress as? Inet4Address ?: return null
+        return VoiceCallP2pEndpoints(
+            sessionId = sessionId,
+            localAddress = local,
+            peerAddress = peer,
+        )
     }
 
     private suspend fun createVoiceCallCapabilityController(
@@ -868,6 +894,7 @@ internal class WifiDirectSecureSessionController(
         secureSocket = null
         rawSocket = null
         activeSessionId = null
+        voiceCallP2pEndpoints = null
         activeKeyAlias?.let(::deleteKeyAlias)
         activeKeyAlias = null
     }
