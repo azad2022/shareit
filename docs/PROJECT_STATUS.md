@@ -18,7 +18,8 @@
 - **Branch:** `feature/cp-chat-002-chat-experience`
 - **Base:** CP-CHAT-001 branch head `eaa8fad9649362951e9283b91b8d162a26c75488`
 - **Latest implementation source SHA:** `8e25b56951ef981dcf85ade834edd94881b655a1`
-- **Latest exact-head CI:** run [43623779996](https://github.com/azad2022/shareit/actions/runs/43623779996), pending at last verification; previous run [43599087732](https://github.com/azad2022/shareit/actions/runs/43599087732) passed on the preceding code snapshot and is not validation of these refinements.
+- **Next approved design checkpoint:** CP-CHAT-003 — bidirectional in-chat attachments with session-scoped automatic reception; owner-approved product behavior, implementation not authorized.
+- **Latest exact-head CI:** run [43623779996](https://github.com/azad2022/shareit/actions/runs/43623779996) completed with conclusion **CANCELLED** for source SHA `8e25b56951ef981dcf85ade834edd94881b655a1`; it is not a passing validation. Previous run [43599087732](https://github.com/azad2022/shareit/actions/runs/43599087732) passed on a preceding code snapshot only.
 
 ## Objective
 
@@ -90,6 +91,15 @@ Highest-risk areas:
 - [CP-CHAT-001 — Local encrypted persistence](CP-CHAT-001-LOCAL-PERSISTENCE.md)
 - [Local Chat UX Specification](../LOCAL_CHAT_UX_SPEC.md)
 - [Local Chat Architecture and UX](../LOCAL_CHAT_ARCHITECTURE_AND_UX.md)
+
+## CP-CHAT-003 — Bidirectional in-chat attachments
+
+- **Status:** `IN_PROGRESS`; product behavior and design recorded on 2026-11-17.
+- **Decision:** One device requests connection and the other accepts. Once the secure one-to-one session is authenticated, both endpoints may send and automatically receive files without per-file/per-batch prompts. The grant ends with that session.
+- **UX:** Native Android Photo Picker for photos/videos; system document picker for other files. No custom gallery/file manager or separate sender/receiver route. Attachment cards and progress stay inside the conversation.
+- **Architecture:** One session supervisor, one FILE_TRANSFER channel owner and one inbound dispatcher; bidirectional transfer IDs and independent item state; bounded streaming and SHA-256 publication.
+- **Security:** Existing mutual TLS, persistent peer identity and ADR-0017 SAS requirements remain; no automatic file opening or installation.
+- **Implementation authorization:** Not granted. Details: `docs/checkpoints/CP-CHAT-003-BIDIRECTIONAL-CHAT-ATTACHMENTS.md` and `docs/decisions/ADR-0018-SESSION-SCOPED-BIDIRECTIONAL-CHAT-ATTACHMENTS.md`.
 
 ## CP-CHAT-001 — Local encrypted persistence
 
