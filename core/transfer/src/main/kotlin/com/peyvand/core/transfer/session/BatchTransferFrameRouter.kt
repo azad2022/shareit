@@ -52,6 +52,7 @@ internal class BatchTransferFrameRouter(
     fun registerOutgoing(batchId: UUID): RoutedBatchChannel = synchronized(lock) {
         check(!closed) { "The batch frame router is closed" }
         check(!routes.containsKey(batchId)) { "A route already exists for this batch" }
+        check(routes.size < MAX_ACTIVE_BATCHES) { "The active batch limit has been reached" }
         createRouteLocked(batchId)
     }
 
@@ -85,6 +86,9 @@ internal class BatchTransferFrameRouter(
                 if (closed) throw IOException("The batch frame router is closed")
                 if (routes.containsKey(batchId)) {
                     throw TransferProtocolException("A batch offer reused an active batch identifier")
+                }
+                if (routes.size >= MAX_ACTIVE_BATCHES) {
+                    throw TransferProtocolException("The peer exceeded the active batch limit")
                 }
                 createRouteLocked(batchId)
             }
@@ -167,6 +171,7 @@ internal class BatchTransferFrameRouter(
         const val FIRST_BATCH_FRAME_CODE = 12
         const val LAST_BATCH_FRAME_CODE = 31
         const val BATCH_ID_BYTES = 16
+        const val MAX_ACTIVE_BATCHES = 2
         const val ROUTE_BUFFER_BYTES = 128 * 1024
     }
 }
