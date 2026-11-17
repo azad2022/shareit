@@ -6,8 +6,9 @@
 - **Product approval:** Explicitly granted 2026-11-17
 - **Implementation authorization:** Audio-only, one-to-one, full-duplex calls
 - **Implementation branch:** `feature/cp-chat-004-offline-audio-calls`
-- **Latest code implementation SHA:** `226b6ef574aa2af92ff24a5f354ed3a886746482`
-- **Exact-head CI:** Run #563 (`44061209704`), targeting the implementation SHA above; status was `pending` when this checkpoint update was prepared. No exact-head APK artifact has been verified.
+- **Latest code implementation SHA:** `76777abaad0547f501f6b87480e3a8814a713e4d`
+- **Latest validation attempt before the compile fixes:** Run #564 (`44061917498`), exact source head `64bc3f8efa38c39e1af540658824ba2e87762178`; build/unit/lint failed during Kotlin compilation, while Android storage/mTLS instrumentation succeeded on API 26 and API 36. No debug APK was uploaded by that run.
+- **Compile-fix commit:** `76777abaad0547f501f6b87480e3a8814a713e4d` fixes the specific application and test compilation errors reported by #564. A new exact-head workflow was triggered by the push; its result was not available when this checkpoint was refreshed. No exact-head APK artifact has yet been verified.
 - **Last fully green CI for the older baseline:** Run #533 (`44045018880`), exact head `091b539f4acd1c8132c684e2077591d224853b1a`. Its APK artifact is not a build of the current implementation SHA.
 - **Video:** Deferred to a separate milestone; no camera/video implementation is included.
 
@@ -81,7 +82,8 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 - Run #526 (`44043724377`) passed all three jobs for the earlier audio-only WebRTC media-engine baseline; its APK is not the current code.
 - Run #533 (`44045018880`) passed build/unit/lint and Android storage/mTLS instrumentation on API 26 and API 36 for exact head `091b539f4acd1c8132c684e2077591d224853b1a`.
 - Run #556 (`44059671482`) failed on an earlier ancestor of the current source line. Its logs identified duplicate availability methods and related Kotlin compile errors plus a call-control queue test that used a malformed 4-byte INVITE payload. The duplicate methods and smart-cast issue were removed, the WebRTC call-site was brought into line with the media API, and the regression test now uses the protocol's required 16-byte call UUID payload.
-- Run #563 (`44061209704`) is the exact-code-head validation for SHA `226b6ef574aa2af92ff24a5f354ed3a886746482`; it was pending when this document was updated. The result and APK artifact must be read back before reporting a successful build or sharing an APK.
+- Run #564 (`44061917498`) targeted exact source head `64bc3f8efa38c39e1af540658824ba2e87762178`. Its app Kotlin compilation failed because of a missing coroutine import, a missing notification vector resource (and consequent notification-builder resolution errors), a local function referenced before its declaration, and test helper/import errors. API 26 and API 36 storage/mTLS instrumentation jobs both passed; this does not validate voice-call media.
+- Commit `76777abaad0547f501f6b87480e3a8814a713e4d` applies the targeted compile fixes and triggers a new workflow. The new exact-head result and APK artifact are not yet available at checkpoint publication.
 - Cancelled superseded runs are not reported as test failures.
 
 ## Acceptance matrix
@@ -101,6 +103,6 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 
 ## Current assessment
 
-The current branch contains the signalling host, orchestrator, WebRTC media foundation, P2P interface admission, chat call UI, microphone permission flow and Core-Telecom / foreground-service integration. These are implementation facts, not yet verified phone-to-phone behaviour. The current exact-code-head CI result and artifact are not yet verified; physical route, audio and lifecycle tests remain outstanding.
+The current branch contains the signalling host, orchestrator, WebRTC media foundation, P2P interface admission, chat call UI, microphone permission flow and Core-Telecom / foreground-service integration. The compile errors identified by Run #564 have been addressed in commit `76777abaad0547f501f6b87480e3a8814a713e4d`; the resulting exact-head CI and debug APK are still pending and have not been independently verified. These are implementation facts, not yet verified phone-to-phone behaviour. Physical route, audio and lifecycle tests remain outstanding.
 
 Checkpoint status remains **IN_PROGRESS**. No successful phone-to-phone voice call is claimed.
