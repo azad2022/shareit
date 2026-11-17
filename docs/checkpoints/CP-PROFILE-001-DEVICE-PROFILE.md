@@ -37,7 +37,8 @@ Every peer retains a visible device label. A user may additionally configure a p
 
 - **Historical isolated implementation SHA:** `fccb9776125afdcfd24e1e957578ce1bf66fe378` on `feature/cp-profile-001-device-profile`.
 - **Historical isolated-branch CI:** [Run #43910295903](https://github.com/azad2022/shareit/actions/runs/43910295903) completed successfully on 2026-11-16; all three jobs passed. This validates the earlier isolated profile branch only and is not evidence for the integrated CP-CHAT-004 source.
-- **Current integrated source SHA:** `06b617cca6e317c8706fc44bfb1d9f22dac16f3d` on `feature/cp-chat-004-offline-audio-calls`; combined-head CI has not yet been validated.
+- **Current integrated source SHA:** `06b617cca6e317c8706fc44bfb1d9f22dac16f3d` on `feature/cp-chat-004-offline-audio-calls`.
+- **Negative avatar test commit:** `c66a234a8204c88bb7d2920d93fe8a29d9cb5e59` adds an instrumentation case proving that a 128×128 JPEG is rejected by the integrated trusted-peer repository. Combined-head CI has not yet been validated.
 - **JVM unit tests:** 172/172 passed; zero failures, errors or skips. `DeviceProfileRulesTest` passed 8/8.
 - **Lint:** zero errors across configured modules. Warnings: app 28, core:data 2, core:storage 1, core:designsystem 1, core:connectivity 1; core:domain and core:transfer reported no issues.
 - **API 26 instrumentation:** 35 tests reported, zero failures and errors, one conditional skip. `:core:data` passed 27/27, including the v2→v3 migration test (1/1), DeviceProfileRepositoryTest (3/3), and RoomChatRepositoryTest (23/23). Storage passed 2/2. Connectivity reported 6 tests with one conditional TLS 1.3 skip because the Android provider does not support TLS 1.3; the remaining five passed.
