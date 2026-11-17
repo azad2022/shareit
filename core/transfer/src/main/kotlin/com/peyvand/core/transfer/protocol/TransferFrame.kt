@@ -143,7 +143,7 @@ object TransferFrameCodec {
         }
 
         val version = headerBuffer.get().toInt() and 0xff
-        if (version !in CURRENT_PROTOCOL_VERSION..BATCH_PROTOCOL_VERSION) {
+        if (version !in CURRENT_PROTOCOL_VERSION..CHAT_ATTACHMENT_PROTOCOL_VERSION) {
             throw TransferProtocolException("Unsupported protocol version: $version")
         }
 
@@ -165,7 +165,7 @@ object TransferFrameCodec {
     }
 
     private fun validateTypeVersion(type: TransferFrameType, version: Int) {
-        if (version !in CURRENT_PROTOCOL_VERSION..BATCH_PROTOCOL_VERSION) {
+        if (version !in CURRENT_PROTOCOL_VERSION..CHAT_ATTACHMENT_PROTOCOL_VERSION) {
             throw TransferProtocolException("Unsupported protocol version: $version")
         }
         val isBatchFrame = type.wireCode in

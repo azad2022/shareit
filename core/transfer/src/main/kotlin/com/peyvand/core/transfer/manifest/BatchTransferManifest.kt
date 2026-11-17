@@ -23,7 +23,8 @@ data class BatchTransferManifest(
     }
 
     companion object {
-        const val MIN_ITEMS = 2
+        const val MIN_ITEMS = 1
+        const val LEGACY_MIN_ITEMS = 2
         const val MAX_ITEMS = 32
     }
 }

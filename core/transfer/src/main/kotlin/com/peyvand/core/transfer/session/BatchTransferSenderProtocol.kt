@@ -58,9 +58,14 @@ import kotlinx.coroutines.selects.select
 
 internal class BatchTransferSenderProtocol(
     private val maximumFileSizeBytes: Long,
+    private val protocolVersion: Int = TransferFrameCodec.BATCH_PROTOCOL_VERSION,
 ) {
     init {
         require(maximumFileSizeBytes >= 0L)
+        require(
+            protocolVersion == TransferFrameCodec.BATCH_PROTOCOL_VERSION ||
+                protocolVersion == TransferFrameCodec.CHAT_ATTACHMENT_PROTOCOL_VERSION,
+        )
     }
 
     suspend fun sendBatch(
@@ -76,13 +81,13 @@ internal class BatchTransferSenderProtocol(
         onItemVerifying: (UUID) -> Unit = {},
         onItemOutcome: (BatchItemOutcome) -> Unit = {},
     ): BatchTransferResult {
-        val output = BufferedOutputStream(channelOutput, IO_BUFFER_BYTES)
-        val reader = BatchFrameReader(channelInput, CoroutineScope(currentCoroutineContext()), sessionId)
+        val output = VersionedBatchOutputStream(channelOutput, IO_BUFFER_BYTES, protocolVersion)
+        val reader = BatchFrameReader(channelInput, CoroutineScope(currentCoroutineContext()), sessionId, protocolVersion)
         val outcomes = ArrayList<BatchItemOutcome>(manifest.items.size)
 
         try {
             // First disclose only a random batch identifier. Names, MIME types, sizes and
-            // item count remain undisclosed until the receiver explicitly permits the preview.
+            // item count remain undisclosed until the receiver's session policy accepts the offer.
             val offer = BatchOffer(manifest.batchId)
             writeFrame(
                 output,

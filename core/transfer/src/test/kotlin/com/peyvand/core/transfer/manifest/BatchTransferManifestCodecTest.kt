@@ -44,6 +44,20 @@ class BatchTransferManifestCodecTest {
     }
 
     @Test
+    fun roundTripsSingleItemForChatAttachmentProtocol() {
+        val manifest = BatchTransferManifest(
+            UUID.randomUUID(),
+            listOf(
+                TransferManifestItem(UUID.randomUUID(), "photo.jpg", "image/jpeg", 128L),
+            ),
+        )
+        assertEquals(
+            manifest,
+            BatchTransferManifestCodec.decode(BatchTransferManifestCodec.encode(manifest)),
+        )
+    }
+
+    @Test
     fun rejectsManifestWithDuplicateItemIds() {
         val id = UUID.randomUUID()
         val duplicatePayload = java.io.ByteArrayOutputStream().apply {

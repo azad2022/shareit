@@ -167,6 +167,26 @@ class TransferFrameCodecTest {
     }
 
     @Test
+    fun chatAttachmentBatchFramesRoundTripWithVersionFour() {
+        val batchId = UUID.randomUUID()
+        val payload = ByteBuffer.allocate(16)
+            .order(ByteOrder.BIG_ENDIAN)
+            .putLong(batchId.mostSignificantBits)
+            .putLong(batchId.leastSignificantBits)
+            .array()
+        val frame = TransferFrame(
+            TransferFrameCodec.CHAT_ATTACHMENT_PROTOCOL_VERSION,
+            TransferFrameType.BATCH_OFFER,
+            sessionId,
+            payload,
+        )
+        val output = ByteArrayOutputStream()
+        TransferFrameCodec.write(frame, output)
+        assertEquals(frame, TransferFrameCodec.read(ByteArrayInputStream(output.toByteArray())))
+        assertEquals(4, TransferFrameCodec.CHAT_ATTACHMENT_PROTOCOL_VERSION)
+    }
+
+    @Test
     fun batchAndSingleFileFramesCannotCrossProtocolVersions() {
         assertThrows(TransferProtocolException::class.java) {
             TransferFrameCodec.write(
@@ -183,6 +203,17 @@ class TransferFrameCodecTest {
             TransferFrameCodec.write(
                 TransferFrame(
                     TransferFrameCodec.BATCH_PROTOCOL_VERSION,
+                    TransferFrameType.ACCEPT,
+                    sessionId,
+                    byteArrayOf(),
+                ),
+                ByteArrayOutputStream(),
+            )
+        }
+        assertThrows(TransferProtocolException::class.java) {
+            TransferFrameCodec.write(
+                TransferFrame(
+                    TransferFrameCodec.CHAT_ATTACHMENT_PROTOCOL_VERSION,
                     TransferFrameType.ACCEPT,
                     sessionId,
                     byteArrayOf(),

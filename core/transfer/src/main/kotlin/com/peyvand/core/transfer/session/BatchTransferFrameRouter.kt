@@ -28,6 +28,8 @@ import kotlinx.coroutines.launch
  *
  * The router owns only the logical child channel, never the parent TLS socket.
  */
+internal enum class BatchRouteDirection { OUTGOING, INCOMING }
+
 internal class BatchTransferFrameRouter(
     private val channel: AuthenticatedPeerChannel,
     private val scope: CoroutineScope,
@@ -52,8 +54,11 @@ internal class BatchTransferFrameRouter(
     fun registerOutgoing(batchId: UUID): RoutedBatchChannel = synchronized(lock) {
         check(!closed) { "The batch frame router is closed" }
         check(!routes.containsKey(batchId)) { "A route already exists for this batch" }
+        check(routes.values.none { it.direction == BatchRouteDirection.OUTGOING }) {
+            "An outbound batch is already active"
+        }
         check(routes.size < MAX_ACTIVE_BATCHES) { "The active batch limit has been reached" }
-        createRouteLocked(batchId)
+        createRouteLocked(batchId, BatchRouteDirection.OUTGOING)
     }
 
     private suspend fun readAndRouteFrames() {
@@ -74,7 +79,7 @@ internal class BatchTransferFrameRouter(
         if (frame.sessionId != channel.sessionId) {
             throw TransferProtocolException("Batch frame belongs to a different authenticated session")
         }
-        if (frame.protocolVersion != TransferFrameCodec.BATCH_PROTOCOL_VERSION ||
+        if (frame.protocolVersion != TransferFrameCodec.CHAT_ATTACHMENT_PROTOCOL_VERSION ||
             frame.type.wireCode !in FIRST_BATCH_FRAME_CODE..LAST_BATCH_FRAME_CODE
         ) {
             throw TransferProtocolException("Unsupported frame on the batch exchange channel")
@@ -87,10 +92,13 @@ internal class BatchTransferFrameRouter(
                 if (routes.containsKey(batchId)) {
                     throw TransferProtocolException("A batch offer reused an active batch identifier")
                 }
+                if (routes.values.any { it.direction == BatchRouteDirection.INCOMING }) {
+                    throw TransferProtocolException("The peer exceeded the inbound batch limit")
+                }
                 if (routes.size >= MAX_ACTIVE_BATCHES) {
                     throw TransferProtocolException("The peer exceeded the active batch limit")
                 }
-                createRouteLocked(batchId)
+                createRouteLocked(batchId, BatchRouteDirection.INCOMING)
             }
             // The offer itself is passed separately. The receiver protocol must not
             // read it again from the route before expecting the manifest.
@@ -113,8 +121,11 @@ internal class BatchTransferFrameRouter(
         route.deliver(frame)
     }
 
-    private fun createRouteLocked(batchId: UUID): RoutedBatchChannel {
-        val route = RoutedBatchChannel(batchId, ROUTE_BUFFER_BYTES, ::releaseRoute)
+    private fun createRouteLocked(
+        batchId: UUID,
+        direction: BatchRouteDirection,
+    ): RoutedBatchChannel {
+        val route = RoutedBatchChannel(batchId, direction, ROUTE_BUFFER_BYTES, ::releaseRoute)
         routes[batchId] = route
         return route
     }
@@ -179,6 +190,7 @@ internal class BatchTransferFrameRouter(
 /** Bounded virtual input stream for one batch. */
 internal class RoutedBatchChannel(
     val batchId: UUID,
+    val direction: BatchRouteDirection,
     bufferBytes: Int,
     private val onClose: (RoutedBatchChannel) -> Unit,
 ) : AutoCloseable {

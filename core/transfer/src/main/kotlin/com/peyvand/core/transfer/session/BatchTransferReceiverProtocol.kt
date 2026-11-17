@@ -59,9 +59,14 @@ import kotlinx.coroutines.selects.select
 
 internal class BatchTransferReceiverProtocol(
     private val maximumFileSizeBytes: Long,
+    private val protocolVersion: Int = TransferFrameCodec.BATCH_PROTOCOL_VERSION,
 ) {
     init {
         require(maximumFileSizeBytes >= 0L)
+        require(
+            protocolVersion == TransferFrameCodec.BATCH_PROTOCOL_VERSION ||
+                protocolVersion == TransferFrameCodec.CHAT_ATTACHMENT_PROTOCOL_VERSION,
+        )
     }
 
     suspend fun receiveBatch(
@@ -83,14 +88,14 @@ internal class BatchTransferReceiverProtocol(
         onItemVerifying: (UUID) -> Unit = {},
         onItemOutcome: (BatchItemOutcome) -> Unit = {},
     ): BatchTransferResult? {
-        if (firstOfferFrame.protocolVersion != TransferFrameCodec.BATCH_PROTOCOL_VERSION ||
+        if (firstOfferFrame.protocolVersion != protocolVersion ||
             firstOfferFrame.sessionId != sessionId ||
             firstOfferFrame.type != TransferFrameType.BATCH_OFFER
         ) {
             throw TransferProtocolException("Invalid initial batch offer frame")
         }
 
-        val output = BufferedOutputStream(channelOutput, IO_BUFFER_BYTES)
+        val output = VersionedBatchOutputStream(channelOutput, IO_BUFFER_BYTES, protocolVersion)
         val offer = BatchOfferCodec.decode(firstOfferFrame.payloadBytes())
         if (!acquireOfferConsent(offer)) {
             writeFrame(
@@ -110,7 +115,7 @@ internal class BatchTransferReceiverProtocol(
 
         val firstManifestFrame = TransferFrameCodec.read(channelInput)
             ?: throw EOFException("Sender closed before revealing the batch manifest")
-        if (firstManifestFrame.protocolVersion != TransferFrameCodec.BATCH_PROTOCOL_VERSION ||
+        if (firstManifestFrame.protocolVersion != protocolVersion ||
             firstManifestFrame.sessionId != sessionId ||
             firstManifestFrame.type != TransferFrameType.BATCH_MANIFEST
         ) {
@@ -118,6 +123,11 @@ internal class BatchTransferReceiverProtocol(
         }
         val manifestBytes = firstManifestFrame.payloadBytes()
         val manifest = BatchTransferManifestCodec.decode(manifestBytes)
+        if (protocolVersion == TransferFrameCodec.BATCH_PROTOCOL_VERSION &&
+            manifest.items.size < BatchTransferManifest.LEGACY_MIN_ITEMS
+        ) {
+            throw TransferProtocolException("Legacy v3 batch manifests require at least two items")
+        }
         val selection = acquireSelection(manifest)
 
         if (selection == null) {
@@ -144,7 +154,7 @@ internal class BatchTransferReceiverProtocol(
         )
         writeFrame(output, sessionId, TransferFrameType.BATCH_DECISION, BatchConsentDecisionCodec.encode(decision))
 
-        val reader = BatchFrameReader(channelInput, CoroutineScope(currentCoroutineContext()), sessionId)
+        val reader = BatchFrameReader(channelInput, CoroutineScope(currentCoroutineContext()), sessionId, protocolVersion)
         val outcomes = ArrayList<BatchItemOutcome>(manifest.items.size)
         try {
             manifest.items.forEach { item ->

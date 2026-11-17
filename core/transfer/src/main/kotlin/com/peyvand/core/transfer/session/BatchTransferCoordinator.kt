@@ -7,6 +7,7 @@ import com.peyvand.core.transfer.manifest.TransferManifestItem
 import com.peyvand.core.transfer.protocol.BatchOffer
 import com.peyvand.core.transfer.protocol.BatchItemOutcome
 import com.peyvand.core.transfer.protocol.TransferFrame
+import com.peyvand.core.transfer.protocol.TransferFrameCodec
 import java.io.IOException
 import java.io.InputStream
 import java.util.UUID
@@ -33,8 +34,20 @@ internal class BatchTransferCoordinator(
         onItemProgress: (UUID, Long) -> Unit,
         onItemVerifying: (UUID) -> Unit,
         onItemOutcome: (BatchItemOutcome) -> Unit,
+        batchId: UUID = UUID.randomUUID(),
+        channelInput: InputStream = channel.inputStream,
+        protocolVersion: Int = TransferFrameCodec.BATCH_PROTOCOL_VERSION,
     ): BatchTransferResult {
-        require(selectedItems.size in 2..BatchTransferManifest.MAX_ITEMS)
+        require(
+            protocolVersion == TransferFrameCodec.BATCH_PROTOCOL_VERSION ||
+                protocolVersion == TransferFrameCodec.CHAT_ATTACHMENT_PROTOCOL_VERSION,
+        )
+        val minimumItems = if (protocolVersion == TransferFrameCodec.BATCH_PROTOCOL_VERSION) {
+            BatchTransferManifest.LEGACY_MIN_ITEMS
+        } else {
+            BatchTransferManifest.MIN_ITEMS
+        }
+        require(selectedItems.size in minimumItems..BatchTransferManifest.MAX_ITEMS)
         val sourceIds = LinkedHashMap<String, UUID>()
         val sourcesByTransferId = LinkedHashMap<UUID, ShareItem>()
         val manifestItems = ArrayList<TransferManifestItem>(selectedItems.size)
@@ -56,11 +69,11 @@ internal class BatchTransferCoordinator(
         }
 
         onManifestReady(sourceIds.toMap())
-        val manifest = BatchTransferManifest(UUID.randomUUID(), manifestItems)
-        return MultiItemTransferProtocol(Long.MAX_VALUE).sendBatch(
+        val manifest = BatchTransferManifest(batchId, manifestItems)
+        return MultiItemTransferProtocol(Long.MAX_VALUE, protocolVersion).sendBatch(
             sessionId = channel.sessionId,
             manifest = manifest,
-            channelInput = channel.inputStream,
+            channelInput = channelInput,
             channelOutput = channel.outputStream,
             openSource = { manifestItem ->
                 val selected = sourcesByTransferId[manifestItem.itemId]
@@ -95,13 +108,14 @@ internal class BatchTransferCoordinator(
         onItemVerifying: (UUID) -> Unit,
         onItemPublishing: (TransferManifestItem, Long) -> Unit,
         onItemOutcome: (BatchItemOutcome) -> Unit,
+        channelInput: InputStream = channel.inputStream,
     ): BatchTransferResult? {
         val maximumReceiveSizeBytes = storageRepository.maximumReceiveSizeBytes()
-        return MultiItemTransferProtocol(maximumReceiveSizeBytes).receiveBatch(
+        return MultiItemTransferProtocol(maximumReceiveSizeBytes, firstOfferFrame.protocolVersion).receiveBatch(
             sessionId = channel.sessionId,
             firstOfferFrame = firstOfferFrame,
             acquireOfferConsent = acquireOfferConsent,
-            channelInput = channel.inputStream,
+            channelInput = channelInput,
             channelOutput = channel.outputStream,
             acquireSelection = { manifest ->
                 onManifest(manifest.items)

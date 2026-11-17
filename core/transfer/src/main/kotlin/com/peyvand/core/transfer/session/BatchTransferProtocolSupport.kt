@@ -92,7 +92,7 @@ internal class BatchFrameReader(
                 val frame = TransferFrameCodec.read(buffered)
                     ?: throw EOFException("Authenticated peer closed the batch protocol stream")
                 if (frame.sessionId != expectedSessionId ||
-                    frame.protocolVersion != TransferFrameCodec.BATCH_PROTOCOL_VERSION
+                    frame.protocolVersion != expectedProtocolVersion
                 ) {
                     throw TransferProtocolException("Frame does not belong to the active batch session")
                 }
@@ -113,7 +113,7 @@ internal class BatchFrameReader(
         if (frame.sessionId != sessionId) {
             throw TransferProtocolException("Frame belongs to a different authenticated session")
         }
-        if (frame.protocolVersion != TransferFrameCodec.BATCH_PROTOCOL_VERSION) {
+        if (frame.protocolVersion != expectedProtocolVersion) {
             throw TransferProtocolException("Unexpected protocol version inside a batch session")
         }
         return frame

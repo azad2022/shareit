@@ -19,9 +19,10 @@ import kotlinx.coroutines.channels.ReceiveChannel
  */
 class MultiItemTransferProtocol(
     maximumFileSizeBytes: Long,
+    protocolVersion: Int = com.peyvand.core.transfer.protocol.TransferFrameCodec.BATCH_PROTOCOL_VERSION,
 ) {
-    private val sender = BatchTransferSenderProtocol(maximumFileSizeBytes)
-    private val receiver = BatchTransferReceiverProtocol(maximumFileSizeBytes)
+    private val sender = BatchTransferSenderProtocol(maximumFileSizeBytes, protocolVersion)
+    private val receiver = BatchTransferReceiverProtocol(maximumFileSizeBytes, protocolVersion)
 
     suspend fun sendBatch(
         sessionId: UUID,
