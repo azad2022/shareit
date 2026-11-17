@@ -1,6 +1,7 @@
 package com.peyvand.app
 
 import android.app.Application
+import com.peyvand.core.domain.call.VoiceCallStatus
 import com.peyvand.app.calling.AndroidVoiceCallTelecomController
 import com.peyvand.core.calling.VoiceCallControlSessionHost
 import com.peyvand.core.calling.VoiceCallMediaSessionFactory
@@ -32,12 +33,43 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 
 class PeyvandApplication : Application() {
+    @Volatile
+    private var mainActivityStarted = false
+
     override fun onCreate() {
         super.onCreate()
         // Starts authenticated call-control listening. The WebRTC runtime remains lazy:
         // no PeerConnection or microphone capture exists until acceptance and permission.
         voiceCallOrchestrator
         voiceCallTelecomController.start()
+        applicationScope.launch {
+            voiceCallOrchestrator.snapshot.collect {
+                stopMonitoringWhenBackgroundedAndIdle()
+            }
+        }
+    }
+
+    internal fun onMainActivityStarted() {
+        mainActivityStarted = true
+    }
+
+    internal fun onMainActivityStopped() {
+        mainActivityStarted = false
+        stopMonitoringWhenBackgroundedAndIdle()
+    }
+
+    private fun stopMonitoringWhenBackgroundedAndIdle() {
+        val callStatus = voiceCallOrchestrator.snapshot.value.status
+        val keepLocalSession = callStatus in setOf(
+            VoiceCallStatus.OUTGOING_RINGING,
+            VoiceCallStatus.INCOMING_RINGING,
+            VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
+            VoiceCallStatus.NEGOTIATING,
+            VoiceCallStatus.ACTIVE,
+        )
+        if (mainActivityStarted || keepLocalSession) return
+        deviceDiscoveryRepository.stopMonitoring()
+        networkEnvironmentRepository.stopMonitoring()
     }
 
     internal val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

@@ -1,6 +1,8 @@
 package com.peyvand.app
 
+import android.content.Intent
 import android.os.Bundle
+import java.util.UUID
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -34,8 +36,12 @@ import com.peyvand.core.data.language.PreferencesLanguageRepository
 import com.peyvand.core.domain.language.AppLanguage
 import com.peyvand.core.domain.language.SelectLanguageUseCase
 import com.peyvand.core.designsystem.theme.PeyvandTheme
+import com.peyvand.app.calling.AndroidVoiceCallTelecomController
+import com.peyvand.core.domain.call.VoiceCallStatus
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class MainActivity : AppCompatActivity() {
     private sealed interface StartupState {
@@ -53,6 +59,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var startupState by mutableStateOf<StartupState>(StartupState.Loading)
+    private var pendingNotificationAnswerCallId: UUID? = null
 
     private val discoveryRepository
         get() = (application as PeyvandApplication).deviceDiscoveryRepository
@@ -62,6 +69,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        captureVoiceCallIntent(intent)
         configureSystemBars()
 
         setContent {
@@ -89,6 +97,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        (application as PeyvandApplication).onMainActivityStarted()
         discoveryRepository.startMonitoring()
         networkEnvironmentRepository.startMonitoring()
     }
@@ -100,11 +109,40 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        // Receive publication uses PEYVAND's app-managed destination; no SAF picker
-        // temporarily backgrounds this Activity during the current transfer flow.
-        discoveryRepository.stopMonitoring()
-        networkEnvironmentRepository.stopMonitoring()
+        // Active calls retain the authenticated P2P session while Telecom owns the call.
+        // Once the call ends in the background, the Application performs the teardown.
+        (application as PeyvandApplication).onMainActivityStopped()
         super.onStop()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        captureVoiceCallIntent(intent)
+        consumePendingNotificationAnswer()
+    }
+
+    private fun captureVoiceCallIntent(intent: Intent?) {
+        if (intent?.action != AndroidVoiceCallTelecomController.ACTION_ANSWER_INCOMING) return
+        pendingNotificationAnswerCallId = intent.getStringExtra(
+            AndroidVoiceCallTelecomController.EXTRA_CALL_ID,
+        )?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+    }
+
+    private fun consumePendingNotificationAnswer() {
+        val ready = startupState as? StartupState.Ready ?: return
+        val callId = pendingNotificationAnswerCallId ?: return
+        pendingNotificationAnswerCallId = null
+        lifecycleScope.launch {
+            val call = withTimeoutOrNull(15_000L) {
+                ready.chatViewModel.voiceCallSnapshot.first {
+                    it.callId == callId || it.isTerminal
+                }
+            }
+            if (call?.callId == callId && call.status == VoiceCallStatus.INCOMING_RINGING) {
+                ready.chatViewModel.acceptIncomingVoiceCall(callId)
+            }
+        }
     }
 
     private fun initializeApplication() {
@@ -174,6 +212,7 @@ class MainActivity : AppCompatActivity() {
                         trustedPeerRepository = peyvandApplication.trustedPeerRepository,
                         connectivityRepository = peerConnectivityRepository,
                         voiceCallOrchestrator = peyvandApplication.voiceCallOrchestrator,
+                        voiceCallTelecomController = peyvandApplication.voiceCallTelecomController,
                     ),
                 )[ChatViewModel::class.java]
 
@@ -186,6 +225,7 @@ class MainActivity : AppCompatActivity() {
                     fileTransferViewModel = fileTransferViewModel,
                     chatViewModel = chatViewModel,
                 )
+                consumePendingNotificationAnswer()
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {
