@@ -9,7 +9,7 @@ import com.peyvand.core.domain.chat.PeerIdentityId
 import com.peyvand.core.domain.chat.TrustedPeerIdentity
 import com.peyvand.core.domain.chat.TrustedPeerRepository
 import com.peyvand.core.calling.VoiceCallOrchestrator
-import com.peyvand.app.calling.AndroidVoiceCallTelecomController
+import com.peyvand.app.calling.VoiceCallTelecomServiceClient
 import com.peyvand.core.domain.call.VoiceCallDirection
 import com.peyvand.core.domain.call.VoiceCallSnapshot
 import com.peyvand.core.domain.call.VoiceCallStatus
@@ -83,7 +83,7 @@ class ChatViewModel(
     private val trustedPeerRepository: TrustedPeerRepository,
     private val connectivityRepository: PeerConnectivityRepository,
     private val voiceCallOrchestrator: VoiceCallOrchestrator,
-    private val voiceCallTelecomController: AndroidVoiceCallTelecomController,
+    private val voiceCallTelecomServiceClient: VoiceCallTelecomServiceClient,
 ) : ViewModel() {
 
     val voiceCallSnapshot: StateFlow<VoiceCallSnapshot> = voiceCallOrchestrator.snapshot
@@ -172,9 +172,8 @@ class ChatViewModel(
                         voiceCallOrchestrator.snapshot,
                         voiceCallOrchestrator.canCall,
                         voiceCallOrchestrator.isMuted,
-                        voiceCallTelecomController.isRegistered,
-                    ) { call, canCall, muted, telecomReady ->
-                        VoiceCallUiState(call, canCall && telecomReady, muted)
+                    ) { call, canCall, muted ->
+                        VoiceCallUiState(call, canCall, muted)
                     },
                 ) { peerMessages, pendingSession, noticeCoordinator, callUi ->
                     val (peers, messages) = peerMessages
@@ -329,7 +328,11 @@ class ChatViewModel(
         }
     }
 
-    suspend fun startVoiceCall(): UUID = voiceCallOrchestrator.startOutgoingCall()
+    suspend fun startVoiceCall(): UUID {
+        voiceCallTelecomServiceClient.startForCall()
+        voiceCallTelecomServiceClient.awaitRegistered()
+        return voiceCallOrchestrator.startOutgoingCall()
+    }
 
     suspend fun acceptIncomingVoiceCall(callId: UUID) =
         voiceCallOrchestrator.acceptIncomingCall(callId)
@@ -350,7 +353,7 @@ class ChatViewModel(
         voiceCallOrchestrator.onMicrophonePermissionResult(callId, granted)
         if (granted && isIncomingCall) {
             try {
-                voiceCallTelecomController.answerIncomingCall(callId)
+                voiceCallTelecomServiceClient.answerIncomingCall(callId)
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {

@@ -212,7 +212,7 @@ class MainActivity : AppCompatActivity() {
                         trustedPeerRepository = peyvandApplication.trustedPeerRepository,
                         connectivityRepository = peerConnectivityRepository,
                         voiceCallOrchestrator = peyvandApplication.voiceCallOrchestrator,
-                        voiceCallTelecomController = peyvandApplication.voiceCallTelecomController,
+                        voiceCallTelecomServiceClient = peyvandApplication.voiceCallTelecomServiceClient,
                     ),
                 )[ChatViewModel::class.java]
 

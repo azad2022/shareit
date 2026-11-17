@@ -2,7 +2,7 @@ package com.peyvand.app
 
 import android.app.Application
 import com.peyvand.core.domain.call.VoiceCallStatus
-import com.peyvand.app.calling.AndroidVoiceCallTelecomController
+import com.peyvand.app.calling.VoiceCallTelecomServiceClient
 import com.peyvand.core.calling.VoiceCallControlSessionHost
 import com.peyvand.core.calling.VoiceCallMediaSessionFactory
 import com.peyvand.core.calling.VoiceCallOrchestrator
@@ -41,10 +41,24 @@ class PeyvandApplication : Application() {
         // Starts authenticated call-control listening. The WebRTC runtime remains lazy:
         // no PeerConnection or microphone capture exists until acceptance and permission.
         voiceCallOrchestrator
-        voiceCallTelecomController.start()
         applicationScope.launch {
-            voiceCallOrchestrator.snapshot.collect {
+            voiceCallOrchestrator.snapshot.collect { call ->
                 stopMonitoringWhenBackgroundedAndIdle()
+                if (call.status == VoiceCallStatus.INCOMING_RINGING) {
+                    val callId = call.callId ?: return@collect
+                    try {
+                        voiceCallTelecomServiceClient.startForCall()
+                        voiceCallTelecomServiceClient.awaitRegistered()
+                    } catch (cancellation: kotlinx.coroutines.CancellationException) {
+                        throw cancellation
+                    } catch (_: Exception) {
+                        if (voiceCallOrchestrator.snapshot.value.callId == callId &&
+                            voiceCallOrchestrator.snapshot.value.status == VoiceCallStatus.INCOMING_RINGING
+                        ) {
+                            runCatching { voiceCallOrchestrator.rejectIncomingCall(callId) }
+                        }
+                    }
+                }
             }
         }
     }
@@ -165,15 +179,10 @@ class PeyvandApplication : Application() {
         ).also(VoiceCallOrchestrator::start)
     }
 
-    val voiceCallTelecomController: AndroidVoiceCallTelecomController by lazy(
+    val voiceCallTelecomServiceClient: VoiceCallTelecomServiceClient by lazy(
         LazyThreadSafetyMode.SYNCHRONIZED,
     ) {
-        AndroidVoiceCallTelecomController(
-            context = applicationContext,
-            scope = applicationScope,
-            secureSession = peerConnectionRepository.secureSession,
-            orchestrator = voiceCallOrchestrator,
-        )
+        VoiceCallTelecomServiceClient(applicationContext)
     }
 
     val networkEnvironmentRepository: NetworkEnvironmentRepository by lazy(
