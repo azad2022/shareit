@@ -2,7 +2,7 @@
 
 - **Status:** Product definition with owner-authorized, checkpoint-scoped Android implementation.
 - **Repository:** `azad2022/shareit` (private), default branch `main`.
-- **Last decision update:** 2026-11-13.
+- **Last decision update:** 2026-11-17.
 
 ## 1. Product vision
 
@@ -66,7 +66,8 @@ The product owner selected local chat with durable local history and synchroniza
 - The initial chat scope includes no cloud backup, Android-managed device migration, app-managed export, or third-party backup path for chat history/outbox/identity data; apply and physically verify Android backup exclusions for supported OS/target-SDK combinations.
 - Distinguish local save, waiting for connection, synchronization, and durable remote receipt. A message is not delivered merely because it is stored locally or written to a socket.
 - Do not promise delivery while devices are apart, after app data is cleared, or when Android prevents the application from running. Local history is recoverable only while the relevant phone's app data and required keys remain available.
-- Group chat, read receipts, voice/video communication, and remote deletion are not approved by this decision and require separate design/approval.
+- This local-chat decision does not authorize group chat, read receipts, video calling, voice notes or remote deletion.
+- Direct one-to-one audio calls are separately authorized under CP-CHAT-004 on 2026-11-17; see section 19 and ADR-0020. That approval does not authorize video or any server/relay service.
 
 See [`LOCAL_CHAT_ARCHITECTURE_AND_UX.md`](LOCAL_CHAT_ARCHITECTURE_AND_UX.md) and the chat ADRs under [`decisions/`](decisions/) for detailed architecture and unresolved decisions.
 
@@ -105,7 +106,7 @@ See [`LOCAL_CHAT_ARCHITECTURE_AND_UX.md`](LOCAL_CHAT_ARCHITECTURE_AND_UX.md) and
 
 - **Owner decision (2026-11-13):** PEYVAND's primary home screen is a chat/conversation list, not separate Send, Receive and Files buttons. The user enters a one-to-one conversation and sends text or initiates image/video/audio/document/APK transfer from its composer/attachment menu.
 - **Conversation UX:** familiar professional-messenger conventions are approved (conversation header, peer avatar/label, actual connection state, message timeline, empty-conversation state, composer, emoji and attachment affordances). Telegram/WhatsApp are usability references only; PEYVAND must have its own original blue/white visual identity, layout details, iconography, artwork and motion.
-- **Call affordances:** voice/video call icons may appear disabled as future placeholders. They do not authorize or imply call implementation.
+- **Call affordances:** one-to-one audio calling is implemented only within the separately authorized CP-CHAT-004 branch and only for a capability-verified authenticated Wi-Fi Direct peer session. The video-call affordance remains disabled; CP-CHAT-004 does not include camera/video.
 - **Delivery truth:** locally committed, queued, synchronizing, and durably delivered are distinct states. A socket write is not remote delivery.
 - **Attachment truth:** attachment selection delegates to the existing secure file-transfer subsystem. The chat message stream must not carry bulk file bytes.
 
@@ -162,7 +163,7 @@ Allowed statuses: `IN_PROGRESS`, `BLOCKED`, `PASSED`. Only mark `PASSED` when th
 - Chat pairing bootstrap and binding to the existing secure session.
 - Chat encryption-at-rest, Android backup exclusion, retention, and deletion policy.
 - Chat message ordering, synchronization protocol, cursor semantics, and queue limits.
-- Whether group chat, read receipts, voice/video messaging, or synchronized deletion are required in a later phase.
+- Whether group chat, read receipts, video calling, voice notes, or synchronized deletion are required in a later phase. Direct one-to-one audio calling is separately approved under CP-CHAT-004.
 - Exact Kurdish locale/script (Sorani/Arabic-based RTL, Kurmanji/Latin LTR, or another explicitly approved variant), and app package/application ID.
 - Quantified throughput and reliability acceptance thresholds after benchmark baselines.
 
@@ -172,4 +173,4 @@ See [`PRODUCT_IDENTITY_AND_LOCALIZATION.md`](PRODUCT_IDENTITY_AND_LOCALIZATION.m
 
 ## 14. Implementation authorization
 
-This document records product requirements and implementation boundaries. The product owner explicitly authorized CP-CHAT-001 local-persistence implementation on 2026-11-13. That authorization is limited to the scoped local-storage milestone and does not approve chat networking, persistent peer identity, Compose chat screens, group chat, remote services, cloud backup, app export, release signing, or unrelated feature expansion.
+This document records product requirements and implementation boundaries. The product owner separately authorized CP-CHAT-001, CP-CHAT-002, CP-CHAT-003 and CP-CHAT-004, each on its own implementation branch and within its own recorded scope. CP-CHAT-004 authorizes only offline one-to-one full-duplex audio calls over an authenticated Wi-Fi Direct session; it does not authorize video, camera, group calling, voice notes, Internet services, cloud, backend, public STUN/TURN or relay. Do not infer authorization for unrelated features or merge isolated branches without the appropriate review and acceptance evidence.

@@ -1,9 +1,9 @@
 # PEYVAND (پیوند) — Product Identity, Localization, and Motion Specification
 
-- **Status:** Confirmed PEYVAND blue/white design direction; on 2026-11-13 the product owner also approved a chat-first main experience and a polished messenger-style conversation UI. CP-CHAT-002 is authorized on its own implementation branch; full design-system and accessibility acceptance remain gated.
+- **Status:** Confirmed PEYVAND blue/white design direction and chat-first experience. CP-CHAT-002 was separately authorized on its own branch. CP-CHAT-004 audio-only one-to-one calling was separately authorized on 2026-11-17; its implementation is recorded in ADR-0020 and the CP-CHAT-004 checkpoint. Physical audio, route and accessibility acceptance remain gated.
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit` — keep repository name unless separately approved.
-- **Last updated:** 2026-11-01.
+- **Last updated:** 2026-11-17.
 
 ## 1. Brand identity
 
@@ -150,7 +150,7 @@ No decorative infinite loops without a user purpose; no fake counters; no false 
 
 ## 8. Governance
 
-The product owner's 2026-11-13 chat-first direction supersedes earlier transfer-first navigation proposals. Voice/video call icons may be displayed as disabled future affordances; call implementation requires its own architecture and security checkpoint.
+The product owner's 2026-11-13 chat-first direction supersedes earlier transfer-first navigation proposals. One-to-one audio calling was separately approved on 2026-11-17 under CP-CHAT-004 and is implemented only on `feature/cp-chat-004-offline-audio-calls`, behind the authenticated Wi-Fi Direct capability gate and the explicit acceptance / microphone-permission flow. Video calling remains a disabled future affordance and requires a separate decision, architecture and security checkpoint. The CP-CHAT-004 code implementation is not considered accepted until exact-head CI, physical-device route/audio/lifecycle tests and the checkpoint's remaining gates are satisfied.
 
 
-This document adds product specifications; it does not authorize application code, Gradle files, or UI implementation. Keep decisions and evidence in Git. Update the engineering skill when these requirements change. Any implementation milestone must include its scope, acceptance criteria, tests, device/API details, commit SHA, evidence, and honest status. A checkpoint is `PASSED` only with reproducible evidence.
+This document defines product identity, localization and motion requirements; implementation authorization is limited to the separately approved checkpoint scopes recorded in the engineering skill and Product Requirements document. CP-CHAT-004 is an explicit, audio-only exception to older planning text that described calls as future placeholders; it does not authorize video/camera or unrelated features. Keep decisions and evidence in Git. Every implementation milestone must include scope, acceptance criteria, tests, device/API details, commit SHA, evidence and honest status. A checkpoint is `PASSED` only with reproducible evidence.

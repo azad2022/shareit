@@ -6,71 +6,64 @@
 - **Product approval:** Explicitly granted 2026-11-17
 - **Implementation authorization:** Audio-only, one-to-one, full-duplex calls
 - **Implementation branch:** `feature/cp-chat-004-offline-audio-calls`
-- **Latest implementation source commit:** `c12af16d2f2f8b53a810f13344330bad2ebddff2`
-- **Latest fully green CI before the current source line:** Run #533 (`44045018880`), exact head `091b539f4acd1c8132c684e2077591d224853b1a`
-- **Current exact-head CI:** Run #538 (`44055153343`), exact head `c12af16d2f2f8b53a810f13344330bad2ebddff2`, `IN_PROGRESS` at this checkpoint update. Run #537 was cancelled when the follow-up test-import commit superseded it; cancellation is not recorded as a test failure.
-- **APK:** No debug APK artifact has been verified for `c12af16`. The prior run #533 artifact belongs to an earlier SHA and is not a test APK for the current code.
+- **Latest code implementation SHA:** `226b6ef574aa2af92ff24a5f354ed3a886746482`
+- **Exact-head CI:** Run #563 (`44061209704`), targeting the implementation SHA above; status was `pending` when this checkpoint update was prepared. No exact-head APK artifact has been verified.
+- **Last fully green CI for the older baseline:** Run #533 (`44045018880`), exact head `091b539f4acd1c8132c684e2077591d224853b1a`. Its APK artifact is not a build of the current implementation SHA.
 - **Video:** Deferred to a separate milestone; no camera/video implementation is included.
 
 ## Objective
 
-Add private, direct, offline voice calls inside the existing one-to-one PEYVAND chat. Either peer may call. Calls are full-duplex and require explicit remote acceptance plus local Android microphone permission before capture starts.
+Add private, direct, offline voice calls inside the existing one-to-one PEYVAND chat. Either peer may initiate. Calls are full-duplex and require explicit remote acceptance plus local Android microphone permission before capture starts.
 
 ## Approved behaviour
 
 - Full-duplex one-to-one audio; not Push-to-Talk.
 - Use only the active authenticated Wi-Fi Direct peer session.
 - Invite, accept, reject, busy, cancel, timeout, SDP/ICE negotiation and hang-up are correlated to a unique call ID and authenticated session.
-- No public Internet, backend, cloud, push service, public STUN/TURN or relay.
+- No public Internet, backend, cloud, push delivery, public STUN/TURN or relay.
 - No microphone capture before explicit call acceptance and local `RECORD_AUDIO` runtime permission.
 - Audio only: no camera permission, video track, recording, transcription or screen sharing.
+- If exact P2P media routing and authenticated media path cannot be established, media activation fails closed.
 
-## Implemented foundations
+## Implemented in the current code line
 
-### Call-control and state
+### Call control, capability and multiplexing
 
-- Dedicated `CALL_CONTROL` logical channel over the existing authenticated TLS multiplexer.
-- Version-1 signalling frames for invite/accept/reject/cancel/end/SDP/ICE, with bounded payload codec.
-- One-call-per-authenticated-session state machine and bounded call-ID replay registry.
-- State ordering requires remote acceptance before requesting microphone permission on outgoing calls.
-- Remote rejection/cancellation handling and timeout rejection reason.
-- Unit-test source covers channel routing, state transitions, call-ID replay, codec bounds and control exchange. Source commit `cb0a2d5` adds regressions for pre-claim INVITE and bounded-queue overflow while chat/file channels remain alive. Source commits `abd050b` and `6c412a0` add the per-session `VoiceCallControlSessionHost`: it probes capability after authentication, claims exactly one `CALL_CONTROL` lease automatically after proof, dispatches incoming signals through a bounded ordered queue, releases the lease when the session ends or the capability proof is revoked, and rejects sends while proof is not valid. Test source covers automatic lease claim, invite reception, legacy-peer no-claim, capability revocation and session teardown. The tests are present but have not been reported green for the current exact head until Run #538 completes.
-- New bounded pre-claim `CALL_CONTROL` queue: max 24 frames / 64 KiB. Early frames are replayed in order when the sole call-channel consumer claims the lease. Queue overflow disables calling only for that authenticated session; chat and file transfer remain operational.
+- A dedicated `CALL_CONTROL` logical channel is owned by the existing authenticated TLS multiplexer. The parent socket still has one reader and one serialized frame writer; audio media does not use the bulk file-transfer TCP channel.
+- The session-scoped `VoiceCallControlSessionHost` automatically verifies call capability and claims exactly one call-control lease only after the signed proof succeeds. It owns one ordered signal reader and releases the lease on capability revocation or session teardown.
+- The legacy-safe capability probe is a signed UDP challenge/response bound to a fresh nonce, authenticated session UUID, call-protocol version and both persistent peer identity fingerprints. A legacy peer that ignores the datagram receives no unknown `CALL_*` TLS frames.
+- The multiplexer buffers at most 24 unclaimed call frames / 64 KiB while the call consumer is being attached. Frames are replayed in order. Queue overflow disables only calling for that authenticated session; it must not close the parent session or the CHAT / FILE_TRANSFER leases.
+- The bounded signal codec, replay-aware state machine and call orchestrator cover incoming/outgoing signalling, acceptance, rejection, cancellation, hang-up, SDP/ICE exchange, permission result and media activation. The orchestrator is hosted at application scope and is invalidated with the authenticated peer session.
 
-### Backwards-compatible capability proof
+### Wi-Fi Direct and media admission
 
-- Signed UDP challenge/response is separate from TLS call-control frames.
-- The TCP layer now retains the exact `WifiP2pGroup.getInterface()` name, local IPv4 address and prefix selected for the P2P TCP socket.
-- The authenticated session verifies that its TLS local address belongs to that exact interface and that the authenticated peer address is in the same P2P subnet.
-- The capability listener binds using the exact interface name and matching local address/prefix, not an interface inferred from an address lookup alone.
-- Request/response bind a cryptographic nonce, current session UUID, protocol version and both persistent peer fingerprints.
-- Both directions use the persistent Android Keystore peer-identity key and verify against the already trusted peer public key.
-- `CALL_CONTROL` cannot be claimed until capability verification succeeds for the current session.
-- Legacy peers that ignore the UDP datagram receive no unknown `CALL_*` TLS frame; chat/file TLS traffic remains untouched.
-- Capability state, UDP listener, endpoint binding and multiplexer queues are cleared when the authenticated session ends.
+- The P2P TCP adapter retains the exact interface name from `WifiP2pGroup.getInterface()`, together with the local IPv4 address and prefix selected on that interface.
+- The authenticated session verifies that its TLS local endpoint belongs to that exact interface and that the authenticated peer endpoint is in the corresponding P2P subnet. Endpoints are in-memory and session-scoped.
+- The signed capability listener binds to the named interface/address. The WebRTC media factory and runtime revalidate interface ownership, address, prefix and peer subnet before PeerConnection creation, ICE admission and media activation.
+- The pinned WebRTC build is audio-only in this integration. ICE servers are empty, TCP candidates are disabled, and candidate policy admits numeric IPv4 UDP host candidates only. mDNS, IPv6, TCP, server-reflexive and relay candidates are rejected.
+- SDP admission is restricted to an audio-only Opus DTLS-SRTP session. The selected ICE pair is checked through WebRTC stats for host/UDP candidate type, exact local and peer P2P addresses, a successful nominated pair, connected DTLS and SRTP cipher.
+- Capture and playout start disabled. Recording begins only after acceptance, Android permission, verified media path and successful AudioRecord start. Mute disables the outgoing track; Telecom inactive state disables capture and playout synchronously.
+- This code-level interface and candidate validation is not physical proof that a particular handset routes media through its Wi-Fi Direct radio. Device-level route proof remains outstanding.
 
-### Media foundation
+### Application, permission and Android Telecom integration
 
-- Audited `io.github.webrtc-sdk:android-prefixed-stripped:150.7871.04`; published AAR reported as 30,526,217 bytes, compared with 49,068,339 bytes for the full variant. The stripped artifact removes software video codecs and uses the `livekit.org.webrtc` namespace.
-- Added media dependency only to `:core:calling`.
-- Added P2P ICE admission policy: numeric IPv4, UDP, host candidates only, exact local/peer P2P IP matching; rejects mDNS, IPv6, TCP, srflx and relay candidates.
-- Added audio-only SDP admission: one audio media section, Opus, DTLS fingerprint, RTCP mux, trickle ICE, no embedded candidates and no SDES crypto.
-- Added WebRTC runtime/session foundation: no STUN/TURN servers, TCP ICE disabled, one local call session per process audio device, audio track mute control, bounded remote candidate queue and explicit teardown.
-- The WebRTC call-session factory now requires the named P2P interface and local prefix. The runtime revalidates that the interface is up, still owns that exact address/prefix, and shares the authenticated peer subnet before creating a call session; the same check runs before PeerConnection creation, local ICE admission and media activation.
-- Capture and playout are explicitly disabled during setup. Activation waits for selected candidate-pair and DTLS/SRTP statistics to match the exact P2P endpoints, then confirms AudioRecord actually starts.
-- Endpoints remain ephemeral, session-ID scoped, not persisted and not exposed in UI state.
+- The app now depends on the calling module and exposes the orchestrator to the chat presentation layer. The voice action is enabled only for a currently authenticated peer with verified voice capability.
+- The conversation UI includes outgoing ringing/cancel, incoming accept/reject, microphone-permission, connecting, active, mute/unmute and hang-up states. User-visible copy added for this scope is currently Persian; other target-language bundles are not yet complete.
+- AndroidX Core-Telecom is integrated through a dedicated `PeyvandVoiceCallService`. `CallsManager` is owned by this service, not by a ViewModel or Activity. CallStyle notifications provide incoming/ongoing call presentation and system actions.
+- The service initially runs with the `phoneCall` foreground-service type. The `microphone` type is added only after explicit call acceptance and successful runtime `RECORD_AUDIO` permission. If the microphone foreground-service promotion fails or times out, the call path fails closed and the orchestrator is not told that microphone permission succeeded.
+- Notification permission and notification-channel availability are checked before starting/accepting a call through the UI.
+- Core-Telecom active/inactive callbacks do not wait for SDP/ICE negotiation. Telecom hold immediately disables capture/playout; media resume runs asynchronously and failure is surfaced to the call actor.
+- The P2P connection is retained while an active call is running in the background. When the app is backgrounded with no active/pending call, local discovery/network monitoring is stopped. Incoming-call delivery is not promised when there is no active authenticated peer session.
 
-## Not implemented / not yet accepted
+## Not yet verified / not yet accepted
 
-- The persistent session-scoped CALL_CONTROL listener now exists, but no complete end-to-end call orchestrator yet connects invitation, user acceptance, runtime permission result, Core-Telecom state, SDP/ICE, WebRTC lifecycle and the call state machine.
-- `:app` does not yet depend on `:core:calling`; no application service owns the call runtime.
-- No Android Core-Telecom integration or managed audio endpoint routing yet.
-- No microphone foreground-service lifecycle, incoming-call notification or background/screen-off handling yet.
-- The manifest still does not declare `RECORD_AUDIO` / `MANAGE_OWN_CALLS` or the call foreground-service permissions; microphone permission is not wired to an app-level runtime request.
-- The in-chat voice-call button remains disabled; no call UI or localization strings exist.
-- No end-to-end physical-device voice call has been completed.
-- No verified concurrent voice + large file transfer test has been run.
-- No audio quality/latency/jitter/loss/CPU/RAM/battery/thermal results exist yet.
+- No complete physical two-device voice call has been completed or independently evidenced.
+- No physical tests have validated both initiator directions, ringing/accept/reject/busy/cancel/end/timeout or the full-duplex audio path.
+- No physical test has proven that the selected WebRTC candidate pair uses the exact Wi-Fi Direct interface on the target phones.
+- No Android device tests have validated earpiece, speaker, wired and Bluetooth routing; audio focus; competing cellular calls; screen-off; notification interaction; process recreation; permission revocation; or OEM-specific foreground-service behaviour.
+- No concurrent voice-call plus large-file-transfer stress test has been run.
+- No measured latency, jitter, packet loss, CPU, RAM, battery or thermal results exist.
+- No exact-head APK artifact has been verified for SHA `226b6ef574aa2af92ff24a5f354ed3a886746482`. The old #533 APK is not a valid substitute.
 
 ## Sub-checkpoints
 
@@ -79,34 +72,35 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 | CP-CHAT-004A | Call-control protocol, bounded codec, state machine, replay handling, legacy-safe capability proof and channel lifecycle | IN_PROGRESS |
 | CP-CHAT-004B | WebRTC audio, exact P2P-interface admission, DTLS-SRTP, Opus and media lifecycle | IN_PROGRESS |
 | CP-CHAT-004C | Core-Telecom, microphone permission, foreground lifecycle, UI and notifications | IN_PROGRESS |
-| CP-CHAT-004D | Physical-device and concurrent file/audio acceptance | IN_PROGRESS |
+| CP-CHAT-004D | Physical-device, route and concurrent file/audio acceptance | IN_PROGRESS |
 
 ## CI evidence
 
-- Run #522 (`44041996814`) passed build/unit/lint and Android storage/mTLS instrumentation on API 26 and API 36 for the microphone-permission/state-machine correction.
+- Run #522 (`44041996814`) passed build/unit/lint and Android storage/mTLS instrumentation on API 26 and API 36 for earlier microphone-permission/state-machine changes.
 - Run #523 (`44042714084`) passed all three jobs for the WebRTC dependency catalog and P2P candidate policy.
-- Run #526 (`44043724377`) passed all three jobs for the audio-only WebRTC media engine on API 26 and API 36; debug APK artifact was uploaded.
-- Run #533 (`44045018880`) passed build/unit/lint and Android storage/mTLS instrumentation on API 26 and API 36 for exact source head `091b539f4acd1c8132c684e2077591d224853b1a`.
-- Runs #527–#532 were cancelled as subsequent commits superseded them; these are not reported as test failures.
-- No exact-head CI result or APK artifact for source commit `cb0a2d5d7384cb324ef80ef2a96113b8c2a03e96` is recorded yet.
+- Run #526 (`44043724377`) passed all three jobs for the earlier audio-only WebRTC media-engine baseline; its APK is not the current code.
+- Run #533 (`44045018880`) passed build/unit/lint and Android storage/mTLS instrumentation on API 26 and API 36 for exact head `091b539f4acd1c8132c684e2077591d224853b1a`.
+- Run #556 (`44059671482`) failed on an earlier ancestor of the current source line. Its logs identified duplicate availability methods and related Kotlin compile errors plus a call-control queue test that used a malformed 4-byte INVITE payload. The duplicate methods and smart-cast issue were removed, the WebRTC call-site was brought into line with the media API, and the regression test now uses the protocol's required 16-byte call UUID payload.
+- Run #563 (`44061209704`) is the exact-code-head validation for SHA `226b6ef574aa2af92ff24a5f354ed3a886746482`; it was pending when this document was updated. The result and APK artifact must be read back before reporting a successful build or sharing an APK.
+- Cancelled superseded runs are not reported as test failures.
 
 ## Acceptance matrix
 
-- [ ] Outgoing/incoming call invitation, accept, reject, busy, cancel, timeout and hang-up end-to-end
+- [ ] Outgoing/incoming call invitation, accept, reject, busy, cancel, timeout and hang-up on two physical devices
 - [ ] Duplicate/replayed call IDs rejected for the whole authenticated session
-- [ ] Signed capability proof verified on two devices; legacy peer keeps text/file service without teardown
-- [ ] No microphone access before acceptance and runtime permission
+- [ ] Signed capability proof verified on two devices; a legacy peer keeps text/file service without teardown
+- [ ] No microphone capture before remote acceptance / local user acceptance as appropriate and runtime permission
 - [ ] Full-duplex audio verified in both directions
 - [ ] Selected ICE pair verified as UDP host endpoints on the exact P2P interface; DTLS and SRTP confirmed
 - [ ] Earpiece/speaker/wired/Bluetooth routing through Telecom where supported
-- [ ] Mute, audio focus, interruption, notifications, background and screen-off behaviour
+- [ ] Mute, audio focus, interruptions, notifications, background and screen-off behaviour
 - [ ] Voice remains intelligible during concurrent file transfer
 - [ ] P2P loss, TLS failure, identity mismatch, permission revocation and process teardown release all resources
-- [ ] Physical Galaxy A12 and ASUS X017DA tests with Android build/API and repetition counts recorded
+- [ ] Physical Galaxy A12 and ASUS X017DA tests with Android build/API, roles and repetition counts recorded
 - [ ] Latency, jitter, packet loss, CPU, memory, battery and thermal metrics recorded
 
 ## Current assessment
 
-The branch has a call-control protocol/state-machine foundation, a signed backward-compatible capability probe, a WebRTC audio engine foundation, bounded pre-claim call signalling, and stricter exact-interface P2P admission. It still does **not** provide a usable in-app voice-call feature. The end-to-end orchestrator, Core-Telecom/permission/foreground integration, in-chat controls and physical-device validation are outstanding.
+The current branch contains the signalling host, orchestrator, WebRTC media foundation, P2P interface admission, chat call UI, microphone permission flow and Core-Telecom / foreground-service integration. These are implementation facts, not yet verified phone-to-phone behaviour. The current exact-code-head CI result and artifact are not yet verified; physical route, audio and lifecycle tests remain outstanding.
 
 Checkpoint status remains **IN_PROGRESS**. No successful phone-to-phone voice call is claimed.
