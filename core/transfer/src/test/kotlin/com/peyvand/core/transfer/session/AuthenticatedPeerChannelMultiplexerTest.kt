@@ -146,6 +146,43 @@ class AuthenticatedPeerChannelMultiplexerTest {
         pair.second.close()
     }
 
+    @Test
+    fun `call signalling is isolated from chat and file-transfer logical channels`() {
+        val pair = createPair()
+        val callA = pair.first.openChannel(AuthenticatedPeerChannelPurpose.CALL_CONTROL)!!
+        val callB = pair.second.openChannel(AuthenticatedPeerChannelPurpose.CALL_CONTROL)!!
+        val chatA = pair.first.openChannel(AuthenticatedPeerChannelPurpose.CHAT)!!
+        val chatB = pair.second.openChannel(AuthenticatedPeerChannelPurpose.CHAT)!!
+        val callId = UUID.randomUUID()
+        val payload = java.nio.ByteBuffer.allocate(16)
+            .putLong(callId.mostSignificantBits)
+            .putLong(callId.leastSignificantBits)
+            .array()
+        val invite = TransferFrame(
+            TransferFrameCodec.CURRENT_PROTOCOL_VERSION,
+            TransferFrameType.CALL_INVITE,
+            sessionId,
+            payload,
+        )
+        try {
+            TransferFrameCodec.write(invite, callA.outputStream)
+            callA.outputStream.flush()
+            assertEquals(invite, TransferFrameCodec.read(callB.inputStream))
+            assertEquals(0, chatB.inputStream.available())
+            assertTrue(runCatching {
+                TransferFrameCodec.write(invite, chatA.outputStream)
+                chatA.outputStream.flush()
+            }.isFailure)
+        } finally {
+            callA.close()
+            callB.close()
+            chatA.close()
+            chatB.close()
+            pair.first.close()
+            pair.second.close()
+        }
+    }
+
     private data class PairOfMultiplexers(
         val first: AuthenticatedPeerChannelMultiplexer,
         val second: AuthenticatedPeerChannelMultiplexer,

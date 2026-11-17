@@ -51,6 +51,8 @@ data class SecureSessionSnapshot(
 enum class AuthenticatedPeerChannelPurpose {
     CHAT,
     FILE_TRANSFER,
+    /** Low-volume call signalling only; live audio uses a separate P2P media transport. */
+    CALL_CONTROL,
 }
 
 /**

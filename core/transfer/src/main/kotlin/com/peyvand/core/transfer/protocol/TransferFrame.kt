@@ -54,7 +54,15 @@ enum class TransferFrameType(
     BATCH_OFFER_ACCEPTED(31, 16, 16),
     PEER_IDENTITY_HELLO(32, 2 * 1024, 80),
     CHAT_MESSAGE(33, 16 + 8 + 8 + 8 + 4 + 4096, 16 + 8 + 8 + 8 + 4 + 1),
-    CHAT_ACK(34, 24, 24);
+    CHAT_ACK(34, 24, 24),
+    CALL_INVITE(35, 16, 16),
+    CALL_ACCEPT(36, 16, 16),
+    CALL_REJECT(37, 17, 17),
+    CALL_CANCEL(38, 16, 16),
+    CALL_END(39, 17, 17),
+    CALL_SDP_OFFER(40, 16 + 2 + 8 * 1024, 19),
+    CALL_SDP_ANSWER(41, 16 + 2 + 8 * 1024, 19),
+    CALL_ICE_CANDIDATE(42, 16 + 4 + 2 + 256 + 2 + 2048 + 2 + 256, 27);
 
     companion object {
         internal fun fromWireCode(code: Int): TransferFrameType =

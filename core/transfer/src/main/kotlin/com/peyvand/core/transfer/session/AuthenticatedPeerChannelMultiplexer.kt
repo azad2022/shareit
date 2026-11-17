@@ -273,6 +273,17 @@ class AuthenticatedPeerChannelMultiplexer(
             TransferFrameType.CHAT_MESSAGE,
             TransferFrameType.CHAT_ACK,
             -> AuthenticatedPeerChannelPurpose.CHAT
+
+            TransferFrameType.CALL_INVITE,
+            TransferFrameType.CALL_ACCEPT,
+            TransferFrameType.CALL_REJECT,
+            TransferFrameType.CALL_CANCEL,
+            TransferFrameType.CALL_END,
+            TransferFrameType.CALL_SDP_OFFER,
+            TransferFrameType.CALL_SDP_ANSWER,
+            TransferFrameType.CALL_ICE_CANDIDATE,
+            -> AuthenticatedPeerChannelPurpose.CALL_CONTROL
+
             else -> AuthenticatedPeerChannelPurpose.FILE_TRANSFER
         }
 
