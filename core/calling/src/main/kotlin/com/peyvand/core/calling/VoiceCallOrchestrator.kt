@@ -197,6 +197,17 @@ class VoiceCallOrchestrator(
         }
     }
 
+    /**
+     * StateFlow collectors and the incoming signal stream are independent coroutines.
+     * A peer can send INVITE immediately after CALL_CONTROL becomes ready, before this
+     * actor has consumed the initial StateFlow emissions. Reconcile from the source of
+     * truth before acting on a call command or remote invitation.
+     */
+    private fun synchronizeExternalState() {
+        handleSessionChanged(secureSession.value)
+        handleControlReadyChanged(callControlReady.value)
+    }
+
     private fun handleSessionChanged(value: SecureSessionSnapshot) {
         val endpoints = if (value.status == SecureSessionStatus.AUTHENTICATED) {
             endpointProvider.currentVoiceCallP2pEndpoints()
@@ -258,6 +269,7 @@ class VoiceCallOrchestrator(
     }
 
     private suspend fun handleStartOutgoing(event: Event.StartOutgoing) {
+        synchronizeExternalState()
         ensureAvailable()
         val callId = UUID.randomUUID()
         machine.beginOutgoing(callId)
@@ -350,8 +362,6 @@ class VoiceCallOrchestrator(
     private suspend fun handleHangUp(event: Event.HangUp) {
         requireCurrentCall(
             event.callId,
-            VoiceCallStatus.OUTGOING_RINGING,
-            VoiceCallStatus.INCOMING_RINGING,
             VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
             VoiceCallStatus.NEGOTIATING,
             VoiceCallStatus.ACTIVE,
@@ -370,6 +380,7 @@ class VoiceCallOrchestrator(
     }
 
     private suspend fun handleRemoteSignal(signal: VoiceCallSignal) {
+        synchronizeExternalState()
         when (signal) {
             is VoiceCallSignal.Invite -> {
                 if (!mutableCanCall.value || !machine.receiveInvite(signal.callId)) {
@@ -629,6 +640,7 @@ class VoiceCallOrchestrator(
     }
 
     private fun ensureAvailable() {
+        synchronizeExternalState()
         check(mutableCanCall.value) {
             "Voice calling requires an authenticated peer and verified call capability."
         }
@@ -659,12 +671,14 @@ class VoiceCallOrchestrator(
             else -> null
         }
         if (callId != null && callId == machine.snapshot.callId) {
-            failCurrentCall(
-                callId,
-                if (event is Event.LocalIce) VoiceCallFailure.SIGNALING_FAILED
-                else VoiceCallFailure.MEDIA_NEGOTIATION_FAILED,
-                sendEnd = true,
-            )
+            val failure = when (event) {
+                is Event.LocalIce -> VoiceCallFailure.SIGNALING_FAILED
+                is Event.RemoteSignal -> VoiceCallFailure.PROTOCOL_ERROR
+                is Event.MediaFailure,
+                is Event.MediaActivated -> VoiceCallFailure.MEDIA_NEGOTIATION_FAILED
+                else -> VoiceCallFailure.RESOURCE_UNAVAILABLE
+            }
+            failCurrentCall(callId, failure, sendEnd = true)
         }
     }
 

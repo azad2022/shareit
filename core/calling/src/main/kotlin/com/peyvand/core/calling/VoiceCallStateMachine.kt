@@ -140,6 +140,7 @@ class VoiceCallStateMachine(
                 VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION,
                 VoiceCallStatus.NEGOTIATING,
             )
+            check(current.direction == VoiceCallDirection.OUTGOING)
             current = current.copy(status = VoiceCallStatus.ENDED, terminationReason = VoiceCallTerminationReason.REJECTED)
         }
     }

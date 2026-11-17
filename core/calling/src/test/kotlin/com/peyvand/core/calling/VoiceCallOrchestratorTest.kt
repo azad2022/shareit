@@ -27,10 +27,26 @@ import org.junit.Test
 class VoiceCallOrchestratorTest {
 
     @Test
+    fun immediateIncomingInviteIsNotRejectedBeforeInitialStateFlowEmissionsAreConsumed() = runBlocking {
+        val rig = Rig()
+        val callId = UUID.randomUUID()
+        try {
+            rig.orchestrator.start()
+            // Deliberately race the first session/control StateFlow emissions.
+            rig.remote.send(VoiceCallSignal.Invite(callId))
+            rig.awaitStatus(VoiceCallStatus.INCOMING_RINGING)
+            assertTrue(rig.orchestrator.canCall.value)
+            assertFalse(rig.sent.tryReceive().isSuccess)
+        } finally {
+            rig.close()
+        }
+    }
+
+    @Test
     fun outgoingCallWaitsForRemoteAcceptanceAndMicPermissionBeforeMediaCreation() = runBlocking {
         val rig = Rig()
         try {
-            rig.orchestrator.start()
+            rig.startAndAwaitReady()
             val callId = rig.orchestrator.startOutgoingCall()
             assertEquals(VoiceCallSignal.Invite(callId), rig.sent.receive())
 
@@ -163,6 +179,11 @@ class VoiceCallOrchestratorTest {
             scope = scope,
             callSetupTimeoutMillis = 5_000L,
         )
+
+        suspend fun startAndAwaitReady() {
+            orchestrator.start()
+            withTimeout(2_000) { orchestrator.canCall.first { it } }
+        }
 
         suspend fun awaitStatus(status: VoiceCallStatus) {
             withTimeout(2_000) { orchestrator.snapshot.first { it.status == status } }
