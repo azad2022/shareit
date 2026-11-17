@@ -6,7 +6,8 @@ enum class VoiceCallRejectReason(val wireCode: Int) {
     USER_DECLINED(1),
     BUSY(2),
     UNSUPPORTED_MEDIA(3),
-    MICROPHONE_PERMISSION_DENIED(4);
+    MICROPHONE_PERMISSION_DENIED(4),
+    TIMED_OUT(5);
 
     companion object {
         fun fromWireCode(code: Int): VoiceCallRejectReason =
