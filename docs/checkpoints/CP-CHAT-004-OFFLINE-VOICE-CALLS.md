@@ -6,9 +6,9 @@
 - **Product approval:** Explicitly granted 2026-11-17
 - **Implementation authorization:** Audio-only, one-to-one, full-duplex calls
 - **Implementation branch:** `feature/cp-chat-004-offline-audio-calls`
-- **Latest code implementation SHA:** `76777abaad0547f501f6b87480e3a8814a713e4d`
-- **Latest validation attempt before the compile fixes:** Run #564 (`44061917498`), exact source head `64bc3f8efa38c39e1af540658824ba2e87762178`; build/unit/lint failed during Kotlin compilation, while Android storage/mTLS instrumentation succeeded on API 26 and API 36. No debug APK was uploaded by that run.
-- **Compile-fix commit:** `76777abaad0547f501f6b87480e3a8814a713e4d` fixes the specific application and test compilation errors reported by #564. A new exact-head workflow was triggered by the push; its result was not available when this checkpoint was refreshed. No exact-head APK artifact has yet been verified.
+- **Latest code implementation SHA:** `5853dff350fb7c8d60f2f86e5dca8a4bf9e15e8b`
+- **Latest completed CI before this correction:** Run #566 (`44065683391`), head `08cead9d9f3652f888ab4c654e9e0afff4c41877`; build/unit/lint failed for two independent reasons: the calling unit test fake incorrectly coupled Telecom-state application to media-path success, and app Lint reported `MissingPermission` at `NotificationManagerCompat.notify`. The API 26 and API 36 storage/mTLS instrumentation jobs passed; they did not test voice calling. The only APK artifacts were Room instrumentation APKs, not the app.
+- **Correction commit:** `5853dff350fb7c8d60f2f86e5dca8a4bf9e15e8b` separates the fake Telecom gate from P2P media verification, strengthens cleanup assertion after media-path failure, and explicitly handles notification-permission revocation between check and notify. Exact-head CI for the new source is pending; no application debug APK is verified yet.
 - **Last fully green CI for the older baseline:** Run #533 (`44045018880`), exact head `091b539f4acd1c8132c684e2077591d224853b1a`. Its APK artifact is not a build of the current implementation SHA.
 - **Video:** Deferred to a separate milestone; no camera/video implementation is included.
 
@@ -103,6 +103,6 @@ Add private, direct, offline voice calls inside the existing one-to-one PEYVAND 
 
 ## Current assessment
 
-The current branch contains the signalling host, orchestrator, WebRTC media foundation, P2P interface admission, chat call UI, microphone permission flow and Core-Telecom / foreground-service integration. The compile errors identified by Run #564 have been addressed in commit `76777abaad0547f501f6b87480e3a8814a713e4d`; the resulting exact-head CI and debug APK are still pending and have not been independently verified. These are implementation facts, not yet verified phone-to-phone behaviour. Physical route, audio and lifecycle tests remain outstanding.
+The current branch contains the signalling host, orchestrator, WebRTC media foundation, P2P interface admission, chat call UI, microphone permission flow and Core-Telecom / foreground-service integration. Run #566 exposed a test-double semantic error and a notification permission Lint error. Both are corrected in code commit `5853dff350fb7c8d60f2f86e5dca8a4bf9e15e8b`; the new exact-head CI and debug APK are pending. These are implementation facts, not yet verified phone-to-phone behaviour. Physical route, audio and lifecycle tests remain outstanding.
 
 Checkpoint status remains **IN_PROGRESS**. No successful phone-to-phone voice call is claimed.
