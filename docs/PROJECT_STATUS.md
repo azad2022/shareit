@@ -3,11 +3,23 @@
 - **Product:** PEYVAND (پیوند)
 - **Repository:** `azad2022/shareit`
 - **Current status:** `IN_PROGRESS`
-- **Current checkpoint:** CP-CHAT-002 — Chat-first experience and direct peer messaging
-- **Current branch:** `feature/cp-chat-002-chat-experience`; latest implementation source SHA: `8e25b56951ef981dcf85ade834edd94881b655a1`
+- **Current checkpoint:** CP-CHAT-003 — Bidirectional in-chat attachments (implementation authorized; IN_PROGRESS)
+- **Current branch:** `feature/cp-chat-003-bidirectional-attachments`; implementation baseline head: `813016d422cd33c54433e897b72fa79cb976690b`
 - **Previous chat foundation:** CP-CHAT-001 remains on `feature/cp-chat-001-local-persistence`; source head `2bb8cd51082428b4c1223cf38260d2672ca0dfb4`
 - **Last updated:** 2026-11-14
 - **Parallel transfer track:** CP-004 remains `IN_PROGRESS` on `feature/cp-004-multi-item-transfer`; PR #3 remains open as Draft and has not been changed or merged.
+
+# CP-CHAT-003 — Bidirectional In-Chat Attachments
+
+- **Status:** IN_PROGRESS
+- **Owner authorization:** Explicitly granted 2026-11-17 for runtime implementation on feature/cp-chat-003-bidirectional-attachments.
+- **Baseline:** 813016d422cd33c54433e897b72fa79cb976690b (documentation head); CP-CHAT-002 source code SHA 8e25b56951ef981dcf85ade834edd94881b655a1.
+- **CI baseline:** runs [44027746525](https://github.com/azad2022/shareit/actions/runs/44027746525) and [44028513484](https://github.com/azad2022/shareit/actions/runs/44028513484) passed build/unit/lint plus API 26 and API 36 instrumentation (3/3 jobs each).
+- **Current audit findings:** conversation currently leaves the chat route for attachment selection/transfer; the file coordinator is direction-fixed and closes its FILE_TRANSFER lease after an operation; inbound batch flow requests per-offer and per-item consent; batch manifest minimum is two items; v1 single-file control frames are not correlation-safe for concurrent operations.
+- **Approved target:** one-to-one session-scoped bidirectional attachments, automatic reception only from the authenticated accepted peer, Android native pickers, inline attachment status, bounded streaming, SHA-256 verification and no auto-open/execute/install.
+- **School readiness:** child-friendly language, large touch targets, TalkBack/font scaling and a visible disconnect are required foundations. Classroom/group/teacher-management functionality remains a separate future milestone.
+- **Prerequisite note:** CP-CHAT-002 remains IN_PROGRESS pending a fully recorded physical-device acceptance matrix. Owner-reported text/emoji smoke testing is not misrepresented as complete security/interoperability evidence.
+- **Detailed records:** docs/checkpoints/CP-CHAT-003-BIDIRECTIONAL-CHAT-ATTACHMENTS.md and docs/decisions/ADR-0018-SESSION-SCOPED-BIDIRECTIONAL-CHAT-ATTACHMENTS.md.
 
 # CP-CHAT-002 — Chat-First Experience and Direct Peer Messaging
 
@@ -18,8 +30,8 @@
 - **Branch:** `feature/cp-chat-002-chat-experience`
 - **Base:** CP-CHAT-001 branch head `eaa8fad9649362951e9283b91b8d162a26c75488`
 - **Latest implementation source SHA:** `8e25b56951ef981dcf85ade834edd94881b655a1`
-- **Next approved design checkpoint:** CP-CHAT-003 — bidirectional in-chat attachments with session-scoped automatic reception; owner-approved product behavior, implementation not authorized.
-- **Latest exact-head CI:** run [43623779996](https://github.com/azad2022/shareit/actions/runs/43623779996) completed with conclusion **CANCELLED** for source SHA `8e25b56951ef981dcf85ade834edd94881b655a1`; it is not a passing validation. Previous run [43599087732](https://github.com/azad2022/shareit/actions/runs/43599087732) passed on a preceding code snapshot only.
+- **CP-CHAT-002 prerequisite:** remains IN_PROGRESS pending a fully recorded physical two-device acceptance matrix. Owner reports text and emoji exchange working; handset/API/APK checksum/repeat-count details are not yet recorded.
+- **Latest baseline CI:** runs [44027746525](https://github.com/azad2022/shareit/actions/runs/44027746525) and [44028513484](https://github.com/azad2022/shareit/actions/runs/44028513484) both passed all three jobs on documentation head `813016d...`, whose source code is CP-CHAT-002 implementation SHA `8e25b569...`. The earlier run [43623779996](https://github.com/azad2022/shareit/actions/runs/43623779996) was cancelled and is superseded by these successful runs.
 
 ## Objective
 
