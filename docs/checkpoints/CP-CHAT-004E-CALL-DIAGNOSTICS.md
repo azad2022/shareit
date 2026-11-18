@@ -6,7 +6,7 @@
 - **Owner authorization:** Explicitly granted 2026-11-18 as the first implementation slice after the product-scope expansion.
 - **Implementation branch:** `feature/pey-vand-product-scope-and-call-diagnostics`
 - **Base:** `feature/cp-chat-004-offline-audio-calls`
-- **Latest implementation commit:** `936e342d70d88d0dcb96a473817edd38e2bb6304`
+- **Latest implementation commit:** `b876d0082aa224a84061585162c3a8962975b0ee`
 - **Product evidence:** Owner reproduced call failure in both initiator directions on Samsung Galaxy A12 (Android 12) and ASUS X017DA (Android 8/9). Receiver sees the in-app incoming-call dialog, accepts, grants first-time microphone permission, then both devices show an error/end state after about 5–15 seconds. Speakerphone and media/call volume were checked. Text chat continues to work after call failure. Exact error text and microphone privacy indicator are unknown.
 
 ## Objective
@@ -18,7 +18,7 @@ Make the existing one-to-one audio-call state machine retain a safe, machine-rea
 - Added `VoiceCallFailureStage` to the domain call snapshot.
 - Added an optional failure-stage argument to the call state machine's terminal failure transition.
 - Classified orchestrator failures from ICE exchange, SDP signalling, media-engine callbacks, P2P media activation and setup timeout.
-- Added a unit test asserting that a media verification failure retains its stage.
+- Added state-machine and orchestrator unit assertions that a media verification failure retains the `P2P_MEDIA_VERIFICATION` stage.
 - Kept failure metadata to enums only. Do not store exception messages, SDP, ICE credentials/candidates, raw addresses, device labels, audio data, message contents or peer fingerprints in diagnostic output.
 
 ## Important limitation
@@ -36,9 +36,9 @@ This slice records the stage in `VoiceCallSnapshot`; it does not yet prove the r
 
 ## Validation
 
-- The state-machine test was extended to assert `P2P_MEDIA_VERIFICATION` is retained.
+- The state-machine test and orchestrator test were extended to assert `P2P_MEDIA_VERIFICATION` is retained.
 - **No local Gradle command was executed in this environment.**
-- **No CI result has yet been observed for implementation head `936e342d70d88d0dcb96a473817edd38e2bb6304`.**
+- **No CI result has yet been observed for implementation head `b876d0082aa224a84061585162c3a8962975b0ee`.**
 - **No physical-device retest has been performed.**
 - Existing CI #567 is historical and predates the latest integrated CP-004 source; it is not evidence for this branch.
 
