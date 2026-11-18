@@ -2,6 +2,7 @@ package com.peyvand.core.calling
 
 import com.peyvand.core.domain.call.VoiceCallDirection
 import com.peyvand.core.domain.call.VoiceCallFailure
+import com.peyvand.core.domain.call.VoiceCallFailureStage
 import com.peyvand.core.domain.call.VoiceCallStatus
 import com.peyvand.core.domain.call.VoiceCallTerminationReason
 import java.util.UUID
@@ -137,13 +138,19 @@ class VoiceCallStateMachineTest {
     }
 
     @Test
-    fun failedMediaNegotiationIsNeverReportedAsActive() {
+    fun failedMediaNegotiationRetainsSafeFailureStage() {
         val machine = VoiceCallStateMachine()
         val id = UUID.randomUUID()
         machine.beginOutgoing(id)
         machine.remoteAccepted(id)
         machine.outgoingMicrophonePermissionGranted(id)
-        machine.fail(id, VoiceCallFailure.MEDIA_NEGOTIATION_FAILED)
+        machine.fail(
+            id,
+            VoiceCallFailure.MEDIA_NEGOTIATION_FAILED,
+            VoiceCallFailureStage.P2P_MEDIA_VERIFICATION,
+        )
         assertEquals(VoiceCallStatus.FAILED, machine.snapshot.status)
+        assertEquals(VoiceCallFailure.MEDIA_NEGOTIATION_FAILED, machine.snapshot.failure)
+        assertEquals(VoiceCallFailureStage.P2P_MEDIA_VERIFICATION, machine.snapshot.failureStage)
     }
 }

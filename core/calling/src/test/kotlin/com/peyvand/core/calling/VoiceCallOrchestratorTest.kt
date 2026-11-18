@@ -1,6 +1,7 @@
 package com.peyvand.core.calling
 
 import com.peyvand.core.domain.call.VoiceCallStatus
+import com.peyvand.core.domain.call.VoiceCallFailureStage
 import com.peyvand.core.domain.connection.SecureSessionSnapshot
 import com.peyvand.core.domain.connection.SecureSessionStatus
 import com.peyvand.core.domain.connection.VoiceCallP2pEndpointProvider
@@ -141,6 +142,10 @@ class VoiceCallOrchestratorTest {
             rig.remote.send(VoiceCallSignal.SdpAnswer(callId, "audio-answer"))
             rig.awaitStatus(VoiceCallStatus.FAILED)
             assertFalse(rig.orchestrator.snapshot.value.status == VoiceCallStatus.ACTIVE)
+            assertEquals(
+                VoiceCallFailureStage.P2P_MEDIA_VERIFICATION,
+                rig.orchestrator.snapshot.value.failureStage,
+            )
             assertTrue(rig.mediaFactory.lastSession?.closed == true)
         } finally {
             rig.close()

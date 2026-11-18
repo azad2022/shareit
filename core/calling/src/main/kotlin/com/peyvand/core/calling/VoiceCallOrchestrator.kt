@@ -2,6 +2,7 @@ package com.peyvand.core.calling
 
 import com.peyvand.core.domain.call.VoiceCallDirection
 import com.peyvand.core.domain.call.VoiceCallFailure
+import com.peyvand.core.domain.call.VoiceCallFailureStage
 import com.peyvand.core.domain.call.VoiceCallSnapshot
 import com.peyvand.core.domain.call.VoiceCallStatus
 import com.peyvand.core.domain.connection.SecureSessionSnapshot
@@ -577,6 +578,7 @@ class VoiceCallOrchestrator(
                 event.callId,
                 VoiceCallFailure.MEDIA_NEGOTIATION_FAILED,
                 sendEnd = true,
+                failureStage = VoiceCallFailureStage.P2P_MEDIA_VERIFICATION,
             )
         }
     }
@@ -590,6 +592,7 @@ class VoiceCallOrchestrator(
             event.callId,
             VoiceCallFailure.MEDIA_NEGOTIATION_FAILED,
             sendEnd = true,
+            failureStage = VoiceCallFailureStage.AUDIO_ENGINE,
         )
     }
 
@@ -606,11 +609,11 @@ class VoiceCallOrchestrator(
                 sendSignal(VoiceCallSignal.Cancel(callId))
             }
             VoiceCallStatus.AWAITING_MICROPHONE_PERMISSION -> {
-                machine.fail(callId, VoiceCallFailure.TIMEOUT)
+                machine.fail(callId, VoiceCallFailure.TIMEOUT, VoiceCallFailureStage.SETUP_TIMEOUT)
                 sendSignal(VoiceCallSignal.Reject(callId, VoiceCallRejectReason.TIMED_OUT))
             }
             VoiceCallStatus.NEGOTIATING -> {
-                machine.fail(callId, VoiceCallFailure.TIMEOUT)
+                machine.fail(callId, VoiceCallFailure.TIMEOUT, VoiceCallFailureStage.SETUP_TIMEOUT)
                 sendSignal(VoiceCallSignal.End(callId, VoiceCallEndCause.INTERNAL_FAILURE))
             }
             else -> return
@@ -628,10 +631,11 @@ class VoiceCallOrchestrator(
         callId: UUID,
         failure: VoiceCallFailure,
         sendEnd: Boolean,
+        failureStage: VoiceCallFailureStage? = null,
     ) {
         val current = machine.snapshot
         if (current.callId != callId || current.isTerminal) return
-        machine.fail(callId, failure)
+        machine.fail(callId, failure, failureStage)
         cancelTimeout()
         cleanupMedia()
         publish()
@@ -714,7 +718,20 @@ class VoiceCallOrchestrator(
                 is Event.MediaActivated -> VoiceCallFailure.MEDIA_NEGOTIATION_FAILED
                 else -> VoiceCallFailure.RESOURCE_UNAVAILABLE
             }
-            failCurrentCall(callId, failure, sendEnd = true)
+            val stage = when (event) {
+                is Event.LocalIce -> VoiceCallFailureStage.ICE_EXCHANGE
+                is Event.RemoteSignal -> when (event.signal) {
+                    is VoiceCallSignal.SdpOffer,
+                    is VoiceCallSignal.SdpAnswer -> VoiceCallFailureStage.SDP_NEGOTIATION
+                    is VoiceCallSignal.IceCandidate -> VoiceCallFailureStage.ICE_EXCHANGE
+                    else -> VoiceCallFailureStage.CALL_CONTROL
+                }
+                is Event.MediaFailure -> VoiceCallFailureStage.AUDIO_ENGINE
+                is Event.MediaActivated -> VoiceCallFailureStage.P2P_MEDIA_VERIFICATION
+                is Event.PermissionResult -> VoiceCallFailureStage.MEDIA_SESSION_SETUP
+                else -> VoiceCallFailureStage.CALL_CONTROL
+            }
+            failCurrentCall(callId, failure, sendEnd = true, failureStage = stage)
         }
     }
 
