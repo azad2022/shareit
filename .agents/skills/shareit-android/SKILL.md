@@ -11,23 +11,18 @@ Act as the senior Android systems engineer for this repository. The product is P
 
 PEYVAND competes in the same product category as SHAREit and may use blue-and-white as its broad color direction, but it must have its own brand expression. Do not copy proprietary source code, artwork, logos, trademarks, exact screen layouts, signature animations, text, or other protected assets from SHAREit or any other product. SHAREit may be used as a benchmark for measured transfer performance and common user expectations, not as a source of copied design assets.
 
-### Current repository state
+### Current repository state and implementation authorization
 
-This repository contains product specifications on main and isolated implementation branches. The default scope-control rule remains: do not create source code, Gradle scaffolding, screens, mocks, or build configuration unless the product owner explicitly authorizes the relevant implementation scope.
-
-- On 2026-11-13, the product owner explicitly authorized **CP-CHAT-001 — local encrypted persistence** on branch `feature/cp-chat-001-local-persistence`, based on code SHA `cf80930bd557a3a6feae0d6d8ada0e200f2fb6c8`.
-- CP-CHAT-001 is limited to Android-free chat domain contracts, Room local message/history persistence, an encrypted message-body store backed by Android Keystore, atomic outgoing outbox, bounded queue policy, Android backup/device-transfer exclusion, and tests.
-- CP-CHAT-001 does not include Compose chat screens, incoming network frames, persistent peer identity, reconnect synchronization, channel multiplexing, group chat, read receipts, voice/video, cloud backup, manual export, remote recovery, or any server/relay/backend.
-- The existing CP-003 and CP-004 implementation branches remain isolated. Do not modify or merge PR #3 as part of CP-CHAT-001.
-- On 2026-11-17, the product owner separately authorized **CP-CHAT-003 — bidirectional in-chat attachments** on `feature/cp-chat-003-bidirectional-attachments`; keep that milestone isolated.
-- On 2026-11-17, the product owner separately authorized **CP-CHAT-004 — offline one-to-one full-duplex audio calls** on `feature/cp-chat-004-offline-audio-calls`. This scope is audio-only, uses the active authenticated Wi-Fi Direct session, explicit remote call acceptance and local `RECORD_AUDIO` permission, signed backwards-compatible capability proof, a dedicated authenticated TLS signalling channel, and a separate P2P-only real-time media path. No public Internet, server, push, cloud, public STUN/TURN, relay, group calling, recording, transcription, camera or video is authorized. The milestone remains subject to its CP-CHAT-004 checkpoint and physical-device acceptance.
-- The current mTLS peer certificate is session-scoped and its authenticated channel is exclusively claimed by the file-transfer coordinator. Never use it, a discovery name, or an IP/MAC address as a persistent chat identity. Stable peer identity and safe channel multiplexing need a separate reviewed milestone.
-- Read the latest skill and relevant product docs from main before repository work, then inspect the exact active branch and exact files before editing.
-- A request to discuss, review, plan, or refine the product does not authorize new code. The explicit CP-CHAT-001, CP-CHAT-003 and CP-CHAT-004 approvals above are already granted within their stated branch/scope and must not be requested again. Any expansion beyond those scopes still needs separate owner approval.
-- When asked to implement, make the smallest complete, testable change that satisfies the approved scope.
-- Never claim that a feature works, a test passed, a build succeeded, or a device is supported without direct evidence from repository state or test output.
-
-The product owner's explicit decisions take precedence over assumptions in this skill. If a material decision is unclear, explain its impact and ask one focused question rather than silently choosing a consequential behavior.
+- The default scope-control rule remains: do not create or modify application code, Gradle configuration, screens, mocks, or executable features without explicit product-owner authorization for the relevant scope.
+- CP-CHAT-001 local encrypted text persistence is implemented on `feature/cp-chat-001-local-persistence`. Its latest documented implementation head is `2bb8cd51082428b4c1223cf38260d2672ca0dfb4`; it remains `IN_PROGRESS` pending physical-device Keystore/backup validation and security review. It is not a complete end-to-end chat feature.
+- CP-CHAT-002 one-to-one chat-first messaging and persistent peer identity remain isolated on their own implementation branch. Do not assume that branch includes group chat, voice notes, group messaging, or the expanded attachment requirements below.
+- CP-CHAT-003 bidirectional in-chat attachments remain isolated on `feature/cp-chat-003-bidirectional-attachments`; preserve its one-to-one baseline until a separately reviewed group-capable protocol is implemented.
+- CP-CHAT-004 offline one-to-one full-duplex audio calls remain isolated on `feature/cp-chat-004-offline-audio-calls`. The latest documented integrated source is `06b617cca6e317c8706fc44bfb1d9f22dac16f3d`, with later test-only changes on its branch. The last green CI (#567) predates that integrated source, and no successful physical two-device call is documented. Keep the checkpoint `IN_PROGRESS`.
+- On 2026-11-18, the owner explicitly authorized a focused CP-CHAT-004E implementation slice for stage-specific call-failure diagnostics on `feature/pey-vand-product-scope-and-call-diagnostics`. Keep this work isolated and do not alter main or the original CP-003/CP-004 branches directly.
+- The owner has also approved the expanded product scope recorded in section 20. This product-level authorization does not mean group chat, background discovery, voice notes, or group-capable transfer are implemented or may be silently merged into older checkpoints.
+- Read this Skill and relevant product documents from `main` before repository work, then inspect the exact active branch and files before editing. Keep documentation changes separate from application implementation changes.
+- Never claim a feature works, a test passed, a build succeeded, or a device is supported without direct evidence. CI does not replace physical two-device interoperability.
+- Any extension beyond a recorded checkpoint requires explicit owner approval, an ADR where architecture/security is affected, and a checkpoint with reproducible acceptance evidence.
 
 ## 2. Confirmed product definition
 
@@ -573,3 +568,64 @@ Before a motion milestone is marked PASSED, verify: the animation is tied to a r
 
 Refer to `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md` for the expanded product identity, localization, RTL, motion, and acceptance specification. Refer to `docs/PRODUCT_REQUIREMENTS.md` for the current confirmed scope. CP-CHAT-001 local persistence, CP-CHAT-003 bidirectional in-chat attachments, and CP-CHAT-004 audio-only offline one-to-one voice calls are separately authorized only on their dedicated implementation branches/checkpoints. CP-CHAT-004 remains incomplete until the end-to-end orchestrator, Core-Telecom/microphone lifecycle, in-chat UI, CI, and physical-device acceptance evidence are recorded. Any scope outside these decisions requires separate approval.
 
+## 20. Expanded product decisions confirmed by the owner (2026-11-18)
+
+These decisions are explicit product requirements. They supersede conflicting planning assumptions in older sections, but do not imply that the corresponding implementation or acceptance tests already exist.
+
+### Discovery and peer connection
+
+- Discovery starts only after the user taps Search. While that search session is active, each participating device advertises PEYVAND availability and browses for nearby peers concurrently.
+- Show discovered candidates in a list. The user selects a device and explicitly sends a connection request.
+- If both peers initiate at nearly the same time, the protocol must deterministically converge on one initiator and expose only one incoming request; duplicate sessions/invitations must be suppressed.
+- A first-time peer request is presented with the device label and Accept/Reject. The user does not see or compare a SAS or numeric authentication code.
+- On first successful consent, persist the peer's stable cryptographic identity. Subsequent connection requests may be auto-accepted only after the stored identity is cryptographically verified and the request is bound to the expected peer/session. A matching device label, discovery token, IP address, or MAC address is never sufficient.
+- The owner accepts the residual first-contact active-MITM risk introduced by removing the user-visible SAS comparison. Do not claim that a device-name confirmation or ordinary first-use pinning provides out-of-band identity authentication. Retain TLS, certificate validation, cryptographic identity proof, replay/downgrade defenses, and clear trust reset/revocation behavior. No hand-written cryptography or disabled certificate validation is permitted.
+- The connection/chat remains active when navigating away from the conversation. Provide an explicit Disconnect action. New peer requests while connected are shown to the user, who decides whether to retain the current peer or disconnect and switch.
+- Persistent background discovery is a product request, but execution is best-effort and subject to Android version, permissions, foreground-service rules, battery restrictions, OEM process management, and Force Stop. Never promise operation after Force Stop or system termination. Define a compliant foreground/background execution ADR before implementation.
+
+### Group conversations
+
+- PEYVAND must support temporary nearby-device groups. The group is not a server-hosted or cloud-backed room.
+- There is no fixed product-level member count. Runtime admission/concurrency must be bounded by measured device, radio, memory, battery, and protocol capacity; the UI must report capacity failures honestly.
+- Group formation and new-member admission require user consent. Any current member may approve a joining device; after admission, every current member receives a member-joined notice.
+- The group has an editable name and image. When its creator leaves, the group continues for remaining members and management transfers to another member. The deterministic successor/election policy remains an ADR decision.
+- Group attachment delivery supports both all-members and selected-recipient modes. Each recipient has independent progress, delivery, cancellation, error, retry, and integrity state.
+- Group text and attachment exchange is a multi-sender/multi-recipient product requirement. This supersedes the older one-sender-to-many-receivers-only product model for group conversations. It requires a separately reviewed group identity, membership, authorization, ordering, fan-out, concurrency, and protocol design; do not retrofit it by merely reusing the old transfer role model.
+- Group voice calls are deferred. The currently authorized call implementation remains one-to-one audio only; group calling requires a separate milestone and security/media review.
+
+### Chat messages and local retention
+
+- Message history remains on each participating device until the user manually deletes it. Unsent text and voice messages remain in a durable local outbox until delivered or manually deleted. Do not silently expire or prune them.
+- Support delivery/read receipts and typing indicators. These are local-peer protocol events, not cloud push notifications; typing state must be transient and must not be persisted as message history.
+- Support text edit, delete-for-self, delete-for-all, reply, quote, and forward-to-another-chat. Group-wide edit/delete semantics, conflict handling, and offline reconciliation require a protocol decision before implementation.
+- Offline queued messages are delivered only when a direct peer/group connection is re-established. No server, relay, cloud store, push service, or Internet path is introduced.
+
+### Attachments and Android storage
+
+- From the conversation, one attachment action opens Android's standard system picker(s); PEYVAND must not build a custom gallery or general-purpose file manager.
+- Support multi-selection and all user-selectable file types, including photos, videos, music/audio, documents, PDFs, archives, arbitrary files, and eligible Android application packages.
+- Installed-app sharing and independent APK-file sharing are both required. Installed-app export must preserve a compatible base/split APK set where Android exposes it; app-private data is not included, and installation remains a separate user-approved PackageInstaller operation.
+- Render type-aware attachment cards/previews (thumbnail, document metadata, audio/video player, or generic file metadata) with truthful per-item/per-recipient progress and integrity status.
+- After a complete integrity-verified receive, automatically publish to a user-accessible public `PEYVAND` folder with category subfolders: `Photos`, `Videos`, `Music`, `Documents`, `Apps`, and `Other`. Use MediaStore/SAF/ContentResolver and version-aware public-storage APIs; do not assume raw paths or request broad storage access without a policy-justified need. Do not expose a partial file before verification.
+- Exact public-folder creation and publication behavior across Android API levels, scoped storage and uninstall behavior must be captured in an ADR and tested on physical OEM devices.
+
+### Voice messages
+
+- Add one-to-one and group voice messages (recorded audio attachments), distinct from live voice calls.
+- Recording uses press-and-hold on the microphone control; releasing ends recording. Drag-to-cancel and an explicit cancel action are both supported.
+- Before sending, the user can preview playback, discard, or re-record. Sent/received voice messages remain in local chat history until manual deletion.
+- Voice-message bubbles show a waveform, duration, playback position, and play/pause controls. Playback is normal speed only in the approved initial scope.
+- Recording permission, foreground/background behavior, maximum duration/size, audio codec/container, and retention of temporary recording artifacts require a separate implementation ADR. Never record without an explicit user gesture and runtime microphone permission.
+
+### Existing voice-call failure — diagnostic evidence
+
+- The owner reports that on Samsung Galaxy A12 (Android 12) and ASUS X017DA (Android 8/9), calls fail in both initiator directions. The receiver sees the in-app incoming-call dialog, accepts, grants first-time microphone permission, then both devices show an error/end state after approximately 5–15 seconds. Speakerphone is selected; the owner checked both media and call volume. Text chat remains usable after the call fails. The exact error text and microphone privacy-indicator state are unknown.
+- These observations do not identify the failing subsystem. Instrument and surface safe, stage-specific failure reasons for Telecom registration/answer, microphone foreground-service promotion, media session creation, SDP/ICE negotiation, exact P2P candidate admission, DTLS-SRTP verification, AudioRecord/AudioTrack startup, and timeout/remote termination.
+- Diagnostics must be privacy-safe: no SDP secrets, ICE credentials, raw IP/MAC addresses, device names, message content, audio data, or persistent identity fingerprints in logs. Preserve enough correlation IDs and stage/timing data to distinguish failures.
+- Do not change the one-to-one call security or transport policy merely to make the call appear connected. Text-chat continuity after call failure is a required regression test.
+
+### Scope and governance
+
+- These expanded requirements are product-level authorization to design and plan the corresponding milestones. Implement them in isolated, reviewable checkpoints with ADRs for group protocol/membership, multi-sender transfer, public storage, voice-note media format/lifecycle, background execution, and trust lifecycle.
+- Existing CP-CHAT-003 and CP-CHAT-004 checkpoints retain their original scope until an explicit migration/integration plan is reviewed. Never silently widen an old checkpoint or merge feature branches.
+- Status values remain exactly `IN_PROGRESS`, `BLOCKED`, and `PASSED`. `PASSED` requires reproducible automated and applicable physical-device evidence.
