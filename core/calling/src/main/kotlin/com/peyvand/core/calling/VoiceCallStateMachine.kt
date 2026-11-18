@@ -2,6 +2,7 @@ package com.peyvand.core.calling
 
 import com.peyvand.core.domain.call.VoiceCallDirection
 import com.peyvand.core.domain.call.VoiceCallFailure
+import com.peyvand.core.domain.call.VoiceCallFailureStage
 import com.peyvand.core.domain.call.VoiceCallSnapshot
 import com.peyvand.core.domain.call.VoiceCallStatus
 import com.peyvand.core.domain.call.VoiceCallTerminationReason
@@ -219,11 +220,15 @@ class VoiceCallStateMachine(
         }
     }
 
-    fun fail(callId: UUID, failure: VoiceCallFailure) {
+    fun fail(
+        callId: UUID,
+        failure: VoiceCallFailure,
+        stage: VoiceCallFailureStage? = null,
+    ) {
         synchronized(lock) {
             require(callId == current.callId) { "Failure belongs to a different call." }
             check(!current.isTerminal) { "A terminal call cannot fail again." }
-            current = current.copy(status = VoiceCallStatus.FAILED, failure = failure)
+            current = current.copy(status = VoiceCallStatus.FAILED, failure = failure, failureStage = stage)
         }
     }
 
