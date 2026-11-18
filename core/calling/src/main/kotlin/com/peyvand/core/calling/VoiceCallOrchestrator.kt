@@ -578,6 +578,7 @@ class VoiceCallOrchestrator(
                 event.callId,
                 VoiceCallFailure.MEDIA_NEGOTIATION_FAILED,
                 sendEnd = true,
+                failureStage = VoiceCallFailureStage.P2P_MEDIA_VERIFICATION,
             )
         }
     }
@@ -612,7 +613,7 @@ class VoiceCallOrchestrator(
                 sendSignal(VoiceCallSignal.Reject(callId, VoiceCallRejectReason.TIMED_OUT))
             }
             VoiceCallStatus.NEGOTIATING -> {
-                machine.fail(callId, VoiceCallFailure.TIMEOUT)
+                machine.fail(callId, VoiceCallFailure.TIMEOUT, VoiceCallFailureStage.SETUP_TIMEOUT)
                 sendSignal(VoiceCallSignal.End(callId, VoiceCallEndCause.INTERNAL_FAILURE))
             }
             else -> return
