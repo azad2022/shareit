@@ -3,6 +3,7 @@ package com.peyvand.app.presentation.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -125,25 +126,31 @@ fun MessagingUiPreviewScreen(
             }
         }
 
-        when (selectedTab) {
-            MessagingPreviewTab.GROUPS -> GroupListPreviewPane(
-                onOpenGroup = { selectedTab = MessagingPreviewTab.CONVERSATION },
-                onCreateGroup = { createdName ->
-                    groupName = createdName
-                    selectedTab = MessagingPreviewTab.CONVERSATION
-                },
-            )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        ) {
+            when (selectedTab) {
+                MessagingPreviewTab.GROUPS -> GroupListPreviewPane(
+                    onOpenGroup = { selectedTab = MessagingPreviewTab.CONVERSATION },
+                    onCreateGroup = { createdName ->
+                        groupName = createdName
+                        selectedTab = MessagingPreviewTab.CONVERSATION
+                    },
+                )
 
-            MessagingPreviewTab.CONVERSATION -> GroupConversationPreviewPane(
-                groupName = resolvedGroupName,
-                onOpenMembers = { selectedTab = MessagingPreviewTab.MEMBERS },
-                onOpenAttachments = { selectedTab = MessagingPreviewTab.ATTACHMENTS },
-                onOpenVoice = { selectedTab = MessagingPreviewTab.VOICE },
-            )
+                MessagingPreviewTab.CONVERSATION -> GroupConversationPreviewPane(
+                    groupName = resolvedGroupName,
+                    onOpenMembers = { selectedTab = MessagingPreviewTab.MEMBERS },
+                    onOpenAttachments = { selectedTab = MessagingPreviewTab.ATTACHMENTS },
+                    onOpenVoice = { selectedTab = MessagingPreviewTab.VOICE },
+                )
 
-            MessagingPreviewTab.ATTACHMENTS -> AttachmentPreviewPane()
-            MessagingPreviewTab.VOICE -> VoiceMessagePreviewPane()
-            MessagingPreviewTab.MEMBERS -> GroupMembersPreviewPane(groupName = resolvedGroupName)
+                MessagingPreviewTab.ATTACHMENTS -> AttachmentPreviewPane()
+                MessagingPreviewTab.VOICE -> VoiceMessagePreviewPane()
+                MessagingPreviewTab.MEMBERS -> GroupMembersPreviewPane(groupName = resolvedGroupName)
+            }
         }
     }
 }

@@ -617,3 +617,12 @@ The product owner explicitly authorized the next implementation sequence: comple
 ### CP-CHAT-UI-001 validation note — 2026-11-19
 
 The first exact-head run (44482801826) compiled the new UI code far enough to reveal a missing Material 3 `TextButton` import in `ChatHomeScreen.kt`; the app build/unit/lint job failed at Kotlin compilation. The API 26 and API 36 instrumentation jobs both completed successfully, but those are not evidence that the app module compiles. Add the import, create a new commit, and re-run all exact-head jobs. Never mark the UI checkpoint passed based only on the emulator instrumentation jobs.
+
+
+### CP-CHAT-UI-001 exact-head validation and UI polish — 2026-11-19
+
+- Commit `94c3a6c8b274f555bc9439637fafb26ca0245d75` completed GitHub Actions run [44499918249, attempt 2](https://github.com/azad2022/shareit/actions/runs/44499918249) with all three jobs successful: app build/unit tests/lint, API 26 instrumentation, and API 36 instrumentation.
+- The first attempt's API 36 failure was caused by Maven/Gradle dependency resolution before instrumentation. The retry succeeded without changing Gradle or Kotlin versions; do not make dependency changes solely to work around that transient failure.
+- The build job compiled `:app:compileDebugKotlin`, completed `:app:lintDebug`, ran configured unit-test tasks, and produced the Debug APK. SHA-256: `c4eb7f3e66089f568e76a42ce4feaaad5e37ba5616972aca4053b164defd579e`.
+- CI evidence applies to commit `94c3a6c8...` only. Subsequent responsive/accessibility UI polish is a separate source commit and must receive its own exact-head CI before being called validated.
+- Physical device visual inspection, TalkBack operation, font-scaling verification and actual release/non-debug build inspection remain outstanding. Keep CP-CHAT-UI-001 `IN_PROGRESS`.

@@ -100,6 +100,7 @@
     <string name="ui_preview_file_other">داده.bin</string>
     <string name="ui_preview_meta_other">نوع فایل بر اساس MIME واقعی تعیین می‌شود.</string>
     <string name="ui_preview_voice_heading">رابط پیام صوتی</string>
+    <string name="ui_preview_voice_record_button">نمایش کنترل ضبط پیام صوتی</string>
     <string name="ui_preview_voice_controls_explainer">جریان هدف: نگه‌داشتن برای ضبط، رهاکردن برای پایان، بازبینی و سپس ارسال یا حذف و ضبط مجدد.</string>
     <string name="ui_preview_voice_hold">نمایش نگه‌داشتن</string>
     <string name="ui_preview_voice_finish">نمایش پایان</string>

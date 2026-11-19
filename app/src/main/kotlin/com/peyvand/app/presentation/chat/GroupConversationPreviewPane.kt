@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -16,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -32,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -57,6 +63,7 @@ internal fun GroupConversationPreviewPane(
     var draft by rememberSaveable { mutableStateOf("") }
     var selectedMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var operationNotice by rememberSaveable { mutableStateOf<String?>(null) }
+    val voiceRecordDescription = stringResource(R.string.ui_preview_voice_record_button)
     val sendDisabledNotice = stringResource(R.string.ui_preview_send_disabled_notice)
     val sendEmptyNotice = stringResource(R.string.ui_preview_send_empty_notice)
     val actionUnavailableNotice = stringResource(R.string.ui_preview_action_unavailable)
@@ -85,7 +92,9 @@ internal fun GroupConversationPreviewPane(
     )
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Surface(
@@ -148,7 +157,7 @@ internal fun GroupConversationPreviewPane(
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f, fill = false),
+                .weight(1f),
             verticalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             items(sampleMessages, key = { it.id }) { message ->
@@ -207,10 +216,15 @@ internal fun GroupConversationPreviewPane(
                     }
                     OutlinedButton(
                         onClick = onOpenVoice,
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .semantics { contentDescription = voiceRecordDescription },
                         shape = CircleShape,
                     ) {
-                        Text("●", color = PeyvandColors.PrimaryBlue)
+                        PeyvandChatIcon(
+                            PeyvandChatIconType.VOICE_NOTE,
+                            PeyvandColors.PrimaryBlue,
+                        )
                     }
                     Surface(
                         modifier = Modifier
@@ -270,7 +284,10 @@ internal fun GroupConversationPreviewPane(
             onDismissRequest = { selectedMessage = null },
             title = { Text(stringResource(R.string.ui_preview_message_actions_title)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     Text(
                         selectedMessage.orEmpty(),
                         color = PeyvandColors.OnSurfaceVariant,
@@ -431,10 +448,10 @@ internal fun VoiceMessagePreviewCard() {
                     color = PeyvandColors.PrimaryBlueContainer,
                     shape = CircleShape,
                 ) {
-                    Text(
-                        "▶",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                        color = PeyvandColors.PrimaryBlueDark,
+                    PeyvandChatIcon(
+                        PeyvandChatIconType.PLAY,
+                        PeyvandColors.PrimaryBlueDark,
+                        Modifier.padding(horizontal = 12.dp, vertical = 9.dp).size(18.dp),
                     )
                 }
                 Column(

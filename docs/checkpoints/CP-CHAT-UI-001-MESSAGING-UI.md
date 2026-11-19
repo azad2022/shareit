@@ -89,3 +89,16 @@ All values in the review surface are **sample data**. They must never be saved, 
 - Root cause from compiler output: the new Debug-preview entry used Material 3 `TextButton` without importing it. The later Compose-context diagnostics were cascading from that unresolved symbol.
 - Corrective change: add the missing `androidx.compose.material3.TextButton` import. No behavior, navigation, backend, transport or data-layer changes are made.
 - Re-run exact-head CI after the corrective commit. Keep status `IN_PROGRESS` until it completes and the physical visual review is recorded.
+
+
+## Exact-head CI evidence before responsive UI polish
+
+- Commit: `94c3a6c8b274f555bc9439637fafb26ca0245d75`
+- Workflow: [Android CI run 44499918249, attempt 2](https://github.com/azad2022/shareit/actions/runs/44499918249)
+- **Build, unit tests, lint and Debug APK:** `success`.
+- **Android storage publication and mTLS, API 26:** `success`.
+- **Android storage publication and mTLS, API 36:** `success` on retry. The first attempt failed during dependency resolution; the retry completed successfully without source or dependency changes.
+- Debug APK SHA-256: `c4eb7f3e66089f568e76a42ce4feaaad5e37ba5616972aca4053b164defd579e`.
+- Artifacts: Debug APK `peyvand-debug-apk`; API 26 and API 36 instrumentation APKs and reports.
+- This evidence validates commit `94c3a6c8...` only. The pending responsive layout, dialog scrolling and TalkBack improvements in the next commit are not covered by this run.
+- Physical-device visual/accessibility review remains outstanding; status remains `IN_PROGRESS`.
