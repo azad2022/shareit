@@ -78,3 +78,14 @@ All values in the review surface are **sample data**. They must never be saved, 
 - This is a visual/interaction review surface, not the final production wiring. Some actions deliberately show a preview-only notice.
 - Final production UI must consume typed immutable UI state from ViewModels/repositories; it must not preserve mock/sample records as a substitute for real backend functionality.
 - UI details for language switching and Kurdish script remain subject to the existing localization requirement; Kurdish must not be enabled before Sorani/Kurmanji variant is selected and reviewed.
+
+
+## CI failure analysis and corrective change
+
+- **Initial exact-head run:** Android CI run [44482801826](https://github.com/azad2022/shareit/actions/runs/44482801826), commit `2903f8e3e960070e9d429c78b592046099eb7f54`.
+- API 26 instrumentation job: `success`.
+- API 36 instrumentation job: `success`.
+- Build/unit-test/lint job: `failure` during Kotlin compilation in `ChatHomeScreen.kt:101–106`.
+- Root cause from compiler output: the new Debug-preview entry used Material 3 `TextButton` without importing it. The later Compose-context diagnostics were cascading from that unresolved symbol.
+- Corrective change: add the missing `androidx.compose.material3.TextButton` import. No behavior, navigation, backend, transport or data-layer changes are made.
+- Re-run exact-head CI after the corrective commit. Keep status `IN_PROGRESS` until it completes and the physical visual review is recorded.
