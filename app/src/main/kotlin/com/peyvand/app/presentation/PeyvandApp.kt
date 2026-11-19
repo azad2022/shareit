@@ -1,5 +1,6 @@
 package com.peyvand.app.presentation
 
+import android.content.pm.ApplicationInfo
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -30,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.peyvand.app.R
 import com.peyvand.app.presentation.chat.ChatConversationScreen
 import com.peyvand.app.presentation.chat.ChatHomeScreen
+import com.peyvand.app.presentation.chat.MessagingUiPreviewScreen
 import com.peyvand.app.presentation.chat.ChatViewModel
 import com.peyvand.app.presentation.chat.NearbyChatHubScreen
 import com.peyvand.app.presentation.connection.PeerConnectionViewModel
@@ -64,6 +67,7 @@ private enum class HomeDestination {
     CHAT_ATTACHMENT_SEND,
     CHAT_ATTACHMENT_RECEIVE,
     ACTIVITY,
+    MESSAGING_UI_PREVIEW,
 }
 
 @Composable
@@ -76,6 +80,7 @@ fun PeyvandApp(
     fileTransferViewModel: FileTransferViewModel,
     chatViewModel: ChatViewModel,
 ) {
+    val isDebuggable = (LocalContext.current.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     val uiState by languageViewModel.uiState.collectAsStateWithLifecycle()
     val connectionState by peerConnectionViewModel.state.collectAsStateWithLifecycle()
     val secureSession by peerConnectionViewModel.secureSession.collectAsStateWithLifecycle()
@@ -165,6 +170,7 @@ fun PeyvandApp(
 
             HomeDestination.NEARBY_HUB,
             HomeDestination.ACTIVITY,
+            HomeDestination.MESSAGING_UI_PREVIEW,
             -> destination = HomeDestination.HOME
 
             HomeDestination.HOME -> Unit
@@ -198,6 +204,15 @@ fun PeyvandApp(
                     },
                     onOpenNearby = { destination = HomeDestination.NEARBY_HUB },
                     onOpenTransfers = { destination = HomeDestination.ACTIVITY },
+                    onOpenUiPreview = if (isDebuggable) {
+                        { destination = HomeDestination.MESSAGING_UI_PREVIEW }
+                    } else {
+                        null
+                    },
+                )
+
+                HomeDestination.MESSAGING_UI_PREVIEW -> MessagingUiPreviewScreen(
+                    onBack = { destination = HomeDestination.HOME },
                 )
 
                 HomeDestination.NEARBY_HUB -> NearbyChatHubScreen(

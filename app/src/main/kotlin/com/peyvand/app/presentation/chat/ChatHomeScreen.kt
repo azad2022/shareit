@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -56,6 +57,7 @@ fun ChatHomeScreen(
     onOpenConversation: (PeerIdentityId) -> Unit,
     onOpenNearby: () -> Unit,
     onOpenTransfers: () -> Unit,
+    onOpenUiPreview: (() -> Unit)? = null,
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     val filtered = remember(state.conversations, search) {
@@ -94,6 +96,15 @@ fun ChatHomeScreen(
                         text = stringResource(R.string.chat_brand_tagline),
                         style = MaterialTheme.typography.labelSmall,
                         color = ChatMuted,
+                    )
+                }
+            }
+            onOpenUiPreview?.let { previewAction ->
+                TextButton(onClick = previewAction) {
+                    Text(
+                        stringResource(R.string.ui_preview_open),
+                        color = ChatBlue,
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }

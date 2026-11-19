@@ -24,6 +24,8 @@ enum class PeyvandChatIconType {
     TRANSFERS,
     NEARBY,
     VOICE_CALL,
+    VOICE_NOTE,
+    PLAY,
     VIDEO_CALL,
     VERIFIED,
     ATTACHMENT,
@@ -118,6 +120,30 @@ internal fun PeyvandChatIcon(
                     lineTo(w * 0.43f, h * 0.25f)
                     close()
                 }
+            }
+            PeyvandChatIconType.VOICE_NOTE -> {
+                drawRoundRect(
+                    color = tint,
+                    topLeft = Offset(w * 0.39f, h * 0.10f),
+                    size = androidx.compose.ui.geometry.Size(w * 0.22f, h * 0.48f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.11f, w * 0.11f),
+                )
+                path {
+                    moveTo(w * 0.24f, h * 0.42f)
+                    quadraticTo(w * 0.24f, h * 0.77f, w * 0.50f, h * 0.77f)
+                    quadraticTo(w * 0.76f, h * 0.77f, w * 0.76f, h * 0.42f)
+                }
+                line(Offset(w * 0.50f, h * 0.77f), Offset(w * 0.50f, h * 0.91f))
+                line(Offset(w * 0.36f, h * 0.91f), Offset(w * 0.64f, h * 0.91f))
+            }
+            PeyvandChatIconType.PLAY -> {
+                val triangle = Path().apply {
+                    moveTo(w * 0.34f, h * 0.18f)
+                    lineTo(w * 0.82f, h * 0.50f)
+                    lineTo(w * 0.34f, h * 0.82f)
+                    close()
+                }
+                drawPath(triangle, tint)
             }
             PeyvandChatIconType.VIDEO_CALL -> {
                 path {
