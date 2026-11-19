@@ -56,6 +56,7 @@ fun ChatHomeScreen(
     onOpenConversation: (PeerIdentityId) -> Unit,
     onOpenNearby: () -> Unit,
     onOpenTransfers: () -> Unit,
+    onOpenUiPreview: (() -> Unit)? = null,
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     val filtered = remember(state.conversations, search) {
@@ -94,6 +95,15 @@ fun ChatHomeScreen(
                         text = stringResource(R.string.chat_brand_tagline),
                         style = MaterialTheme.typography.labelSmall,
                         color = ChatMuted,
+                    )
+                }
+            }
+            onOpenUiPreview?.let { previewAction ->
+                TextButton(onClick = previewAction) {
+                    Text(
+                        stringResource(R.string.ui_preview_open),
+                        color = ChatBlue,
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }

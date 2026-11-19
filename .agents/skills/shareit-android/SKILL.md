@@ -594,3 +594,21 @@ Before a motion milestone is marked PASSED, verify: the animation is tied to a r
 
 Refer to `docs/PRODUCT_IDENTITY_AND_LOCALIZATION.md` for the expanded product identity, localization, RTL, motion, and acceptance specification. Refer to `docs/PRODUCT_REQUIREMENTS.md` for the current confirmed scope. CP-001/CP-002 implementation was authorized by the product owner on 2026-11-01. The owner separately authorized CP-003 on 2026-11-04; its active branch is `feature/secure-file-transfer`. The current CP-003B substage implements a P2P-interface-bound raw TCP channel under ADR-0008. The owner separately authorized CP-CHAT-001 on 2026-11-13 on `feature/cp-chat-001-local-persistence`, limited to encrypted local Room persistence, durable outbox, Android backup/device-transfer exclusions, and tests. Chat Compose UI, stable peer identity, sync protocol, channel multiplexing and all remote/online services remain outside this authorization. Future scope expansions still require explicit approval.
 
+
+
+## 19. Owner-approved messaging UI-only milestone (2026-11-19)
+
+The product owner explicitly authorized the next implementation sequence: complete the messaging/group/voice/attachment user interface first; defer new backend, transport, persistence, group protocol, and media-engine implementation to later separately scoped work.
+
+- **Milestone:** CP-CHAT-UI-001 — Messaging UI Preview and Interaction Surface.
+- **Branch:** `feature/pey-vand-messaging-ui-preview`.
+- **Base source:** `813016d422cd33c54433e897b72fa79cb976690b` on `feature/cp-chat-002-chat-experience`.
+- This authorization supersedes only the earlier statement that group chat, voice notes, read receipts, editing/deletion and related messaging UX are outside product scope. It does not authorize their runtime/backend implementation in this milestone.
+- Keep the current one-to-one text/chat transport and file transfer implementation unchanged. Do not add network frames, socket ownership, Room entities/migrations, microphone access, audio recording/playback, Android file picker launchers, storage writes, notifications, group persistence or protocol changes in this UI-only milestone.
+- The new review surface is available only when the application is built with the Android debuggable flag. It must not appear in non-debug builds.
+- All preview names, participants, messages, file metadata, receipt counts, typing indicators and voice waveforms are illustrative static/local UI data. Clearly identify them as samples and never persist, transmit, or present them as live device/network status.
+- Preview actions may demonstrate local UI affordances and navigation only. They must not claim that a group was actually created, a member invited/removed, a message sent/edited/deleted, a file transferred, a recording captured, or audio played.
+- Keep every user-facing string in Android resources. Do not silently enable a language bundle that lacks reviewed coverage. Respect layout direction, TalkBack, font scaling and minimum touch targets.
+- Group UI must represent the latest owner decisions: multiple group memberships with one active group session at a time; capacity warning based on a real estimate (do not invent a number); per-invitee consent; only recipients who received a message count in its read-receipt denominator; private chats survive group departure; local-only deletion when the last local member leaves; the group admin controls group metadata/membership; the oldest available member temporarily sequences messages during temporary admin absence; the primary admin regains sequencing authority when returning; distinguish app group admin from Wi-Fi Direct Group Owner.
+- Attachment and voice-note screens are presentation only. The product requirement remains multi-select via native Android pickers, all common file types and APKs, automatic saving into the approved PEYVAND category folders, unique collision-safe file names, sender-only transfer cancellation, and incoming voice notes saved under `PEYVAND/Voice Messages`. Voice-note product maximum is 10 minutes with compressed default quality.
+- Update this checkpoint and its ADR with implementation evidence. Do not mark it PASSED until exact-head CI, UI tests, RTL/accessibility review and physical-device visual checks are recorded. A preview-only screen is not release-ready production UI.
